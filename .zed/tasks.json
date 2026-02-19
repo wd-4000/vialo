@@ -1,0 +1,10 @@
+[
+  {
+    "label": "db",
+    "command": "docker compose up",
+  },
+  {
+    "label": "vialo-api",
+    "command": "cd vialo-api; cargo run",
+  },
+]
