@@ -1,0 +1,13 @@
+{
+  "languages": {
+    "SQL": {
+      "formatter": {
+        "external": {
+          "command": "sql-formatter",
+          "arguments": ["--language", "postgresql"],
+        },
+      },
+      "format_on_save": "off",
+    },
+  },
+}
