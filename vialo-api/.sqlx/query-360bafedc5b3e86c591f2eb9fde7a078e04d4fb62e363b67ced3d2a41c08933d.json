@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select nr.ipv4_nat, nr.id from net_realm_assignments nra JOIN net_realms nr ON nra.realm_id = nr.id WHERE nra.account_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ipv4_nat",
+        "type_info": "Inet"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "360bafedc5b3e86c591f2eb9fde7a078e04d4fb62e363b67ced3d2a41c08933d"
+}

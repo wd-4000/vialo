@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT nc.id, nc.username as \"username!\", nc.password as \"password!\", nc.network_id, nc.last_updated,\n         n.label AS network_label,\n         nc.account_id, coalesce(ap.full_name, ag.label) as account_full_name\n         FROM net_cred nc\n         JOIN net_networks n ON nc.network_id = n.id\n         LEFT JOIN accounts_people ap ON nc.account_id = ap.id\n         LEFT JOIN account_groups ag ON nc.account_id = ag.id\n         WHERE nc.id = $1 AND nc.username IS NOT NULL AND nc.password IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "username!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "password!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "network_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_updated",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "network_label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "account_full_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "8c197b56bb5b4b326f0afbeb6e94ef087ce0f7698e5b8b20cc9c7b85594e87f7"
+}

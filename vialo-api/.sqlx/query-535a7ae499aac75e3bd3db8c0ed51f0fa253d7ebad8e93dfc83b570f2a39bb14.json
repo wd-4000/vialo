@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            id,\n            label,\n            schedule::text[] as \"schedule!\",\n            asset_type,\n            slot_price\n        FROM\n            bookable_schemas\n        WHERE\n            id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "schedule!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 3,
+        "name": "asset_type",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "slot_price",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      true,
+      false
+    ]
+  },
+  "hash": "535a7ae499aac75e3bd3db8c0ed51f0fa253d7ebad8e93dfc83b570f2a39bb14"
+}

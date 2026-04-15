@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index, ((j_v->>'expected_start')::date + bs.schedule[(j_v->>'slot_index')::int+1]) as begins, ((j_v->>'expected_start')::date + bs.schedule[(j_v->>'slot_index')::int+2]) as ends, bs.slot_price as price, (j_v->>'asset_id')::int as asset_id\n        FROM bookable_schema_assignments bsa\n        JOIN jsonb_array_elements($1) WITH ORDINALITY AS j(j_v, j_i) ON bsa.begins <= (j_v->>'expected_start')::date AND bsa.asset_id = (j_v->>'asset_id')::int\n        JOIN bookable_schemas bs ON bsa.schema_id = bs.id\n        ORDER BY j_i, bsa.begins DESC;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "schema_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "index",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "begins",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 3,
+        "name": "ends",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 4,
+        "name": "price",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "asset_id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      false,
+      null
+    ]
+  },
+  "hash": "6d84a6847d1f1cecd36caca332ab323ea036c1b30d76700514c2383906474a46"
+}

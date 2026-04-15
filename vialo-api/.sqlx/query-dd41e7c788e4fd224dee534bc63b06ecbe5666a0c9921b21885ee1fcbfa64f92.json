@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH inserted AS (\n                INSERT INTO net_realm_assignments (realm_id, account_id)\n                SELECT id as realm_id, $1 as account_id\n                FROM net_realms nr\n                LEFT JOIN net_realm_assignments nra ON nr.id = nra.realm_id\n                WHERE nra.realm_id IS NULL AND nr.ipv4_nat IS NOT NULL\n                LIMIT 1\n                RETURNING realm_id\n            )\n            SELECT\n                inserted.realm_id AS id,\n                nr.ipv4_nat\n            FROM inserted\n            JOIN net_realms nr ON nr.id = inserted.realm_id;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "ipv4_nat",
+        "type_info": "Inet"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "dd41e7c788e4fd224dee534bc63b06ecbe5666a0c9921b21885ee1fcbfa64f92"
+}

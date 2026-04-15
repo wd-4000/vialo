@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT bat.group_id FROM bookable_assets ba\n         JOIN bookable_asset_types bat ON ba.asset_type = bat.id\n         WHERE ba.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "group_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "45ebdf486b0a9dddcd8fd5f3e5138a27015d936462a409cebae2df97505ec48d"
+}

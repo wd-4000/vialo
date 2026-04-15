@@ -1,0 +1,71 @@
+use crate::{
+    AppState,
+    http::{
+        history::models::Subsystem,
+        util::{ListOptions, VialoError},
+    },
+    permissions::{AppRole, require_app_role},
+};
+use axum::{Json, extract::State, middleware, response::IntoResponse};
+use axum::{Router, routing::get};
+use axum_extra::extract::Query;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+
+pub async fn get_health_status(
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    let badness = sqlx::query_scalar!(
+        r#"SELECT sum(badness) FROM health_events WHERE (NOW() - created_at >= '1 hour' AND badness > 0 AND resolved = false AND read = false) OR badness > 99"#,
+    )
+    .fetch_optional(&data.db)
+    .await?.flatten().unwrap_or(0);
+
+    return Ok(Json(
+        serde_json::json!({"status": "success","data":badness}),
+    ));
+}
+
+#[derive(Deserialize, Serialize)]
+struct HealthEvent {
+    pub id: i32,
+    pub created_at: DateTime<Utc>,
+    pub last_updated: Option<DateTime<Utc>>,
+    pub subsystem: Option<Subsystem>,
+    pub label: String,
+    pub data: Option<serde_json::Value>,
+    pub badness: i32,
+    pub read: bool,
+    pub resolved: bool,
+}
+
+pub async fn get_health_events(
+    Query(opts): Query<ListOptions>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    let limit = opts.limit.unwrap_or(10);
+    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+
+    let events = sqlx::query_as!(
+        HealthEvent,
+        r#"SELECT id, created_at, last_updated, subsystem AS "subsystem: Subsystem", label, data, badness, read, resolved
+        FROM health_events ORDER BY id DESC LIMIT $1 OFFSET $2"#,
+        limit,
+        offset
+    )
+    .fetch_all(&data.db)
+    .await?;
+
+    return Ok(Json(serde_json::json!({"status": "success","data":events})));
+}
+
+pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
+    return Router::new()
+        .route("/", get(get_health_events))
+        .route("/status", get(get_health_status))
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            |state, ext, req, next| require_app_role(AppRole::HealthViewer, state, ext, req, next),
+        ));
+}

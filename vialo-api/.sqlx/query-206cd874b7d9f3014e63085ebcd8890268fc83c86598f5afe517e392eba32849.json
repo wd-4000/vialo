@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE net_networks SET\n        label = $2,\n        icon = $3,\n        multi_device = $4,\n        auto_add_on_auth = $5,\n        auto_add_via_dhcp = $6,\n        auth = $7,\n        gen_username = $8,\n        gen_password = $9,\n        active = $10,\n        wired = $11\n        WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool",
+        "Bool",
+        {
+          "Custom": {
+            "name": "net_auth",
+            "kind": {
+              "Enum": [
+                "username_password",
+                "password"
+              ]
+            }
+          }
+        },
+        "Int4",
+        "Int4",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "206cd874b7d9f3014e63085ebcd8890268fc83c86598f5afe517e392eba32849"
+}

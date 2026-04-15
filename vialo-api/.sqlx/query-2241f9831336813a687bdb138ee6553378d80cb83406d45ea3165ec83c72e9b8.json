@@ -1,0 +1,80 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ag.id, ag.label, ag.email, ag.icon, ag.public,  COALESCE(\n                array_agg(agra.role) FILTER (WHERE agra.role IS NOT NULL),\n                '{}'::app_role[]\n            ) as \"app_roles!: Vec<AppRole>\" FROM account_groups ag LEFT JOIN account_group_app_roles agra ON ag.id = agra.group_id WHERE id = $1 GROUP BY ag.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "icon",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "public",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "app_roles!: Vec<AppRole>",
+        "type_info": {
+          "Custom": {
+            "name": "app_role[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "app_role",
+                  "kind": {
+                    "Enum": [
+                      "account_manager",
+                      "credit_manager",
+                      "bookable_manager",
+                      "board_manager",
+                      "home_manager",
+                      "network_manager",
+                      "history_viewer",
+                      "health_viewer"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "2241f9831336813a687bdb138ee6553378d80cb83406d45ea3165ec83c72e9b8"
+}

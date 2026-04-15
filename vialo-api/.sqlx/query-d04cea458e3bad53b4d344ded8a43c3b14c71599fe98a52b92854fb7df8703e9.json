@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n                bp.id,\n                bp.account_id,\n                bp.board_id,\n                bp.icon,\n                -- Use get_i18n_string for title, content, and location translations with fallback\n                get_i18n_string(bp.title, $1) AS title,\n                get_i18n_string(bp.content_plain, $1) AS content_plain,\n                get_i18n_string(bp.content_html, $1) AS content_html,\n                NULL as content,\n                get_i18n_string(bp.location, $1) AS location,\n                bp.event_from,\n                bp.event_to,\n                bp.created_at\n            FROM\n                board_posts bp\n            LEFT JOIN board_group_perms bgp ON bp.board_id = bgp.board_id\n            LEFT JOIN account_group_memberships agm ON bgp.group_id = agm.group_id\n            WHERE bp.id = $2 AND bp.visibility = 'public'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "board_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "icon",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "content_plain",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "content_html",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "event_from",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "event_to",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      null,
+      null,
+      null,
+      null,
+      null,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "d04cea458e3bad53b4d344ded8a43c3b14c71599fe98a52b92854fb7df8703e9"
+}

@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO account_group_memberships (group_id, account_id, role) VALUES ($1, $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "group_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "manager"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8f7244661ffa07756bb8d7d6d5486bdefbc5806bb80b8cc2ae207dace3b76d0a"
+}

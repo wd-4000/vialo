@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO net_devices (label, mac, cred_id, last_updated) VALUES ($1, $2, $3, NOW()) RETURNING id, label, mac AS \"mac: MacAddressWrapper\", cred_id, last_updated, last_seen, hostname, realm_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "mac: MacAddressWrapper",
+        "type_info": "Macaddr"
+      },
+      {
+        "ordinal": 3,
+        "name": "cred_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_updated",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "last_seen",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "hostname",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "realm_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Macaddr",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "85f461358faf8d6f967a714f00f3f5099d97a5c944e10f7147ded7785b9b3a61"
+}

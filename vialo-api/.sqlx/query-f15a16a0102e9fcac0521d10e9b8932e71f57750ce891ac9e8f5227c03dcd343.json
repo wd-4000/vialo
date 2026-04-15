@@ -1,0 +1,75 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT    id,\n       label,\n     auth_id,\n      email,\n     membership_start,\n       membership_end as \"membership_end: PgDate\",\n        full_name,\n        manually_suspended,\n       credit_balance FROM accounts_people WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "auth_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "email",
+        "type_info": {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "membership_start",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 5,
+        "name": "membership_end: PgDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 6,
+        "name": "full_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "manually_suspended",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "credit_balance",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "f15a16a0102e9fcac0521d10e9b8932e71f57750ce891ac9e8f5227c03dcd343"
+}

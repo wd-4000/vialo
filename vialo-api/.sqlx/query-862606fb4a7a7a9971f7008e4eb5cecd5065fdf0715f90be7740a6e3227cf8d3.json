@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select array_agg(jsonb_build_object('id',agm.group_id, 'label',ag.label)) as groups, agra.role as \"role: AppRole\" from account_group_memberships agm join account_group_app_roles agra on agm.group_id = agra.group_id join account_groups ag on agra.group_id = ag.id where agm.account_id = $1 group by agra.role;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "groups",
+        "type_info": "JsonbArray"
+      },
+      {
+        "ordinal": 1,
+        "name": "role: AppRole",
+        "type_info": {
+          "Custom": {
+            "name": "app_role",
+            "kind": {
+              "Enum": [
+                "account_manager",
+                "credit_manager",
+                "bookable_manager",
+                "board_manager",
+                "home_manager",
+                "network_manager",
+                "history_viewer",
+                "health_viewer"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "862606fb4a7a7a9971f7008e4eb5cecd5065fdf0715f90be7740a6e3227cf8d3"
+}

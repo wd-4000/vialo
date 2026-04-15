@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE account_group_memberships SET role = $3 WHERE group_id = $1 AND account_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "group_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "manager"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "65779db91c3ddbb498c8c17152b5c903d6f8408718812d4bcf02e774acbe3f22"
+}

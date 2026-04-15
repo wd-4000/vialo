@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT LOCALTIMESTAMP;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "localtimestamp",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ead69e7804a8b71e593b879ed95c16d5ed5e3c556a155b20fb92510c49c73bd4"
+}

@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT nr.* FROM net_realms nr WHERE TRUE  ORDER BY id ASC LIMIT $1 OFFSET $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "ipv4_subnet",
+        "type_info": "Cidr"
+      },
+      {
+        "ordinal": 2,
+        "name": "ipv4_nat",
+        "type_info": "Inet"
+      },
+      {
+        "ordinal": 3,
+        "name": "ipv4_router",
+        "type_info": "Inet"
+      },
+      {
+        "ordinal": 4,
+        "name": "ipv4_dns",
+        "type_info": "Inet"
+      },
+      {
+        "ordinal": 5,
+        "name": "ipv6_prefix",
+        "type_info": "Cidr"
+      },
+      {
+        "ordinal": 6,
+        "name": "vlan",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "1a82b95166a9f684668fa2fcdd58166b12492288fdc8033a3090f9b26b0a25c3"
+}

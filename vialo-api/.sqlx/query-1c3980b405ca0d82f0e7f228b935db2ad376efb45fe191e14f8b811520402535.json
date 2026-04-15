@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) > 0 AS \"has_role: bool\" FROM account_group_memberships agm\n         JOIN account_group_app_roles agra ON agm.group_id = agra.group_id\n         WHERE agm.account_id = $1 AND agra.role = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "has_role: bool",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "app_role",
+            "kind": {
+              "Enum": [
+                "account_manager",
+                "credit_manager",
+                "bookable_manager",
+                "board_manager",
+                "home_manager",
+                "network_manager",
+                "history_viewer",
+                "health_viewer"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1c3980b405ca0d82f0e7f228b935db2ad376efb45fe191e14f8b811520402535"
+}

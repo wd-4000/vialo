@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select ARRAY_AGG(ag.email) as emails from account_groups ag WHERE ag.email IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "emails",
+        "type_info": {
+          "Custom": {
+            "name": "citext[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "citext",
+                  "kind": "Simple"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7442e93fd43b8173431b59ad49c799cdedc09eba073928970505f9efdb489ec9"
+}

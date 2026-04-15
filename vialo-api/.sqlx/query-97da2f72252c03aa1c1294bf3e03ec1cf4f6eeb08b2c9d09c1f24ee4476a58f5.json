@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO accounts_people (id, full_name, email, label, membership_end) VALUES ($1, 'Admin', $2, 'auto-created during setup', 'infinity')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "97da2f72252c03aa1c1294bf3e03ec1cf4f6eeb08b2c9d09c1f24ee4476a58f5"
+}

@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE bookable_connectors SET\n        endpoint = $1   WHERE id = $2\n        RETURNING\n            id,\n            endpoint,\n            num_outputs,\n            device_name,\n            serial_number,\n            mac::text,\n            username,\n            password\n        ;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "endpoint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "num_outputs",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "device_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "serial_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "mac",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "password",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "e4fbe01ea7cb0363778014e38d2aaa273119ae2deb708f772b62e7e14d8e1777"
+}

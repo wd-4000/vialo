@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bookable_appointments (\n        asset_id,\n        account_id,\n        during\n        )\n        SELECT\n            (j->>'asset_id')::int,\n            $1,\n            tsrange((j->>'begins')::timestamp, (j->>'ends')::timestamp, '[)')\n        FROM jsonb_array_elements($2) AS j;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1b266ead63659aa03312c4bb7c9dd49551f5485337becc83b706910665c29db2"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM bookable_asset_types WHERE id = $1 RETURNING name_i18n ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name_i18n",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "be19448d7eb648f2239abd75ac28d91de527ac10a78775cba2ab65d4173e9ffd"
+}

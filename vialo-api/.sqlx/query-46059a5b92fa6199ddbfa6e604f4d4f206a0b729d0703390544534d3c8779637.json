@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM bookable_schema_assignments WHERE begins = $1 AND asset_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "46059a5b92fa6199ddbfa6e604f4d4f206a0b729d0703390544534d3c8779637"
+}

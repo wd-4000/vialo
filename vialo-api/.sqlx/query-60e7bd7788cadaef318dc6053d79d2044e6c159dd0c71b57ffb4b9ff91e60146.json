@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO board_group_perms (board_id, group_id, perm) VALUES ($1, $2, $3) ON CONFLICT (board_id, group_id) DO UPDATE SET perm = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "board_perm",
+            "kind": {
+              "Enum": [
+                "view",
+                "post",
+                "moderate",
+                "admin"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "60e7bd7788cadaef318dc6053d79d2044e6c159dd0c71b57ffb4b9ff91e60146"
+}

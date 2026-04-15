@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO board_pinned_posts (board_id, post_id, pinned_until) VALUES ($1, $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fa11192a04c3ab76e39fd5730b7b4fdc9e2e968c9a49e79ba3084dbdad693350"
+}

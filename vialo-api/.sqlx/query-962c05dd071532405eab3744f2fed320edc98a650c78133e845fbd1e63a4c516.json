@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM board_posts WHERE id = $1\n        RETURNING array[title, content, location, content_html, content_plain] as \"i18n_strings!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "i18n_strings!",
+        "type_info": "Int4Array"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "962c05dd071532405eab3744f2fed320edc98a650c78133e845fbd1e63a4c516"
+}

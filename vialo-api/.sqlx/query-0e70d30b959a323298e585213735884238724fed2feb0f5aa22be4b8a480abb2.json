@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            bp.id,\n            bp.icon,\n            -- Use get_i18n_string for title, content, and location translations with fallback\n            get_i18n_string(bp.title, $1) AS title,\n            left(get_i18n_string(bp.content_html, $1), 400) AS content,\n            get_i18n_string(bp.location, $1) AS location,\n            bp.event_from,\n            bp.event_to,\n            bp.created_at,\n            bpp.pinned_until\n        FROM\n            board_posts bp\n        LEFT JOIN\n            board_pinned_posts bpp ON bp.id = bpp.post_id\n        WHERE (bp.created_at >= CURRENT_DATE::timestamptz) OR (bpp.pinned_until <= NOW() AND bpp.board_id = 0)\n        ORDER BY created_at DESC LIMIT $2 OFFSET $3 ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "icon",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "event_from",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "event_to",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "pinned_until",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      null,
+      null,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "0e70d30b959a323298e585213735884238724fed2feb0f5aa22be4b8a480abb2"
+}

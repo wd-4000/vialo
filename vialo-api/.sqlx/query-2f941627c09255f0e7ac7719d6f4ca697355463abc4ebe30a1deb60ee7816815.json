@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id,\n                endpoint,\n                num_outputs,\n                device_name,\n                serial_number,\n                mac::text,\n                username,\n                password\n            FROM bookable_connectors WHERE id = $1;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "endpoint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "num_outputs",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "device_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "serial_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "mac",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "password",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "2f941627c09255f0e7ac7719d6f4ca697355463abc4ebe30a1deb60ee7816815"
+}

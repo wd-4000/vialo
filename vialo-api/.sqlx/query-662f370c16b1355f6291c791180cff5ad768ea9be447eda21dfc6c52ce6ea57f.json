@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) > 0 AS \"allowed: bool\"\n           FROM board_group_perms bgp\n           JOIN account_group_memberships agm ON bgp.group_id = agm.group_id\n           WHERE bgp.board_id = $1\n             AND agm.account_id = $2\n             AND bgp.perm >= $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed: bool",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "board_perm",
+            "kind": {
+              "Enum": [
+                "view",
+                "post",
+                "moderate",
+                "admin"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "662f370c16b1355f6291c791180cff5ad768ea9be447eda21dfc6c52ce6ea57f"
+}

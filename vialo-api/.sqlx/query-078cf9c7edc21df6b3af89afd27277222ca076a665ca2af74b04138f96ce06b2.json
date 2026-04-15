@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT nd.id, nd.label, nd.mac AS \"mac: MacAddressWrapper\", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as \"ipv4_addr?\", row_to_json(nc) as cred, row_to_json(nn) as network,\n                    jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account\n                    FROM net_devices nd\n                    JOIN net_cred nc ON nc.id = nd.cred_id\n                    JOIN net_networks nn ON nc.network_id = nn.id\n                    LEFT JOIN net_ip_assignments nia ON nia.device_id = nd.id\n                    LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n                    WHERE nd.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "mac: MacAddressWrapper",
+        "type_info": "Macaddr"
+      },
+      {
+        "ordinal": 3,
+        "name": "cred_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_updated",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "last_seen",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "hostname",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "realm_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "ipv4_addr?",
+        "type_info": "Inet"
+      },
+      {
+        "ordinal": 9,
+        "name": "cred",
+        "type_info": "Json"
+      },
+      {
+        "ordinal": 10,
+        "name": "network",
+        "type_info": "Json"
+      },
+      {
+        "ordinal": 11,
+        "name": "account",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "078cf9c7edc21df6b3af89afd27277222ca076a665ca2af74b04138f96ce06b2"
+}

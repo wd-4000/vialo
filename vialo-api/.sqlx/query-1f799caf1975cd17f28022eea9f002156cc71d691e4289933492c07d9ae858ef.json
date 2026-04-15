@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT role as \"role: AppRole\" FROM account_group_app_roles WHERE group_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role: AppRole",
+        "type_info": {
+          "Custom": {
+            "name": "app_role",
+            "kind": {
+              "Enum": [
+                "account_manager",
+                "credit_manager",
+                "bookable_manager",
+                "board_manager",
+                "home_manager",
+                "network_manager",
+                "history_viewer",
+                "health_viewer"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1f799caf1975cd17f28022eea9f002156cc71d691e4289933492c07d9ae858ef"
+}

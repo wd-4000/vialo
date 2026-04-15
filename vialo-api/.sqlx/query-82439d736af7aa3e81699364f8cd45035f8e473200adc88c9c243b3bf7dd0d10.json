@@ -1,0 +1,108 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH i18n_cols AS (\n            SELECT tc.table_name, array_agg(kcu.column_name::text) as cols\n            FROM information_schema.table_constraints tc\n            JOIN information_schema.key_column_usage kcu\n              ON tc.constraint_name = kcu.constraint_name\n              AND tc.table_schema = kcu.table_schema\n            JOIN information_schema.constraint_column_usage ccu\n              ON ccu.constraint_name = tc.constraint_name\n              AND ccu.table_schema = tc.table_schema\n            WHERE tc.constraint_type = 'FOREIGN KEY'\n              AND ccu.table_name = 'i18n_index'\n            GROUP BY tc.table_name\n        )\n        SELECT tl.id,\n        tl.table_name,\n        record_id,\n        record_uuid,\n        a2.full_name as object_name,\n        operation_type as \"operation_type: TgOp\",\n        created_at,\n        delete_on,\n        CASE WHEN tl.caused_by_account IS NOT NULL THEN jsonb_build_object('id', tl.caused_by_account, 'full_name', a.full_name) ELSE NULL END AS caused_by_account,\n        caused_by_subsystem as \"caused_by_subsystem: Subsystem\",\n        resolve_i18n_in_diff(diff, COALESCE(i18n_cols.cols, ARRAY[]::text[])) as diff\n        FROM table_log tl\n        LEFT JOIN accounts_people a ON tl.caused_by_account = a.id\n        LEFT JOIN accounts_people a2 ON tl.table_name = 'accounts_people' AND a2.id = tl.record_uuid\n        LEFT JOIN i18n_cols ON i18n_cols.table_name = tl.table_name\n        WHERE NOT (tl.table_name = ANY(ARRAY['i18n_strings', 'i18n_index']))\n        ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "table_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "record_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "record_uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "object_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "operation_type: TgOp",
+        "type_info": {
+          "Custom": {
+            "name": "tgop",
+            "kind": {
+              "Enum": [
+                "INSERT",
+                "UPDATE",
+                "DELETE"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "delete_on",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "caused_by_account",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "caused_by_subsystem: Subsystem",
+        "type_info": {
+          "Custom": {
+            "name": "subsystem_type",
+            "kind": {
+              "Enum": [
+                "app",
+                "bookable",
+                "printer",
+                "ppsk",
+                "email",
+                "sysop"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "diff",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      null,
+      true,
+      null
+    ]
+  },
+  "hash": "82439d736af7aa3e81699364f8cd45035f8e473200adc88c9c243b3bf7dd0d10"
+}

@@ -1,0 +1,92 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, label, icon, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as \"auth: NetAuth\", gen_username, gen_password, active, wired FROM net_networks WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "icon",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "multi_device",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "auto_add_on_auth",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "auto_add_via_dhcp",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "auth: NetAuth",
+        "type_info": {
+          "Custom": {
+            "name": "net_auth",
+            "kind": {
+              "Enum": [
+                "username_password",
+                "password"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "gen_username",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "gen_password",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "wired",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "08f343ef25513c7f5e77f79d45e064642575df61be98d72c73e3aaa49c0c26cf"
+}
