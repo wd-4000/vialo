@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE bookable_connectors SET num_outputs = $1, device_name = $2, serial_number = $3, mac = $4::macaddr WHERE id = $5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Text",
+        "Macaddr",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aa65452f9f0efe1772c5c2e5bf2560da388d02d861ff3feb3967b904e63f02c2"
+}

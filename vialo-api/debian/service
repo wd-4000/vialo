@@ -1,0 +1,11 @@
+[Unit]
+Description=API service for Vialo
+
+[Service]
+ExecStart=/usr/bin/vialo-api
+ConfigurationDirectory=vialo
+LogsDirectory=vialo-api
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

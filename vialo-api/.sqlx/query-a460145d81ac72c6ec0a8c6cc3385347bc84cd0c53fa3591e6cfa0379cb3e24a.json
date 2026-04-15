@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT account_role_exists($1, 'network_manager'::app_role) AS \"is_manager: bool\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_manager: bool",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a460145d81ac72c6ec0a8c6cc3385347bc84cd0c53fa3591e6cfa0379cb3e24a"
+}

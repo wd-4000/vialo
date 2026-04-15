@@ -1,0 +1,67 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE net_devices SET label = coalesce($1, label), mac = coalesce($2, mac), cred_id = coalesce($3, cred_id) WHERE id = $4 RETURNING  id, label, mac AS \"mac: MacAddressWrapper\", cred_id, last_updated, last_seen, hostname, realm_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "mac: MacAddressWrapper",
+        "type_info": "Macaddr"
+      },
+      {
+        "ordinal": 3,
+        "name": "cred_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_updated",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "last_seen",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "hostname",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "realm_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Macaddr",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "db3b9d65da17978fdd20a6f4634f26e190f4dd7130101653ee104e410ec64852"
+}

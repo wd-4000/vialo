@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n                bb.group_id,\n                bb.slug,\n                bb.icon,\n                bb.default_post_visibility AS \"default_post_visibility: PostVisibility\",\n                get_i18n_string(bb.label, $1) AS label\n            FROM\n                boards bb WHERE slug = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "group_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "slug",
+        "type_info": {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "icon",
+        "type_info": {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "default_post_visibility: PostVisibility",
+        "type_info": {
+          "Custom": {
+            "name": "post_visibility",
+            "kind": {
+              "Enum": [
+                "public",
+                "logged_in",
+                "board"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "label",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        }
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "073c5c228288839acfd5bc109dd79488f778bca26f0b518b29eda2b7046c4b91"
+}

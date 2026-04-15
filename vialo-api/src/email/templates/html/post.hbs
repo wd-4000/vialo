@@ -1,0 +1,55 @@
+{{#> html/index}}
+    {{#*inline "slot"}}
+                  <table
+                  width="100%"
+                    style="width: 100%; color: #546e7a; padding: 0; line-height: 1.5; font-size: 16px; max-width: 600px; overflow-wrap: break-word;">
+                    <tbody>
+                      <tr>
+                        <td>{{> hello}} </td>
+                      </tr>
+                      <tr>
+                        <td>{{> body}}</td>
+                      </tr>
+
+                      <tr>
+                        <td>
+                          <div style="border: solid #ddd 1px;border-radius: 5px; padding: 10px 15px; margin-top: 10px;">
+
+                            <h2>{{message.post.title}}</h2>
+                    {{#if message.post.time}}
+                            <p style="margin-bottom: 2px">{{message.post.time}}</p>
+                    {{/if}}
+                            <p style="word-break: break-word;">{{{message.post.content_html}}}</p>
+
+                          </div>
+                        </td>
+                      </tr>
+
+     <tr>
+                                <td>
+                      <a rel="noopener" target="_blank" rel="noopener" target="_blank" rel="noopener" href="{{message.post.url}}" style="background-color: #A02C89; font-size: 18px;  text-decoration: none; padding: 10px 20px; color: #ffffff; border-radius: 5px; display: inline-block; margin-top: 10px;">{{> read_more}}</a>
+      </td>
+                            </tr>
+
+                    {{#if group.email}}
+                            <tr>
+                                <td>
+                                <p style="margin: 15px 0 0 0; overflow-wrap: break-word; word-wrap:break-word; ">
+                                        {{>email_replyable}}
+                                </p>
+                                </td>
+                            </tr>
+                    {{/if}}
+                      <tr>
+                        <td>
+                          <p style="margin: 15px 0 0 0">
+                            <small>
+                              {{> footer}}
+                            </small>
+                          </p>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+    {{/inline}}
+{{/html/index}}

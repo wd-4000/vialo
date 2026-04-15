@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS \"mac?: MacAddressWrapper\", cred_id, realm_id, nd.last_updated, nd.last_seen,\n            jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account\n            FROM net_devices nd\n            JOIN net_cred nc ON nd.cred_id = nc.id\n            LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n            WHERE nd.label ILIKE '%' || $1 || '%' OR nd.mac::text ILIKE '%' || $1 || '%' ORDER by nd.id  LIMIT $2 OFFSET $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "hostname",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "mac?: MacAddressWrapper",
+        "type_info": "Macaddr"
+      },
+      {
+        "ordinal": 4,
+        "name": "cred_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "realm_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_updated",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "last_seen",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "account",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "5feba805370380f5d7c6653c99a54a32f1bb9fb6c1658ff46eb124f7374333ae"
+}

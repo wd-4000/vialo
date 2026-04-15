@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "RESET app.account_id;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "47c6b2d906c4810e6d0a8c58cb3cc8a838aa2d2201f61f9531ddc8545a1698ca"
+}

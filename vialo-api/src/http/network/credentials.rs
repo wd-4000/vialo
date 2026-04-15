@@ -1,0 +1,198 @@
+use crate::{
+    AppState,
+    http::util::{JsonE, User, VialoError, grab_authd_conn_user},
+    permissions::{AppRole, check_app_role},
+};
+use std::sync::Arc;
+
+use super::{models::CredentialModelWithAccountEmbed, schemas::NetworkFilterOptions};
+
+use axum::{
+    Extension, Json,
+    extract::{Path, Query, State},
+    http::{StatusCode, header},
+    response::IntoResponse,
+};
+use serde::Deserialize;
+use serde_json::json;
+use sqlx::{query, query_as};
+use sqlx_conditional_queries::conditional_query_as;
+use uuid::Uuid;
+
+/// Returns Ok(()) if the user owns the credential OR holds NetworkManager.
+async fn check_own_or_network_manager(
+    user: &User,
+    cred_id: Uuid,
+    db: &sqlx::PgPool,
+) -> Result<(), VialoError> {
+    if check_app_role(user.clone(), AppRole::NetworkManager, db)
+        .await
+        .is_ok()
+    {
+        return Ok(());
+    }
+
+    let owns = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) > 0 AS "owns: bool" FROM net_cred WHERE id = $1 AND account_id = $2"#,
+        cred_id,
+        user.id,
+    )
+    .fetch_one(db)
+    .await
+    .map_err(|e| VialoError::Anyhow(e.into()))?
+    .unwrap_or(false);
+
+    if owns {
+        Ok(())
+    } else {
+        Err(VialoError::Forbidden())
+    }
+}
+
+pub async fn list_credentials(
+    Query(opts): Query<NetworkFilterOptions>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    let limit = opts.limit.unwrap_or(10);
+    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let records = conditional_query_as!(
+        CredentialModelWithAccountEmbed,
+        "SELECT nc.id, nc.username, nc.password, nc.network_id, nc.last_updated,
+        jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account
+        FROM net_cred nc LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id
+         {#search} ORDER BY id ASC LIMIT {limit} OFFSET {offset}",
+        #search = match opts.search {
+            Some(src) => "WHERE account_id::text ILIKE '%' || {src} || '%'", //todo
+            _ => ""
+        }
+    )
+    .fetch_all(&data.db)
+    .await?;
+
+    return Ok((
+        StatusCode::OK,
+        Json(json!({"status": "success","data": records})),
+    ));
+}
+
+pub async fn get_credential(
+    Path(id): Path<Uuid>,
+    Extension(user): Extension<User>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    check_own_or_network_manager(&user, id, &data.db).await?;
+
+    let record = query_as!(
+        CredentialModelWithAccountEmbed,
+        "SELECT nc.id, nc.username, nc.password, nc.network_id, nc.last_updated,
+         jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account
+         FROM net_cred nc
+         LEFT JOIN accounts_people ap ON nc.account_id = ap.id
+         LEFT JOIN account_groups ag ON nc.account_id = ag.id
+         WHERE nc.id = $1",
+        id
+    )
+    .fetch_one(&data.db)
+    .await?;
+
+    return Ok((
+        StatusCode::OK,
+        Json(json!({"status": "success","data": record})),
+    ));
+}
+
+pub async fn get_mobileconfig(
+    Path((id, _filename)): Path<(Uuid, String)>,
+    Extension(user): Extension<User>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    check_own_or_network_manager(&user, id, &data.db).await?;
+
+    let record = query!(
+        r#"SELECT nc.id, nc.username as "username!", nc.password as "password!", nc.network_id, nc.last_updated,
+         n.label AS network_label,
+         nc.account_id, coalesce(ap.full_name, ag.label) as account_full_name
+         FROM net_cred nc
+         JOIN net_networks n ON nc.network_id = n.id
+         LEFT JOIN accounts_people ap ON nc.account_id = ap.id
+         LEFT JOIN account_groups ag ON nc.account_id = ag.id
+         WHERE nc.id = $1 AND nc.username IS NOT NULL AND nc.password IS NOT NULL"#,
+        id
+    )
+    .fetch_one(&data.db)
+    .await?;
+    // TODO gracefully handle per-device profiles
+    let file = format!(
+        include_str!("template.mobileconfig.xml"),
+        network_label = record.network_label,
+        account_full_name = record.account_full_name.unwrap_or(record.id.to_string()),
+        username = record.username,
+        password = record.password,
+        cred_id = record.id,
+        network_id = record.network_id,
+        network_ssid = record.network_label,              // TODO
+        network_tlstrust = "xyz.uni.example.com",         // TODO
+        outer_identity = "anonymous@xyz.uni.example.com", // TODO
+        copyright = "COPYRIGHT"                           // TODO
+    );
+    return Ok((
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/x-apple-aspen-config")],
+        file,
+    ));
+}
+
+#[derive(Deserialize)]
+pub struct PutCredentialSchema {
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+pub async fn put_credential(
+    Path(id): Path<Uuid>,
+    Extension(user): Extension<User>,
+    State(data): State<Arc<AppState>>,
+    JsonE(body): JsonE<PutCredentialSchema>,
+) -> Result<impl IntoResponse, VialoError> {
+    check_own_or_network_manager(&user, id, &data.db).await?;
+
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+
+    let result = sqlx::query!(
+        "UPDATE net_cred SET username = $1, password = $2 WHERE id = $3",
+        body.username,
+        body.password,
+        id
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    match result.rows_affected() {
+        1 => Ok((
+            StatusCode::OK,
+            Json(json!({"status": "success","data": {}})),
+        )),
+        _ => Err(VialoError::NotFound()),
+    }
+}
+
+pub async fn delete_credential(
+    Path(id): Path<Uuid>,
+    Extension(user): Extension<User>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    check_own_or_network_manager(&user, id, &data.db).await?;
+
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+
+    let rows_affected = sqlx::query!("DELETE FROM net_cred WHERE id = $1", id)
+        .execute(&mut *conn)
+        .await?
+        .rows_affected();
+
+    if rows_affected == 0 {
+        return Err(VialoError::NotFound());
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}

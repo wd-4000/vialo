@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n             SELECT 1 FROM board_group_perms bgp\n             JOIN account_group_memberships agm ON bgp.group_id = agm.group_id\n             WHERE agm.account_id = $1 AND bgp.perm >= 'moderate'\n           ) AS \"exists!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ccb3425b375e255d0286d1d9e2065c6427c25f264ad5df9be2c84b81151eb3ca"
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO credit_ledger (\n            from_account, credits, created_at\n            )\n            SELECT\n                $1,\n                (j->>'price')::int,\n                NOW()\n            FROM jsonb_array_elements($2) AS j RETURNING id;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d700e930feb095a6160b44d2939e14e40c3aeafc70b768ac69e2a44354e0e5bd"
+}

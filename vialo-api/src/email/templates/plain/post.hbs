@@ -1,0 +1,19 @@
+{{> hello}}
+
+{{> body}}
+
+
+{{message.post.title}}
+{{#if message.post.time}}
+{{message.post.time}}
+{{/if}}
+
+{{message.post.content_plain}}
+
+{{> read_more}}: {{message.post.url}}
+
+{{#if group.email}}
+{{>email_replyable}}
+{{/if}}
+
+{{> footer}}

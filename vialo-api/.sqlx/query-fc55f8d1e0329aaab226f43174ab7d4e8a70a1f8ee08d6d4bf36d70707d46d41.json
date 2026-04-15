@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO health_events (subsystem, data, label, badness, resolved) VALUES ($1,$2,$3,$4,$5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "subsystem_type",
+            "kind": {
+              "Enum": [
+                "app",
+                "bookable",
+                "printer",
+                "ppsk",
+                "email",
+                "sysop"
+              ]
+            }
+          }
+        },
+        "Jsonb",
+        "Text",
+        "Int4",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fc55f8d1e0329aaab226f43174ab7d4e8a70a1f8ee08d6d4bf36d70707d46d41"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM\n            bookable_schemas\n        WHERE\n            id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ea711b7e138b1b456723296e915364f3e4faeb0a3e1f41bb445126d78f4f84d7"
+}

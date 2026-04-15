@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            begins,\n            schema_id\n        FROM\n            bookable_schema_assignments\n        WHERE asset_id = $1\n            LIMIT $2 OFFSET $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "begins",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "schema_id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1df3b647fe0ec73a1c2a577d85802a65be189c3af353d6f5c766d4b579dfc75d"
+}

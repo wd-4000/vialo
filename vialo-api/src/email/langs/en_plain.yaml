@@ -1,0 +1,28 @@
+global:
+  hello: Hello, {{account.full_name}}!
+  org_name: XYZ e.V.
+  org_impressum: Straße 111, 12345 Hamburg – https://xyz.example.com
+  footer_disclaimer: Emails from us always include your full name.
+  email_replyable: You can reply! {{group.label}} will receive your message.
+post:
+  new:
+    title: "{{message.post.title}} - {{message.post.board.label}}"
+    body: There's a new post on {{message.post.board.label}}.
+    read_more: Read more
+    footer: "You can always unsubscribe from this board by visiting {{account.url_unsubscribe}} \n ...or manage your email preferences by visiting {{url_email_preferences}}."
+
+  pinned:
+    title: "📌 {{message.post.title}} - {{message.post.board.label}}"
+    body: A post has been pinned on <a href="{{message.post.board.url}}">{{message.post.board.label}}</a>.
+    read_more: Read more
+    footer: "You can always unsubscribe from this board by visiting {{account.url_unsubscribe}} \n ...or manage your email preferences by visiting {{url_email_preferences}}."
+
+  edited:
+    title: "✏️ {{message.post.title}} - {{message.post.board.label}}"
+    body: A post has been edited on <a href="{{message.post.board.url}}">{{message.post.board.label}}</a>. The person who edited it requested that you be notified.
+    read_more: Read more
+    footer: "You can always unsubscribe from this board by visiting {{account.url_unsubscribe}} \n ...or manage your email preferences by visiting {{url_email_preferences}}."
+
+direct:
+  title: "{{direct.subject}} - {{group.label}}"
+  footer: "This is a direct message from {{group.label}}."

@@ -1,0 +1,85 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, created_at, last_updated, subsystem AS \"subsystem: Subsystem\", label, data, badness, read, resolved\n        FROM health_events ORDER BY id DESC LIMIT $1 OFFSET $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_updated",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "subsystem: Subsystem",
+        "type_info": {
+          "Custom": {
+            "name": "subsystem_type",
+            "kind": {
+              "Enum": [
+                "app",
+                "bookable",
+                "printer",
+                "ppsk",
+                "email",
+                "sysop"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "data",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "badness",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "read",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "resolved",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6e0add40defbd07adc15de006ab7aee4d120ad53b3c90f3a0488cfb5030b9dcf"
+}

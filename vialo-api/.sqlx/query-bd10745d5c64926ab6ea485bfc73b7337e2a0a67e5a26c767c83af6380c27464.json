@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT transitions, ARRAY_AGG(asset_id) as assets FROM (SELECT ARRAY_AGG(jsonb_build_object('schema', bsa.schema_id, 'begins', bsa.begins, 'schedule', bs.schedule, 'slot_price', slot_price) ORDER BY bsa.begins) as transitions, bsa.asset_id FROM bookable_schema_assignments bsa JOIN bookable_schemas bs ON bs.id = bsa.schema_id WHERE bsa.asset_id = ANY($1) AND bsa.begins <= $2::date group by bsa.asset_id) group by transitions;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "transitions",
+        "type_info": "JsonbArray"
+      },
+      {
+        "ordinal": 1,
+        "name": "assets",
+        "type_info": "Int4Array"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4Array",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "bd10745d5c64926ab6ea485bfc73b7337e2a0a67e5a26c767c83af6380c27464"
+}

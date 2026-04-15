@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO res_leases (tenant_id, lessor_id, room_id, begins, ends) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (tenant_id) DO UPDATE SET (lessor_id, room_id, begins, ends) = ($2, $3, $4, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a16f0fd27a6453322129b09a2b8c6c0823df4feacd466f1a20daedcbc63b6725"
+}

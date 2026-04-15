@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id, a.full_name, a.email::text as \"email?: String\", r.label as \"room_name\" FROM accounts_people a LEFT JOIN res_leases l ON a.id = l.tenant_id\n            LEFT JOIN res_rooms r ON l.room_id = r.id WHERE a.auth_id IS NULL AND a.full_name IS NOT NULL AND string_to_array(LOWER(a.full_name), ' ') @> string_to_array(LOWER($1), ' ') AND string_to_array(LOWER($1), ' ') @> string_to_array(LOWER(a.full_name), ' ')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "full_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email?: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "room_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      false
+    ]
+  },
+  "hash": "9d84225d27a877318ccedae3b5399c83cd003ce3941cb4f11b601d96a2a78dff"
+}

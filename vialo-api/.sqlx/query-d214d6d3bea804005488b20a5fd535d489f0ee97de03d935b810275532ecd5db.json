@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (\n                    (SELECT EXISTS (SELECT 1 FROM net_cred WHERE id = $2 AND account_id = $1))\n                    OR\n                    account_role_exists($1, 'network_manager'::app_role)\n                ) AS \"allowed: bool\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed: bool",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d214d6d3bea804005488b20a5fd535d489f0ee97de03d935b810275532ecd5db"
+}

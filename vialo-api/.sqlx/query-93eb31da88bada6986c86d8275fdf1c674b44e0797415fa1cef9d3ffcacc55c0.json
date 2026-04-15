@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO subsystem_jobs (subsystem, data, created_at, last_updated, status) VALUES ('ppsk',$1,NOW(),NOW(), 'pending') RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "93eb31da88bada6986c86d8275fdf1c674b44e0797415fa1cef9d3ffcacc55c0"
+}

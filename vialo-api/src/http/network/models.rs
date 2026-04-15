@@ -1,0 +1,61 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sqlx::{FromRow, types::ipnetwork};
+use uuid::Uuid;
+
+#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize)]
+#[sqlx(type_name = "net_auth", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum NetAuth {
+    UsernamePassword,
+    Password,
+}
+
+#[derive(FromRow, Serialize, Deserialize)]
+pub struct NetworkModel {
+    pub id: i32,
+    pub label: String,
+    pub icon: Option<String>,
+    pub multi_device: bool,
+    pub auto_add_on_auth: bool,
+    pub auto_add_via_dhcp: bool,
+    pub auth: Option<NetAuth>,
+    pub gen_username: Option<i32>,
+    pub gen_password: Option<i32>,
+    pub active: bool,
+    pub wired: bool,
+}
+
+#[derive(FromRow, Serialize)]
+pub struct RealmModel {
+    pub id: Uuid,
+    pub ipv4_subnet: Option<ipnetwork::IpNetwork>,
+    pub ipv6_prefix: Option<ipnetwork::IpNetwork>,
+    pub ipv4_nat: Option<ipnetwork::IpNetwork>,
+    pub ipv4_dns: Option<ipnetwork::IpNetwork>,
+    pub ipv4_router: Option<ipnetwork::IpNetwork>,
+
+    pub vlan: Option<i32>,
+}
+
+#[derive(FromRow, Serialize, Deserialize)]
+pub struct CredentialModel {
+    pub id: Uuid,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub account_id: Uuid,
+    pub network_id: i32,
+    pub last_updated: Option<DateTime<Utc>>,
+}
+
+#[derive(FromRow, Serialize, Deserialize)]
+pub struct CredentialModelWithAccountEmbed {
+    pub id: Uuid,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub network_id: i32,
+    pub last_updated: Option<DateTime<Utc>>,
+
+    pub account: Option<Value>, // TODO Make not optional
+}

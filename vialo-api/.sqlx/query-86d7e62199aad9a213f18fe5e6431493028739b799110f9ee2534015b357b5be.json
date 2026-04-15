@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (\n                -- author\n                (SELECT COUNT(*) > 0 FROM board_posts WHERE id = $1 AND account_id = $2)\n                OR\n                -- moderate permission on the post's board\n                (SELECT COUNT(*) > 0\n                 FROM board_posts bp\n                 JOIN board_group_perms bgp ON bp.board_id = bgp.board_id\n                 JOIN account_group_memberships agm ON bgp.group_id = agm.group_id\n                 WHERE bp.id = $1 AND agm.account_id = $2 AND bgp.perm >= 'moderate')\n            ) AS \"allowed: bool\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed: bool",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "86d7e62199aad9a213f18fe5e6431493028739b799110f9ee2534015b357b5be"
+}

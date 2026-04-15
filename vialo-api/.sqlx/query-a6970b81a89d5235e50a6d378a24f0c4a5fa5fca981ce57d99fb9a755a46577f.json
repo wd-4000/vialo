@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM account_group_app_roles WHERE group_id = $1 AND role = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "app_role",
+            "kind": {
+              "Enum": [
+                "account_manager",
+                "credit_manager",
+                "bookable_manager",
+                "board_manager",
+                "home_manager",
+                "network_manager",
+                "history_viewer",
+                "health_viewer"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a6970b81a89d5235e50a6d378a24f0c4a5fa5fca981ce57d99fb9a755a46577f"
+}

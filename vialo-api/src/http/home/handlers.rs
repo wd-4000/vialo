@@ -1,0 +1,108 @@
+use super::super::home::models::JumboModelTranslated;
+use super::{models::QuickLinkModelTranslated, schemas::PostFilterOptions};
+use crate::http::home::models::BoardPostModelHomeTranslated;
+use crate::http::util::VialoError;
+use crate::{AppState, list_i18n_generic};
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum_extra::extract::Query;
+use serde_json::json;
+use sqlx::query_as;
+use std::sync::Arc;
+
+pub async fn list_quicklinks(
+    Query(opts): Query<PostFilterOptions>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    list_i18n_generic!(
+        &data.db,
+        "SELECT * FROM get_i18n_quicklinks($1) LIMIT $2 OFFSET $3",
+        opts,
+        QuickLinkModelTranslated
+    );
+}
+
+pub async fn list_jumbo(
+    Query(opts): Query<PostFilterOptions>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    list_i18n_generic!(
+        &data.db,
+        "SELECT * FROM get_i18n_jumbo($1) LIMIT $2 OFFSET $3",
+        opts,
+        JumboModelTranslated
+    );
+}
+
+pub async fn get_home_aggregated(
+    Query(opts): Query<PostFilterOptions>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    let limit = opts.limit.unwrap_or(10);
+    let langs = opts
+        .lang
+        .unwrap_or(vec![String::from("en"), String::from("de")]);
+    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+
+    let jumbo = query_as!(
+        JumboModelTranslated,
+        "SELECT * FROM get_i18n_jumbo($1) LIMIT $2 OFFSET $3",
+        &langs,
+        limit as i32,
+        offset as i32
+    )
+    .fetch_all(&data.db);
+
+    let quicklinks = query_as!(
+        QuickLinkModelTranslated,
+        "SELECT * FROM get_i18n_quicklinks($1) LIMIT $2 OFFSET $3",
+        &langs,
+        limit as i32,
+        offset as i32
+    )
+    .fetch_all(&data.db);
+
+    let posts = query_as!(
+        BoardPostModelHomeTranslated,
+        "SELECT
+            bp.id,
+            bp.icon,
+            -- Use get_i18n_string for title, content, and location translations with fallback
+            get_i18n_string(bp.title, $1) AS title,
+            left(get_i18n_string(bp.content_html, $1), 400) AS content,
+            get_i18n_string(bp.location, $1) AS location,
+            bp.event_from,
+            bp.event_to,
+            bp.created_at,
+            bpp.pinned_until
+        FROM
+            board_posts bp
+        LEFT JOIN
+            board_pinned_posts bpp ON bp.id = bpp.post_id
+        WHERE (bp.created_at >= CURRENT_DATE::timestamptz) OR (bpp.pinned_until <= NOW() AND bpp.board_id = 0)
+        ORDER BY created_at DESC LIMIT $2 OFFSET $3 ",
+        &langs,
+        limit as i32,
+        offset as i32
+    )
+    .fetch_all(&data.db);
+
+    let (jumbo, quicklinks, posts) = tokio::try_join!(jumbo, quicklinks, posts)?;
+
+    let mut pinned = Vec::new();
+    let mut timeline = Vec::new();
+
+    for post in posts {
+        if post.pinned_until.is_some() {
+            pinned.push(post)
+        } else {
+            timeline.push(post)
+        }
+    }
+
+    return Ok((
+        StatusCode::OK,
+        Json(
+            json!({"status": "success","data": {"quicklinks":quicklinks, "jumbo":jumbo, "posts":{"pinned":pinned,"timeline":timeline}}}),
+        ),
+    ));
+}

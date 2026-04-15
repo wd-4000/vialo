@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM (SELECT\n                          bp.id,\n                          bp.account_id,\n                          bp.board_id,\n                          bp.icon,\n                          -- Use get_i18n_string for title, content, and location translations with fallback\n                          get_i18n_string(bp.title, $1) AS title,\n                          get_i18n_string(bp.content, $1) AS content,\n                          get_i18n_string(bp.location, $1) AS location,\n                          bp.event_from,\n                          bp.event_to,\n                          bp.created_at,\n                          NULL AS \"pinned_on: Vec<i32>\"\n                            FROM board_posts bp\n                            LEFT JOIN board_group_perms bgp ON bp.board_id = bgp.board_id\n                            LEFT JOIN account_group_memberships agm ON bgp.group_id = agm.group_id WHERE CASE WHEN bp.event_to IS NOT NULL THEN bp.event_to >= NOW() - interval '3 hours' ELSE bp.created_at > NOW() - interval '1 day' END\n                          AND bp.visibility = 'public'\n                          AND bp.board_id = ANY($2)\n                          GROUP BY bp.id\n                         )  WHERE (title ILIKE '%' || $3 || '%' OR location ILIKE '%' || $3 || '%')\n                          ORDER BY (event_from <= now() AND event_to >= now()), created_at DESC LIMIT $4 OFFSET $5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "board_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "icon",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "event_from",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "event_to",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "pinned_on: Vec<i32>",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Int4Array",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      null,
+      null,
+      null,
+      true,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "25d2e49df1b65a0a84f0515a42538d8da84dbc1ba4a86a488f3a40fdc80859b3"
+}

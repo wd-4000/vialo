@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "RESET app.subsystem;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "388765be97fdc1127ee78dbf9f0910e0d83950c2726d6161e92cc2f52c806f21"
+}

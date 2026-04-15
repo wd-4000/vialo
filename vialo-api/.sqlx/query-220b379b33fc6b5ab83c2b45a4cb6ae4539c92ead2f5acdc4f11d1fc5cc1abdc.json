@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE subsystem_jobs SET status = $1, last_updated = NOW() WHERE id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "job_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "processing",
+                "done",
+                "error"
+              ]
+            }
+          }
+        },
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "220b379b33fc6b5ab83c2b45a4cb6ae4539c92ead2f5acdc4f11d1fc5cc1abdc"
+}

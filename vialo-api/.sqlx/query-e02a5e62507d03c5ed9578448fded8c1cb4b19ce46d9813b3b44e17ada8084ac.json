@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM i18n_strings WHERE id = ANY($1);",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e02a5e62507d03c5ed9578448fded8c1cb4b19ce46d9813b3b44e17ada8084ac"
+}

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT nc.id, nc.username, nc.password, nc.network_id, nc.last_updated,\n         jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account\n         FROM net_cred nc\n         LEFT JOIN accounts_people ap ON nc.account_id = ap.id\n         LEFT JOIN account_groups ag ON nc.account_id = ag.id\n         WHERE nc.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "password",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "network_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_updated",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "account",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "f34b1e285ef10d0552ca42b826dbe1931abeb881db1d335cb2bef8372adcab3e"
+}

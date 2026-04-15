@@ -1,0 +1,61 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT nr.* FROM net_realms nr JOIN net_realm_assignments nra ON nra.realm_id = nr.id WHERE nra.account_id = $1 AND (ipv4_subnet::text ILIKE '%' || $2 || '%' OR ipv4_nat::text ILIKE '%' || $2 || '%' OR ipv6_prefix::text ILIKE '%' || $2 || '%') ORDER BY id ASC LIMIT $3 OFFSET $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "ipv4_subnet",
+        "type_info": "Cidr"
+      },
+      {
+        "ordinal": 2,
+        "name": "ipv4_nat",
+        "type_info": "Inet"
+      },
+      {
+        "ordinal": 3,
+        "name": "ipv4_router",
+        "type_info": "Inet"
+      },
+      {
+        "ordinal": 4,
+        "name": "ipv4_dns",
+        "type_info": "Inet"
+      },
+      {
+        "ordinal": 5,
+        "name": "ipv6_prefix",
+        "type_info": "Cidr"
+      },
+      {
+        "ordinal": 6,
+        "name": "vlan",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "5a4f30d7e30394ca0e6ed4927fabac47b92043c0883aece60293d4a63203a1bf"
+}

@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n                bp.id,\n                bp.account_id,\n                bp.board_id,\n                bp.icon,\n                -- Use get_i18n_string for title, content, and location translations with fallback\n                get_i18n_all_string_translations(bp.title) AS title,\n                get_i18n_all_string_translations(bp.content) AS content,\n                get_i18n_all_string_translations(bp.content_plain) AS content_plain,\n                NULL::jsonb as content_html,\n                get_i18n_all_string_translations(bp.location) AS location,\n                bp.event_from,\n                bp.event_to,\n                bp.created_at\n            FROM\n                board_posts bp\n            LEFT JOIN board_group_perms bgp ON bp.board_id = bgp.board_id\n            LEFT JOIN account_group_memberships agm ON bgp.group_id = agm.group_id\n            WHERE bp.id = $1 AND bp.visibility = 'public'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "board_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "icon",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "title",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "content",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "content_plain",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "content_html",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "location",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "event_from",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "event_to",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      null,
+      null,
+      null,
+      null,
+      null,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "68173d24d75dbb5d194d0adb1b40414b5c6fb6f4e912dc5e5398337d658be87d"
+}

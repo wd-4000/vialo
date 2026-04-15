@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO account_group_app_roles (group_id, role) VALUES ($1, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "app_role",
+            "kind": {
+              "Enum": [
+                "account_manager",
+                "credit_manager",
+                "bookable_manager",
+                "board_manager",
+                "home_manager",
+                "network_manager",
+                "history_viewer",
+                "health_viewer"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c5aa990ae07ba9db86f0dedc1359cea4db944c60b3ef7c92978aaa7578c2e559"
+}

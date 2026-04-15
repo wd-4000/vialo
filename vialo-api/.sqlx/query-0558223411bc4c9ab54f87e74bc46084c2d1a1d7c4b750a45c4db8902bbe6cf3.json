@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE accounts_people SET credit_balance = 0 WHERE id = $1 AND credit_balance IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0558223411bc4c9ab54f87e74bc46084c2d1a1d7c4b750a45c4db8902bbe6cf3"
+}

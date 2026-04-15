@@ -1,0 +1,10 @@
+[target.aarch64-apple-darwin]
+rustflags = [
+  # Don't pack debug info
+  "-C", "split-debuginfo=unpacked",
+]
+
+[profile.dev]
+opt-level = 0
+debug = true
+incremental = true

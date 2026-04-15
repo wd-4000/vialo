@@ -1,0 +1,40 @@
+secrets:
+  postgres_root_username:
+    file: ./private/postgres_root_username
+  postgres_root_password:
+    file: ./private/postgres_root_password
+services:
+  vialo-api:
+    stop_grace_period: 30s
+    build: ./vialo-api
+    restart: always
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./vialo.toml:/app/vialo.toml
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - "./.env"
+  postgres:
+    build: ./postgres
+    volumes:
+      - "./data/postgres:/var/lib/postgresql"
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_root_password
+      - POSTGRES_USER_FILE=/run/secrets/postgres_root_username
+      - POSTGRES_DB=vialo
+      - TZ=Europe/Berlin
+      - PGTZ=Europe/Berlin
+
+    secrets:
+      - postgres_root_password
+      - postgres_root_username

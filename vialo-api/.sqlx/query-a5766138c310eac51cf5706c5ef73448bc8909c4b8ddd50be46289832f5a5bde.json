@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sum(badness) FROM health_events WHERE (NOW() - created_at >= '1 hour' AND badness > 0 AND resolved = false AND read = false) OR badness > 99",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sum",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a5766138c310eac51cf5706c5ef73448bc8909c4b8ddd50be46289832f5a5bde"
+}
