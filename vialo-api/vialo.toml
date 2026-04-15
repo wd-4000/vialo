@@ -7,8 +7,11 @@ listen = "0.0.0.0:8000"
 [hooks]
 listen = "0.0.0.0:8011"
 
-[email]
-url = { unsubscribe = "https://xyz.example.com/unsub/", post =  "https://xyz.example.com/post/", board = "https://xyz.example.com/board/", preferences= "https://xyz.example.com/prefs/" }
+[email.url]
+unsubscribe = "https://xyz.example.com/unsub/"
+post = "https://xyz.example.com/post/"
+board = "https://xyz.example.com/board/"
+preferences = "https://xyz.example.com/prefs/"
 
 [auth]
 type = "kratos"
