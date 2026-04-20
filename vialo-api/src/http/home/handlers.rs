@@ -9,6 +9,7 @@ use serde_json::json;
 use sqlx::query_as;
 use std::sync::Arc;
 
+#[utoipa::path(get, path = "/home/quicklinks", responses((status = 200, description = "OK")))]
 pub async fn list_quicklinks(
     Query(opts): Query<PostFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -21,6 +22,7 @@ pub async fn list_quicklinks(
     );
 }
 
+#[utoipa::path(get, path = "/home/jumbo", responses((status = 200, description = "OK")))]
 pub async fn list_jumbo(
     Query(opts): Query<PostFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -33,6 +35,7 @@ pub async fn list_jumbo(
     );
 }
 
+#[utoipa::path(get, path = "/home", responses((status = 200, description = "OK")))]
 pub async fn get_home_aggregated(
     Query(opts): Query<PostFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -99,10 +102,10 @@ pub async fn get_home_aggregated(
         }
     }
 
-    return Ok((
+    Ok((
         StatusCode::OK,
         Json(
-            json!({"status": "success","data": {"quicklinks":quicklinks, "jumbo":jumbo, "posts":{"pinned":pinned,"timeline":timeline}}}),
+            json!({"quicklinks":quicklinks, "jumbo":jumbo, "posts":{"pinned":pinned,"timeline":timeline}}),
         ),
-    ));
+    ))
 }

@@ -1,4 +1,4 @@
-use crate::helpers::PgDateTime;
+use crate::helpers::{LangVariant, PgDateTime};
 
 use super::models::{
     BoardPostIdModel, BookableAssetStatus, BookableAssetTranslatedAllLanguages,
@@ -21,15 +21,15 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sqlx::{query, query_as};
 use sqlx_conditional_queries::conditional_query_as;
 use std::{collections::HashMap, sync::Arc};
 use std::{i64, time::Duration};
 use tokio::time::sleep;
 use tracing::info;
+use utoipa::ToSchema;
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, ToSchema)]
 pub struct BookableFilterOptions {
     pub lang: Option<Vec<String>>,
     pub page: Option<i64>,
@@ -37,6 +37,7 @@ pub struct BookableFilterOptions {
     pub asset_types: Option<Vec<i32>>,
 }
 
+#[utoipa::path(get, path = "/bookables", responses((status = 200, description = "OK")))]
 pub async fn list_bookables(
     Query(opts): Query<BookableFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -72,12 +73,10 @@ pub async fn list_bookables(
     )
     .fetch_all(&data.db)
     .await?;
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(post, path = "/bookables/{id}/quick-unlock", responses((status = 200, description = "Unlocked")))]
 pub async fn quick_unlock(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -130,10 +129,10 @@ pub async fn quick_unlock(
         }
     });
 
-    return Ok((StatusCode::OK, Json(json!({"status": "success"}))));
+    Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct PostBookableSchema {
     //pub group_id: Option<i32>,
     pub name: HashMap<String, String>,
@@ -144,6 +143,7 @@ pub struct PostBookableSchema {
     pub asset_type: i32,
 }
 
+#[utoipa::path(post, path = "/bookables", responses((status = 201, description = "Created")))]
 pub async fn post_bookable(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -197,11 +197,12 @@ pub async fn post_bookable(
     .fetch_one(&mut *trans)
     .await?;
 
-    let device_response = json!({"status": "success","data": record});
+    let device_response = record;
     trans.commit().await?;
-    return Ok((StatusCode::CREATED, Json(device_response)));
+    Ok((StatusCode::CREATED, Json(device_response)))
 }
 
+#[utoipa::path(put, path = "/bookables/{id}", responses((status = 200, description = "Updated")))]
 pub async fn put_bookable(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -273,12 +274,10 @@ pub async fn put_bookable(
 
     trans.commit().await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(get, path = "/bookables/{id}", responses((status = 200, description = "OK")))]
 pub async fn get_bookable(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -306,7 +305,7 @@ pub async fn get_bookable(
         .fetch_one(&data.db)
         .await?;
 
-        return Ok(Json(json!({"status": "success","data": post})));
+        Ok(Json(LangVariant::AllLangs(post)))
     } else {
         let post = sqlx::query_as!(
             BookableAssetTranslatedWithStatus,
@@ -326,6 +325,6 @@ pub async fn get_bookable(
         .fetch_one(&data.db)
         .await?;
 
-        return Ok(Json(json!({"status": "success","data": post})));
+        Ok(Json(LangVariant::Localized(post)))
     }
 }

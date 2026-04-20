@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT ap.id,\n             ap.label,\n           ap.auth_id,\n            ap.email,\n           ap.membership_start,\n             ap.membership_end as \"membership_end: PgDate\",\n              ap.full_name,\n              ap.manually_suspended,\n             ap.credit_balance FROM accounts_people ap WHERE ap.id = $1",
+  "query": "SELECT ap.id,\n         ap.label,\n       ap.auth_id,\n        ap.email,\n       ap.membership_start,\n         ap.membership_end as \"membership_end: PgDate\",\n          ap.full_name,\n          ap.manually_suspended,\n         ap.credit_balance, spc.printer_username, spc.printer_id as \"printer_id?\"\n         FROM accounts_people ap LEFT JOIN subsystem_printer_context spc ON ap.id = spc.id WHERE ap.id = $1",
   "describe": {
     "columns": [
       {
@@ -52,6 +52,16 @@
         "ordinal": 8,
         "name": "credit_balance",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "printer_username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "printer_id?",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -68,8 +78,10 @@
       false,
       true,
       false,
+      false,
+      true,
       false
     ]
   },
-  "hash": "4a71d095434443b5de1cb15d663107173add50c1ce611d7de09d5399f556bcfb"
+  "hash": "d19682f396495570a15c597f06f813cb2f0a472400f524b64affd58755ea440f"
 }

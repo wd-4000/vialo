@@ -37,6 +37,7 @@ struct IdentityResponse {
     candidates: Vec<PersonCandidateModel>,
 }
 
+#[utoipa::path(get, path = "/people/identities/{id}", responses((status = 200, description = "OK")))]
 pub async fn get(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -59,11 +60,13 @@ pub async fn get(
         vec![]
     };
 
-    return Ok(Json(
-        serde_json::json!({"status": "success", "data": json!(IdentityResponse { identity: person, candidates })}),
-    ));
+    Ok(Json(IdentityResponse {
+        identity: person,
+        candidates,
+    }))
 }
 
+#[utoipa::path(delete, path = "/people/identities/{id}", responses((status = 204, description = "Deleted")))]
 pub async fn delete(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -74,11 +77,11 @@ pub async fn delete(
 
     helpers::people::delete_identity(id, &mut trans)
         .await
-        .map_err(|e| VialoError::Anyhow(e.into()))?;
+        .map_err(|e| VialoError::Anyhow(e))?;
 
     trans.commit().await?;
 
-    return Ok(StatusCode::NO_CONTENT);
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -86,6 +89,7 @@ pub struct MergeUserSchema {
     pub account_id: Uuid,
 }
 
+#[utoipa::path(post, path = "/people/identities/{id}/merge", responses((status = 200, description = "Merged")))]
 pub async fn merge(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -102,10 +106,7 @@ pub async fn merge(
     .fetch_optional(&mut *conn)
     .await?
     {
-        return Ok((
-            StatusCode::OK,
-            Json(json!({"status": "success", "data": json!({"account_id": account_id})})),
-        ));
+        return Ok(Json(json!({"account_id": account_id})));
     }
 
     let person = sqlx::query!(
@@ -115,9 +116,9 @@ pub async fn merge(
     .fetch_one(&mut *conn)
     .await?;
 
-    return Err(VialoError::AppErrorWithDetails(
+    Err(VialoError::AppErrorWithDetails(
         StatusCode::CONFLICT,
         "identity_already_bound".into(),
         json!({"account_id": person.account_id, "auth_id": person.auth_id}),
-    ));
+    ))
 }

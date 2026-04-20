@@ -72,10 +72,10 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(devices::handlers::get_device_overview),
         );
 
-    return Router::new()
+    Router::new()
         .merge(public_routes)
         .merge(manager_routes)
         .merge(credential_routes)
         .merge(realm_read_routes)
-        .merge(device_routes);
+        .merge(device_routes)
 }

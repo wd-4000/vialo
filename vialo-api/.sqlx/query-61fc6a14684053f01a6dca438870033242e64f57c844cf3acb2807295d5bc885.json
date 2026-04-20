@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO subsystem_printer_context (printer_id, bw, color)\n            SELECT * FROM UNNEST($1::integer[], $2::integer[], $3::integer[])\n            AS t(printer_id, bw, color)\n            ON CONFLICT (printer_id)\n            DO UPDATE SET\n                bw = EXCLUDED.bw,\n                color = EXCLUDED.color;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4Array",
+        "Int4Array",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "61fc6a14684053f01a6dca438870033242e64f57c844cf3acb2807295d5bc885"
+}

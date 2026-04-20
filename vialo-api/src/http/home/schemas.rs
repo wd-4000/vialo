@@ -1,15 +1,16 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, ToSchema)]
 pub struct PostFilterOptions {
     pub lang: Option<Vec<String>>,
     pub page: Option<usize>,
     pub limit: Option<usize>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreatePostSchema {
     pub board_id: i32,
     pub icon: Option<String>,

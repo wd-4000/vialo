@@ -10,8 +10,8 @@ CREATE TABLE bookable_connectors (
   device_name text,
   serial_number text,
   mac macaddr,
-  username text NOT NULL,
-  password text NOT NULL
+  username BYTEA NOT NULL,
+  password BYTEA NOT NULL
 );
 
 CREATE TABLE bookable_asset_types (

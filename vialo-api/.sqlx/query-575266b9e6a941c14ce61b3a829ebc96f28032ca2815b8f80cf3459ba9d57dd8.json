@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * from net_cred WHERE account_id = $1 AND network_id = $2",
+  "query": "SELECT id, username, password AS \"password: Encrypted<String>\", account_id, network_id, last_updated FROM net_cred WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -15,8 +15,8 @@
       },
       {
         "ordinal": 2,
-        "name": "password",
-        "type_info": "Text"
+        "name": "password: Encrypted<String>",
+        "type_info": "Bytea"
       },
       {
         "ordinal": 3,
@@ -36,8 +36,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Int4"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -49,5 +48,5 @@
       true
     ]
   },
-  "hash": "30008ddaccdf6d90c642bbda843e5b681cc879a26a45660b0087d2b9a13bb3ce"
+  "hash": "575266b9e6a941c14ce61b3a829ebc96f28032ca2815b8f80cf3459ba9d57dd8"
 }

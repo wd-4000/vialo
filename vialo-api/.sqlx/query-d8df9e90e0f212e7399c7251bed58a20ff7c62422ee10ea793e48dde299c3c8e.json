@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO bookable_connectors (endpoint, username, password)\n        VALUES ($1, $2, $3)\n        RETURNING\n            id,\n            endpoint,\n            num_outputs,\n            device_name,\n            serial_number,\n            mac::text,\n            username,\n            password\n        ;",
+  "query": "SELECT id,\n            endpoint,\n            num_outputs,\n            device_name,\n            serial_number,\n            mac::text\n        FROM bookable_connectors;",
   "describe": {
     "columns": [
       {
@@ -32,24 +32,10 @@
         "ordinal": 5,
         "name": "mac",
         "type_info": "Text"
-      },
-      {
-        "ordinal": 6,
-        "name": "username",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 7,
-        "name": "password",
-        "type_info": "Text"
       }
     ],
     "parameters": {
-      "Left": [
-        "Text",
-        "Text",
-        "Text"
-      ]
+      "Left": []
     },
     "nullable": [
       false,
@@ -57,10 +43,8 @@
       true,
       true,
       true,
-      null,
-      false,
-      false
+      null
     ]
   },
-  "hash": "730f47e6339cf36ccc59011925554db0942f07bca6bf375bf427489b9798c788"
+  "hash": "d8df9e90e0f212e7399c7251bed58a20ff7c62422ee10ea793e48dde299c3c8e"
 }

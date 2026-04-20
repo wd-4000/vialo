@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO net_cred (username, password, account_id, network_id, last_updated) VALUES ($1, $2, $3, $4, NOW()) RETURNING *",
+  "query": "SELECT id, username, password AS \"password: Encrypted<String>\", account_id, network_id, last_updated from net_cred WHERE account_id = $1 AND network_id = $2",
   "describe": {
     "columns": [
       {
@@ -15,8 +15,8 @@
       },
       {
         "ordinal": 2,
-        "name": "password",
-        "type_info": "Text"
+        "name": "password: Encrypted<String>",
+        "type_info": "Bytea"
       },
       {
         "ordinal": 3,
@@ -36,8 +36,6 @@
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Text",
         "Uuid",
         "Int4"
       ]
@@ -51,5 +49,5 @@
       true
     ]
   },
-  "hash": "6aeaf71efbc7a410350c685913fd0666a022df7c77313f2894fa937667c41419"
+  "hash": "5aa3038119fea72d3cf6dbc6172512cfe801bba6ece955ba806e3196d53a5eb7"
 }

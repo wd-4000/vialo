@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT nc.id, nc.username as \"username!\", nc.password as \"password!\", nc.network_id, nc.last_updated,\n         n.label AS network_label,\n         nc.account_id, coalesce(ap.full_name, ag.label) as account_full_name\n         FROM net_cred nc\n         JOIN net_networks n ON nc.network_id = n.id\n         LEFT JOIN accounts_people ap ON nc.account_id = ap.id\n         LEFT JOIN account_groups ag ON nc.account_id = ag.id\n         WHERE nc.id = $1 AND nc.username IS NOT NULL AND nc.password IS NOT NULL",
+  "query": "SELECT nc.id, nc.username as \"username!\", nc.password AS \"password: Encrypted<String>\", nc.network_id, nc.last_updated,\n         n.label AS network_label,\n         nc.account_id, coalesce(ap.full_name, ag.label) as account_full_name\n         FROM net_cred nc\n         JOIN net_networks n ON nc.network_id = n.id\n         LEFT JOIN accounts_people ap ON nc.account_id = ap.id\n         LEFT JOIN account_groups ag ON nc.account_id = ag.id\n         WHERE nc.id = $1 AND nc.username IS NOT NULL AND nc.password IS NOT NULL",
   "describe": {
     "columns": [
       {
@@ -15,8 +15,8 @@
       },
       {
         "ordinal": 2,
-        "name": "password!",
-        "type_info": "Text"
+        "name": "password: Encrypted<String>",
+        "type_info": "Bytea"
       },
       {
         "ordinal": 3,
@@ -60,5 +60,5 @@
       null
     ]
   },
-  "hash": "8c197b56bb5b4b326f0afbeb6e94ef087ce0f7698e5b8b20cc9c7b85594e87f7"
+  "hash": "be377c8cb354e8df71e6a07afcf267045787f801381b8fd2020466ece5f5ca76"
 }

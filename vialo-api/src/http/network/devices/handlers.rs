@@ -1,13 +1,19 @@
 use crate::{
     AppState,
+    helpers::{
+        ResponseVariant,
+        encryption::{self, Encrypted},
+    },
     http::{
         network::{
             devices::models::DeviceWithRefsAndIpAndAccountAndCredentialEmbed,
             mac::MacAddressWrapper,
-            models::{CredentialModel, NetAuth, NetworkModel},
+            models::{CredentialModelWithPassword, NetAuth, NetworkModel},
         },
-        util::models::{IdOrMeOrAllQuery, IdOrMeQuery},
-        util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans},
+        util::{
+            JsonE, User, VialoError, grab_authd_conn_user, grab_trans,
+            models::{IdOrMeOrAllQuery, IdOrMeQuery},
+        },
     },
     permissions::check_app_role,
 };
@@ -38,6 +44,7 @@ pub struct DeviceQuerySchema {
     pub search: Option<String>,
     pub account_id: Option<IdOrMeOrAllQuery>,
 }
+#[utoipa::path(get, path = "/network/devices", responses((status = 200, description = "OK")))]
 pub async fn list_devices(
     Query(opts): Query<DeviceQuerySchema>,
     Extension(user): Extension<User>,
@@ -53,8 +60,8 @@ pub async fn list_devices(
         _ => false,
     };
 
-    if requesting_other_account {
-        if !sqlx::query_scalar!(
+    if requesting_other_account
+        && !sqlx::query_scalar!(
             r#"SELECT account_role_exists($1, 'network_manager'::app_role) AS "allowed: bool""#,
             user.id
         )
@@ -65,7 +72,6 @@ pub async fn list_devices(
         {
             return Err(VialoError::Forbidden());
         }
-    }
 
     if let Some(IdOrMeOrAllQuery::All) = opts.account_id {
         let devices = conditional_query_as!(DeviceModelWithAccountEmbed,
@@ -82,10 +88,7 @@ pub async fn list_devices(
           ).fetch_all(&data.db)
             .await?;
 
-        Ok(Json(json!({
-            "status": "success",
-            "data": devices,
-        })))
+        Ok(Json(ResponseVariant::A(devices)))
     } else {
         let current_account_id = user.id; // certified this macro moment
         let devices = conditional_query_as!(
@@ -105,10 +108,7 @@ pub async fn list_devices(
     .fetch_all(&data.db)
     .await?;
 
-        Ok(Json(json!({
-            "status": "success",
-            "data": devices,
-        })))
+        Ok(Json(ResponseVariant::B(devices)))
     }
 }
 
@@ -127,6 +127,7 @@ pub enum PostDeviceSchema {
         cred_id: Uuid,
     },
 }
+#[utoipa::path(post, path = "/network/devices", responses((status = 201, description = "Created")))]
 pub async fn post_device(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -161,8 +162,8 @@ pub async fn post_device(
 
             let credential =
                 sqlx::query_as!(
-                    CredentialModel,
-                    "SELECT id, username, password, account_id, network_id, last_updated FROM net_cred WHERE id = $1",
+                    CredentialModelWithPassword,
+                    r#"SELECT id, username, password AS "password: Encrypted<String>", account_id, network_id, last_updated FROM net_cred WHERE id = $1"#,
                     cred_id
                 )
                 .fetch_one(&mut *trans)
@@ -213,8 +214,8 @@ pub async fn post_device(
             let mut credential = None;
             if network.multi_device {
                 credential = sqlx::query_as!(
-                    CredentialModel,
-                    "SELECT * from net_cred WHERE account_id = $1 AND network_id = $2",
+                    CredentialModelWithPassword,
+                    r#"SELECT id, username, password AS "password: Encrypted<String>", account_id, network_id, last_updated from net_cred WHERE account_id = $1 AND network_id = $2"#,
                     account_id,
                     network_id
                 )
@@ -225,13 +226,16 @@ pub async fn post_device(
             // Generate a new credential if not found
             if credential.is_none() {
                 let username: String = Alphanumeric.sample_string(&mut rng(), 8);
+
                 let password: String = Alphanumeric.sample_string(&mut rng(), 16);
+                let password_encrypted = encryption::encrypt(&password)?;
+
                 credential = Some(
                     sqlx::query_as!(
-                        CredentialModel,
-                        "INSERT INTO net_cred (username, password, account_id, network_id, last_updated) VALUES ($1, $2, $3, $4, NOW()) RETURNING *",
+                        CredentialModelWithPassword,
+                        r#"INSERT INTO net_cred (username, password, account_id, network_id, last_updated) VALUES ($1, $2, $3, $4, NOW()) RETURNING id, username, password AS "password: Encrypted<String>", account_id, network_id, last_updated"#,
                         username,
-                        password,
+                        password_encrypted,
                         account_id,
                         network_id
                     )
@@ -253,14 +257,15 @@ pub async fn post_device(
 
     trans.commit().await?;
 
-    return Ok((StatusCode::CREATED, {
+    Ok((StatusCode::CREATED, {
         let mut data = serde_json::to_value(&device).map_err(|e| VialoError::Anyhow(e.into()))?;
         data["credential"] =
             serde_json::to_value(&final_cred).map_err(|e| VialoError::Anyhow(e.into()))?;
-        Json(json!({"status": "success", "data": data}))
-    }));
+        Json(data)
+    }))
 }
 
+#[utoipa::path(get, path = "/network/devices/{id}/overview", responses((status = 200, description = "OK")))]
 pub async fn get_device_overview(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -282,9 +287,7 @@ pub async fn get_device_overview(
     .fetch_one(&data.db)
     .await
     {
-        Ok(device) => Ok(Json(
-            serde_json::json!({"status": "success","data": serde_json::json!(device)}),
-        )),
+        Ok(device) => Ok(Json(device)),
         Err(_) => {
             // Ok fine, maybe the user's a NetworkManager?
             let is_manager = sqlx::query_scalar!(
@@ -312,7 +315,7 @@ pub async fn get_device_overview(
                 .fetch_one(&data.db)
                 .await
                 {
-                    Ok(device) => Ok(Json(json!({"status": "success","data": device}))),
+                    Ok(device) => Ok(Json(device)),
                     Err(e) => {
                         println!("{:?}", e);
                         Err(VialoError::NotFound())
@@ -331,6 +334,7 @@ pub struct UpdateDeviceSchema {
     pub mac: Option<MacAddressWrapper>,
     pub cred: Option<Uuid>,
 }
+#[utoipa::path(patch, path = "/network/devices/{id}", responses((status = 200, description = "Updated")))]
 pub async fn update_device(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -363,13 +367,14 @@ pub async fn update_device(
     .fetch_one(&data.db)
     .await?;
 
-    let device_response = serde_json::json!({"status": "success","data": json!({
+    let device_response = json!({
         "label"  : device.label,
-    })});
+    });
 
-    return Ok(Json(device_response));
+    Ok(Json(device_response))
 }
 
+#[utoipa::path(delete, path = "/network/devices/{id}", responses((status = 204, description = "Deleted")))]
 pub async fn delete_device(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,

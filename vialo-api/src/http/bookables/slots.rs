@@ -3,7 +3,7 @@ use crate::http::util::{JsonE, User, VialoError};
 use crate::http::util::{grab_authd_conn_user, grab_trans};
 // use crate::ketoapi::subject::Ref;
 // use crate::ketoapi::{self, CheckRequest, Subject};
-use crate::AppState;
+use crate::{AppState, health, http::history::models::Subsystem};
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime};
@@ -27,6 +27,7 @@ pub struct TakenSlots {
     pub taken: JsonValue,
 }
 
+#[utoipa::path(get, path = "/bookables/slots/taken", responses((status = 200, description = "OK")))]
 pub async fn taken_slots(
     Query(opts): Query<TakenSlotQuery>,
     State(data): State<Arc<AppState>>,
@@ -43,10 +44,7 @@ pub async fn taken_slots(
     .fetch_one(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record.taken})),
-    ));
+    Ok((StatusCode::OK, Json(record.taken)))
 }
 
 #[derive(Deserialize, Serialize)]
@@ -63,6 +61,7 @@ pub struct SlotSchemaQuery {
     pub lang: Option<Vec<String>>,
 }
 
+#[utoipa::path(get, path = "/bookables/slots/schemas", responses((status = 200, description = "OK")))]
 pub async fn slot_schemas(
     Query(opts): Query<SlotSchemaQuery>,
     State(data): State<Arc<AppState>>,
@@ -131,11 +130,11 @@ pub async fn slot_schemas(
 
         return Ok((
             StatusCode::OK,
-            Json(json!({"status": "success","data": {"pages":pages, "assets": assets}})),
+            Json(json!({"pages":pages, "assets": assets})),
         ));
     }
 
-    return Err(VialoError::NotFound());
+    Err(VialoError::NotFound())
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -162,6 +161,7 @@ pub struct MaterializedSlots {
     pub price: Option<i32>,
 }
 
+#[utoipa::path(post, path = "/bookables/slots/book", responses((status = 200, description = "Booked")))]
 pub async fn book_slots(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -205,14 +205,36 @@ pub async fn book_slots(
         }
     }
 
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+
     if sum_total != body.expected_sum_total {
+        tracing::error!(
+            "sum_total_expectation: expected {} got {}",
+            body.expected_sum_total,
+            sum_total
+        );
+
+        health::add_health_event(
+            &mut *conn,
+            Subsystem::App,
+            "sum_total_expectation",
+            Some(serde_json::json!({
+                "expected": body.expected_sum_total,
+                "actual": sum_total,
+                "slots": body.slots
+            })),
+            10,
+            false,
+        )
+        .await
+        .map_err(|e| VialoError::Anyhow(e))?;
+
         return Err(VialoError::AppError(
             StatusCode::BAD_REQUEST,
             "sum_total_expectation".to_string(),
         ));
     }
 
-    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
     // The materialized slots seem to be right.
@@ -249,23 +271,18 @@ pub async fn book_slots(
     .await;
 
     if let Err(insert_error) = slot_insert_result {
-        if let sqlx::Error::Database(db_err) = &insert_error {
-            if let Some(constraint) = db_err.constraint() {
-                if constraint == "no_overlapping_appointments_per_asset" {
+        if let sqlx::Error::Database(db_err) = &insert_error
+            && let Some(constraint) = db_err.constraint()
+                && constraint == "no_overlapping_appointments_per_asset" {
                     return Err(VialoError::AppError(
                         StatusCode::BAD_REQUEST,
                         "overlap".to_string(),
                     ));
-                }
-            }
-        };
+                };
         return Err(VialoError::Anyhow(insert_error.into()));
     }
 
     trans.commit().await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": materialized_slots})),
-    ));
+    Ok((StatusCode::OK, Json(materialized_slots)))
 }

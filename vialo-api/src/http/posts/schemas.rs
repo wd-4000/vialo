@@ -1,16 +1,17 @@
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Deserialize, Debug, PartialEq,Eq,Hash)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Hash, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PostContentFormat {
     Markdown,
     Html,
-    Plain
+    Plain,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, ToSchema)]
 pub struct PostFilterOptions {
     pub lang: Option<Vec<String>>,
     pub page: Option<i64>,
@@ -19,11 +20,11 @@ pub struct PostFilterOptions {
     pub current_only: Option<bool>,
     pub board_id: Option<Vec<i32>>,
     pub pinned_on: Option<bool>,
-     #[serde(default)]
-    pub content_format: HashSet<PostContentFormat>
+    #[serde(default)]
+    pub content_format: HashSet<PostContentFormat>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreatePostSchema {
     pub board_id: i32,
     pub icon: Option<String>,

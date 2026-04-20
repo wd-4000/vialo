@@ -12,8 +12,8 @@ pub mod models;
 pub mod schemas;
 
 pub fn create_router(_app_state: Arc<AppState>) -> Router<Arc<AppState>> {
-    return Router::new()
+    Router::new()
         .route("/", get(handlers::get_home_aggregated))
         .route("/quicklinks", get(handlers::list_quicklinks))
-        .route("/jumbo", get(handlers::list_jumbo));
+        .route("/jumbo", get(handlers::list_jumbo))
 }

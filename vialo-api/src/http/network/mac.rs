@@ -20,7 +20,7 @@ impl Serialize for MacAddressWrapper {
 
 impl MacAddressWrapper {
     pub fn get_value(&self) -> mac_address::MacAddress {
-        return self.0;
+        self.0
     }
 }
 
@@ -37,10 +37,10 @@ impl<'de> Visitor<'de> for MacAddrVisitor {
     where
         E: de::Error,
     {
-        if let Ok(res) = MacAddress::from_str(&value) {
-            return Ok(MacAddressWrapper::from(res));
+        if let Ok(res) = MacAddress::from_str(value) {
+            Ok(MacAddressWrapper::from(res))
         } else {
-            return Err(de::Error::custom("Invalid MAC"));
+            Err(de::Error::custom("Invalid MAC"))
         }
     }
 }
@@ -75,7 +75,7 @@ impl<'r> Decode<'r, Postgres> for MacAddressWrapper {
         let bytes = match value.format() {
             PgValueFormat::Binary => value.as_bytes()?,
             PgValueFormat::Text => {
-                return MacAddress::from_str(&value.as_str()?)
+                return MacAddress::from_str(value.as_str()?)
                     .map(MacAddressWrapper::from)
                     .map_err(|e| format!("Invalid MacAddr string: {}", e).into());
             }

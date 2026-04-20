@@ -19,22 +19,19 @@ pub mod rooms;
 pub mod schemas;
 pub mod transactions;
 
-// #[cfg(feature = "printer")]
-// pub mod printer;
+#[cfg(feature = "printer")]
+pub mod printer;
 
 pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     // Routes accessible to any authenticated user about themselves
     let me_routes = Router::new()
-        .route("/me", get(handlers::get_person))
-        .route("/me/roles", get(handlers::get_person_roles))
-        .route("/me/capabilities", get(handlers::get_person_capabilities));
+        .route("/me", get(handlers::get_me))
+        .route("/me/roles", get(handlers::get_person_roles_me))
+        .route("/me/capabilities", get(handlers::get_person_capabilities_me));
 
     // Routes gated behind CreditManager
     let credit_routes = Router::new()
-        .route(
-            "/transactions",
-            get(transactions::list).post(transactions::post),
-        )
+        .route("/transactions", get(transactions::list).post(transactions::post))
         .route("/transactions/{id}", get(transactions::get))
         .route("/transactions/{id}/undo", post(transactions::undo))
         .route_layer(middleware::from_fn_with_state(
@@ -57,14 +54,13 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(identities::get).delete(identities::delete),
         )
         .route("/identities/{id}/merge", post(identities::merge))
+        .route("/{id}", get(handlers::get_person))
         .route(
             "/{id}",
-            get(handlers::get_person)
-                .put(handlers::put_person)
-                .delete(handlers::delete_person),
+            put(handlers::put_person).delete(handlers::delete_person),
         )
         .route("/{id}/overview", get(handlers::get_person_overview))
-        .route("/{id}/roles", get(handlers::get_person_roles))
+        .route("/{id}/roles", get(handlers::get_person_roles_by_id))
         .route("/{id}/groups", get(handlers::get_person_groups))
         .route("/{id}/app_roles", get(handlers::get_person_app_roles))
         .route(
@@ -109,18 +105,18 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .merge(group_read_routes)
         .merge(group_write_routes);
 
-    // #[cfg(feature = "printer")]
-    // {
-    //     builder = builder
-    //         .route("/printer", get(printer::list))
-    //         .route(
-    //             "/{id}/printer",
-    //             get(printer::get)
-    //                 .post(printer::link_or_create)
-    //                 .delete(printer::delete),
-    //         )
-    //         .route("/{id}/printer/unlink", post(printer::unlink));
-    // }
+    #[cfg(feature = "printer")]
+    {
+        builder = builder
+            .route("/printer", get(printer::list))
+            .route(
+                "/{id}/printer",
+                get(printer::get)
+                    .post(printer::link_or_create)
+                    .delete(printer::delete),
+            )
+            .route("/{id}/printer/unlink", post(printer::unlink));
+    }
 
-    return builder;
+    builder
 }

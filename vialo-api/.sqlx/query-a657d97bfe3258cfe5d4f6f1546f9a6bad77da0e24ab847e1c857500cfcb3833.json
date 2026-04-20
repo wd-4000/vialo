@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE bookable_connectors SET\n        endpoint = $1 , username = $2  WHERE id = $3\n        RETURNING\n            id,\n            endpoint,\n            num_outputs,\n            device_name,\n            serial_number,\n            mac::text,\n            username,\n            password\n        ;",
+  "query": "UPDATE bookable_connectors SET\n        endpoint = $1 , username = $2 , password = $3 WHERE id = $4\n        RETURNING\n            id,\n            endpoint,\n            num_outputs,\n            device_name,\n            serial_number,\n            mac::text\n        ;",
   "describe": {
     "columns": [
       {
@@ -32,22 +32,13 @@
         "ordinal": 5,
         "name": "mac",
         "type_info": "Text"
-      },
-      {
-        "ordinal": 6,
-        "name": "username",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 7,
-        "name": "password",
-        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
         "Text",
-        "Text",
+        "Bytea",
+        "Bytea",
         "Int4"
       ]
     },
@@ -57,10 +48,8 @@
       true,
       true,
       true,
-      null,
-      false,
-      false
+      null
     ]
   },
-  "hash": "30b5c4a6bd387ec02c123686317afd11f5cde08d5fabac2447c8c1f8f4ef054f"
+  "hash": "a657d97bfe3258cfe5d4f6f1546f9a6bad77da0e24ab847e1c857500cfcb3833"
 }

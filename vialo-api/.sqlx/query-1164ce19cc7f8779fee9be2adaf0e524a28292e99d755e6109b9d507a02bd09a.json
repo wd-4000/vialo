@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select nc.password as \"password!: Encrypted<String>\", nr.vlan as \"vlan!\", nc.id from net_cred nc JOIN net_realm_assignments nra ON nc.account_id = nra.account_ID JOIN net_realms nr ON nr.id = nra.realm_id WHERE nc.network_id = $1 AND nc.password IS NOT NULL AND nr.vlan IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "password!: Encrypted<String>",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 1,
+        "name": "vlan!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "1164ce19cc7f8779fee9be2adaf0e524a28292e99d755e6109b9d507a02bd09a"
+}

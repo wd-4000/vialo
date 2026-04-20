@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id as \"id!\", printer_id, printer_username, printer_password as \"printer_password: Encrypted<String>\", color, bw\n        FROM subsystem_printer_context WHERE id = $1 AND id IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "printer_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "printer_username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "printer_password: Encrypted<String>",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 4,
+        "name": "color",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "bw",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "09e19e670ed787e1304df274e661b57352516dd0edc8b3410a1264d35c0b4ce0"
+}

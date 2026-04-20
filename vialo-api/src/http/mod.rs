@@ -1,15 +1,14 @@
 use std::sync::Arc;
 
-use axum::handler::Handler;
 use axum::{
     Router,
     extract::{MatchedPath, Request},
     middleware::{self},
     routing::get,
 };
-use rand::prelude::*;
 use tower_http::trace::TraceLayer;
 pub mod bookables;
+pub mod docs;
 mod etc;
 mod health;
 pub mod history;
@@ -90,6 +89,7 @@ pub async fn create_router(app_state: Arc<AppState>) -> Router {
             util::middleware::auth_middleware,
         ))
         .route("/etc/mail-recipients", get(etc::list_mail_recipients))
+        // TODO expose openapi.json (Maybe) .route("/openapi.json", get(docs::openapi_json))
         .layer(
             TraceLayer::new_for_http()
                 // Create our own span for the request and include the matched path. The matched

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id,\n        endpoint,\n        num_outputs,\n        device_name,\n        serial_number,\n        mac::text,\n        username,\n        password\n    FROM bookable_connectors;",
+  "query": "SELECT id,\n        endpoint,\n        num_outputs,\n        device_name,\n        serial_number,\n        mac::text,\n        username as \"username!: Encrypted<String>\",\n        password as \"password!: Encrypted<String>\"\n    FROM bookable_connectors;",
   "describe": {
     "columns": [
       {
@@ -35,13 +35,13 @@
       },
       {
         "ordinal": 6,
-        "name": "username",
-        "type_info": "Text"
+        "name": "username!: Encrypted<String>",
+        "type_info": "Bytea"
       },
       {
         "ordinal": 7,
-        "name": "password",
-        "type_info": "Text"
+        "name": "password!: Encrypted<String>",
+        "type_info": "Bytea"
       }
     ],
     "parameters": {
@@ -58,5 +58,5 @@
       false
     ]
   },
-  "hash": "29be98a1d32c6e8383f3118dc059f4ee3d71e24c49baa0c64a0d06a4404c81ed"
+  "hash": "52127ec8a9d581659582662734d6fd6a7e49bbda5bf2e0e8310a256b1102fd0f"
 }

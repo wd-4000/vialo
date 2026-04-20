@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT data['type'] as \"type!: String\", status as \"status: JobStatus\" FROM subsystem_jobs\n        WHERE subsystem = 'printer' AND data->>'account_id' = $1::text AND status != 'done' AND data->>'type' IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "type!: String",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "status: JobStatus",
+        "type_info": {
+          "Custom": {
+            "name": "job_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "processing",
+                "done",
+                "error"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "87f2b831f6b06767eaafce5ad8f2bc0d255517b1f07f37784caf20ad6ba26e01"
+}

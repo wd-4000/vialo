@@ -1,11 +1,15 @@
 use crate::{
     AppState,
+    helpers::encryption::{self, Encrypted},
     http::util::{JsonE, User, VialoError, grab_authd_conn_user},
     permissions::{AppRole, check_app_role},
 };
 use std::sync::Arc;
 
-use super::{models::CredentialModelWithAccountEmbed, schemas::NetworkFilterOptions};
+use super::{
+    models::{CredentialModelWithAccountEmbed, CredentialModelWithPasswordAndAccountEmbed},
+    schemas::NetworkFilterOptions,
+};
 
 use axum::{
     Extension, Json,
@@ -14,7 +18,6 @@ use axum::{
     response::IntoResponse,
 };
 use serde::Deserialize;
-use serde_json::json;
 use sqlx::{query, query_as};
 use sqlx_conditional_queries::conditional_query_as;
 use uuid::Uuid;
@@ -49,6 +52,7 @@ async fn check_own_or_network_manager(
     }
 }
 
+#[utoipa::path(get, path = "/network/credentials", responses((status = 200, description = "OK")))]
 pub async fn list_credentials(
     Query(opts): Query<NetworkFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -57,7 +61,7 @@ pub async fn list_credentials(
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
     let records = conditional_query_as!(
         CredentialModelWithAccountEmbed,
-        "SELECT nc.id, nc.username, nc.password, nc.network_id, nc.last_updated,
+        "SELECT nc.id, nc.username, nc.network_id, nc.last_updated,
         jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account
         FROM net_cred nc LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id
          {#search} ORDER BY id ASC LIMIT {limit} OFFSET {offset}",
@@ -69,12 +73,10 @@ pub async fn list_credentials(
     .fetch_all(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": records})),
-    ));
+    Ok((StatusCode::OK, Json(records)))
 }
 
+#[utoipa::path(get, path = "/network/credentials/{id}", responses((status = 200, description = "OK")))]
 pub async fn get_credential(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -83,24 +85,22 @@ pub async fn get_credential(
     check_own_or_network_manager(&user, id, &data.db).await?;
 
     let record = query_as!(
-        CredentialModelWithAccountEmbed,
-        "SELECT nc.id, nc.username, nc.password, nc.network_id, nc.last_updated,
+        CredentialModelWithPasswordAndAccountEmbed,
+        r#"SELECT nc.id, nc.username, nc.password AS "password: Encrypted<String>", nc.network_id, nc.last_updated,
          jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account
          FROM net_cred nc
          LEFT JOIN accounts_people ap ON nc.account_id = ap.id
          LEFT JOIN account_groups ag ON nc.account_id = ag.id
-         WHERE nc.id = $1",
+         WHERE nc.id = $1"#,
         id
     )
     .fetch_one(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(get, path = "/network/credentials/{id}/mobileconfig/{filename}", responses((status = 200, description = "OK")))]
 pub async fn get_mobileconfig(
     Path((id, _filename)): Path<(Uuid, String)>,
     Extension(user): Extension<User>,
@@ -109,7 +109,7 @@ pub async fn get_mobileconfig(
     check_own_or_network_manager(&user, id, &data.db).await?;
 
     let record = query!(
-        r#"SELECT nc.id, nc.username as "username!", nc.password as "password!", nc.network_id, nc.last_updated,
+        r#"SELECT nc.id, nc.username as "username!", nc.password AS "password: Encrypted<String>", nc.network_id, nc.last_updated,
          n.label AS network_label,
          nc.account_id, coalesce(ap.full_name, ag.label) as account_full_name
          FROM net_cred nc
@@ -127,7 +127,7 @@ pub async fn get_mobileconfig(
         network_label = record.network_label,
         account_full_name = record.account_full_name.unwrap_or(record.id.to_string()),
         username = record.username,
-        password = record.password,
+        password = record.password.map(|p| p.expose()).unwrap_or_default(),
         cred_id = record.id,
         network_id = record.network_id,
         network_ssid = record.network_label,              // TODO
@@ -135,11 +135,11 @@ pub async fn get_mobileconfig(
         outer_identity = "anonymous@xyz.uni.example.com", // TODO
         copyright = "COPYRIGHT"                           // TODO
     );
-    return Ok((
+    Ok((
         StatusCode::OK,
         [(header::CONTENT_TYPE, "application/x-apple-aspen-config")],
         file,
-    ));
+    ))
 }
 
 #[derive(Deserialize)]
@@ -148,6 +148,7 @@ pub struct PutCredentialSchema {
     pub password: Option<String>,
 }
 
+#[utoipa::path(put, path = "/network/credentials/{id}", responses((status = 200, description = "Updated")))]
 pub async fn put_credential(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -158,24 +159,29 @@ pub async fn put_credential(
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
+    // Encrypt the password if provided
+    let password = body
+        .password
+        .as_ref()
+        .map(encryption::encrypt)
+        .transpose()?;
+
     let result = sqlx::query!(
         "UPDATE net_cred SET username = $1, password = $2 WHERE id = $3",
         body.username,
-        body.password,
+        password,
         id
     )
     .execute(&mut *conn)
     .await?;
 
     match result.rows_affected() {
-        1 => Ok((
-            StatusCode::OK,
-            Json(json!({"status": "success","data": {}})),
-        )),
+        1 => Ok(StatusCode::NO_CONTENT),
         _ => Err(VialoError::NotFound()),
     }
 }
 
+#[utoipa::path(delete, path = "/network/credentials/{id}", responses((status = 204, description = "Deleted")))]
 pub async fn delete_credential(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,

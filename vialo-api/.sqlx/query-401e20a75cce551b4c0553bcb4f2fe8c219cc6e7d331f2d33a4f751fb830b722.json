@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO subsystem_jobs (subsystem, data, created_at, last_updated, status) VALUES ('printer',$1,NOW(),NOW(), 'pending') RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "401e20a75cce551b4c0553bcb4f2fe8c219cc6e7d331f2d33a4f751fb830b722"
+}

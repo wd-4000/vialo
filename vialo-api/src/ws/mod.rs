@@ -1,20 +1,5 @@
-//! Example websocket server.
-//!
-//! Run the server with
-//! ```not_rust
-//! cargo run -p example-websockets --bin example-websockets
-//! ```
-//!
-//! Run a browser client with
-//! ```not_rust
-//! firefox http://localhost:3000
-//! ```
-//!
-//! Alternatively you can run the rust client (showing two
-//! concurrent websocket connections being established) with
-//! ```not_rust
-//! cargo run -p example-websockets --bin example-client
-//! ```
+//! WebSocket server.
+//! Handles event subscriptions
 
 use axum::{
     Router,
@@ -46,16 +31,15 @@ struct EventSubscriptionSchema {
 }
 pub fn main(app_state: Arc<AppState>) -> Router {
     // build our application with some routes
-    let app = Router::new()
+
+    Router::new()
         .route("/ws", any(ws_handler))
         // logging so we can see what's going on
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
         )
-        .with_state(app_state);
-
-    return app;
+        .with_state(app_state)
 }
 
 /// The handler for the HTTP request (this gets called when the HTTP request lands at the start
@@ -148,14 +132,13 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, state: Arc<AppSta
     // This second task will receive messages from client and print them on server console
     let mut recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
-            if let Message::Text(msg_text) = msg {
-                if let Ok(sub) = serde_json::from_str::<EventSubscriptionSchema>(msg_text.as_str())
-                {
-                    state
-                        .event_channel
-                        .subscribe_string(sub.id.into(), mpsc_tx.clone())
-                        .await;
-                }
+            if let Message::Text(msg_text) = msg
+                && let Ok(sub) = serde_json::from_str::<EventSubscriptionSchema>(msg_text.as_str())
+            {
+                state
+                    .event_channel
+                    .subscribe_string(sub.id.into(), mpsc_tx.clone())
+                    .await;
             }
         }
     });

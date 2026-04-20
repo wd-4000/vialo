@@ -36,8 +36,7 @@ pub async fn update_identity(
     // Create initial admin account if needed
     if let (Some(email), Ok(initial_admin_email)) =
         (&body.email, std::env::var("INITIAL_ADMIN_EMAIL"))
-    {
-        if email.eq_ignore_ascii_case(&initial_admin_email) {
+        && email.eq_ignore_ascii_case(&initial_admin_email) {
             // Check if there are any users bound to identities yet
             let has_users = sqlx::query_scalar!(
                 r#"SELECT EXISTS (SELECT 1 FROM accounts_people WHERE auth_id IS NOT NULL) AS "exists!""#
@@ -75,7 +74,6 @@ pub async fn update_identity(
                 ).execute(&mut **trans).await?;
             }
         }
-    }
 
     Ok(())
 }

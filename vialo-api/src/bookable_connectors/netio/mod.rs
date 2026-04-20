@@ -21,27 +21,27 @@ impl NetioApi {
             builder = builder.proxy(reqwest::Proxy::all(proxy).unwrap());
         }
 
-        return NetioApi {
+        NetioApi {
             url,
             username,
             password,
             client: Arc::new(builder.build().unwrap()),
-        };
+        }
     }
 
     pub fn get(&mut self) -> RequestBuilder {
-        return self
+        self
             .client
             .get(self.url.as_str())
             .header("Content-Type", "application/json")
-            .basic_auth(&self.username, Some(&self.password));
+            .basic_auth(&self.username, Some(&self.password))
     }
 
     pub fn post(&mut self) -> RequestBuilder {
-        return self
+        self
             .client
             .post(self.url.as_str())
             .header("Content-Type", "application/json")
-            .basic_auth(&self.username, Some(&self.password));
+            .basic_auth(&self.username, Some(&self.password))
     }
 }

@@ -16,7 +16,7 @@ CREATE TABLE subsystem_printer_context (
   id uuid UNIQUE REFERENCES accounts_people (id) ON DELETE SET NULL,
   printer_id int PRIMARY KEY,
   printer_username text,
-  printer_password text,
+  printer_password BYTEA,
   bw int NOT NULL DEFAULT 0,
   color int NOT NULL DEFAULT 0
 );

@@ -7,13 +7,13 @@ use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sqlx::query;
 use sqlx_conditional_queries::conditional_query_as;
 use std::i64;
 use std::sync::Arc;
+use utoipa::ToSchema;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct BookableSchema {
     pub id: i32,
     pub label: Option<String>,
@@ -22,6 +22,7 @@ pub struct BookableSchema {
     pub slot_price: Option<i32>,
 }
 
+#[utoipa::path(get, path = "/bookables/schemas", responses((status = 200, description = "OK")))]
 pub async fn list(
     Query(opts): Query<ListOptions>,
     State(data): State<Arc<AppState>>,
@@ -45,12 +46,10 @@ pub async fn list(
     .fetch_all(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(get, path = "/bookables/schemas/{id}", responses((status = 200, description = "OK")))]
 pub async fn get(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -72,12 +71,10 @@ pub async fn get(
     .fetch_one(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(delete, path = "/bookables/schemas/{id}", responses((status = 204, description = "Deleted")))]
 pub async fn delete(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -122,10 +119,10 @@ pub async fn delete(
     .execute(&data.db)
     .await?;
 
-    return Ok(StatusCode::NO_CONTENT);
+    Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct BookableSchemaPostOrPut {
     pub label: Option<String>,
     pub schedule: Vec<String>,
@@ -133,6 +130,7 @@ pub struct BookableSchemaPostOrPut {
     pub slot_price: Option<i32>,
 }
 
+#[utoipa::path(post, path = "/bookables/schemas", responses((status = 201, description = "Created")))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -172,12 +170,10 @@ pub async fn post(
     .fetch_one(&mut *conn)
     .await?;
 
-    return Ok((
-        StatusCode::CREATED,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::CREATED, Json(record)))
 }
 
+#[utoipa::path(put, path = "/bookables/schemas/{id}", responses((status = 200, description = "Updated")))]
 pub async fn put(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -240,8 +236,5 @@ pub async fn put(
     .fetch_one(&mut *conn)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }

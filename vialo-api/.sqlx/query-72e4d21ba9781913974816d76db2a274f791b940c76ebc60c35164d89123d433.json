@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, printer_username, printer_id\n        FROM subsystem_printer_context WHERE TRUE   LIMIT $1 OFFSET $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "printer_username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "printer_id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "72e4d21ba9781913974816d76db2a274f791b940c76ebc60c35164d89123d433"
+}

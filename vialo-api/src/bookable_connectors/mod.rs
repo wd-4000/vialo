@@ -1,5 +1,5 @@
 use crate::events::EventEnvelope;
-use crate::helpers::PgDateTime;
+use crate::helpers::{PgDateTime, encryption::Encrypted};
 use crate::http::bookables::connectors::BookableConnectorWithPassword;
 use crate::http::bookables::models::{BookableAssetStatus, BookableStatus};
 use crate::{AppState, helpers::grab_authd_conn_subsystem};
@@ -7,7 +7,7 @@ use netio::models::OutputPost;
 use sqlx::{query, query_as};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tokio::time;
 use tracing::info;
 
@@ -19,15 +19,15 @@ use models::BookableAssetStatusWithConnector;
 pub async fn run(app_state: Arc<AppState>) -> Result<(), anyhow::Error> {
     let connectors = query_as!(
         BookableConnectorWithPassword,
-        "SELECT id,
+        r#"SELECT id,
         endpoint,
         num_outputs,
         device_name,
         serial_number,
         mac::text,
-        username,
-        password
-    FROM bookable_connectors;"
+        username as "username!: Encrypted<String>",
+        password as "password!: Encrypted<String>"
+    FROM bookable_connectors;"#
     )
     .fetch_all(&app_state.db)
     .await?;
@@ -64,8 +64,8 @@ pub async fn run(app_state: Arc<AppState>) -> Result<(), anyhow::Error> {
 
         let mut api = netio::NetioApi::new(
             connector.endpoint,
-            connector.username,
-            connector.password,
+            connector.username.expose(),
+            connector.password.expose(),
             &app_state.config.proxy,
         );
         // info!("{:}", json!(NetioPost { outputs }));
@@ -103,11 +103,18 @@ pub async fn run(app_state: Arc<AppState>) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-pub async fn main(app_state: Arc<AppState>) -> Result<(), anyhow::Error> {
+pub async fn main(
+    app_state: Arc<AppState>,
+    mut shutdown: watch::Receiver<bool>,
+) -> Result<(), anyhow::Error> {
     let mut interval = time::interval(Duration::from_secs(60 * 5));
     let (mpsc_tx, mut mpsc_rx) = mpsc::channel::<Arc<EventEnvelope<i32, BookableAssetStatus>>>(10);
     app_state.event_channel.subscribe_wildcard(mpsc_tx).await;
     loop {
+        if *shutdown.borrow() {
+            break;
+        }
+
         tokio::select! {
             _ = interval.tick() => {
                 // interval sync sort of just in case really
@@ -129,7 +136,12 @@ pub async fn main(app_state: Arc<AppState>) -> Result<(), anyhow::Error> {
                     .inspect_err(|e| tracing::error!("{:?}", e))
                     .ok();
             }
+            changed = shutdown.changed() => {
+                if changed.is_ok() && *shutdown.borrow() {
+                    break;
+                }
+            }
         };
     }
-    Err(anyhow::anyhow!("channel closed"))
+    Ok(())
 }
