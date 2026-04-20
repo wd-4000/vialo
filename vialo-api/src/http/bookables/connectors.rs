@@ -1,5 +1,6 @@
 use super::handlers::BookableFilterOptions;
 use crate::AppState;
+use crate::helpers::encryption::{self, Encrypted};
 use crate::http::util::grab_authd_conn_user;
 use crate::http::util::models::PatchOption;
 use crate::http::util::{JsonE, User, VialoError};
@@ -12,12 +13,21 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sqlx::query;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 
 #[derive(Deserialize, Serialize, Debug)]
+pub struct BookableConnector {
+    pub id: i32,
+    pub endpoint: String,
+    pub num_outputs: Option<i32>,
+    pub device_name: Option<String>,
+    pub serial_number: Option<String>,
+    pub mac: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct BookableConnectorWithPassword {
     pub id: i32,
     pub endpoint: String,
@@ -25,8 +35,8 @@ pub struct BookableConnectorWithPassword {
     pub device_name: Option<String>,
     pub serial_number: Option<String>,
     pub mac: Option<String>,
-    pub username: String,
-    pub password: String,
+    pub username: Encrypted<String>,
+    pub password: Encrypted<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -55,6 +65,7 @@ pub struct BookableConnectorPost {
     pub password: Option<String>,
 }
 
+#[utoipa::path(get, path = "/bookables/connectors", responses((status = 200, description = "OK")))]
 pub async fn list(
     Query(opts): Query<BookableFilterOptions>,
     Extension(user): Extension<User>,
@@ -71,26 +82,22 @@ pub async fn list(
 
     // Execute the query and handle the result
     let record = conditional_query_as!(
-        BookableConnectorWithOptionalPassword,
+        BookableConnector,
         r#"SELECT id,
             endpoint,
             num_outputs,
             device_name,
             serial_number,
-            mac::text,
-            username,
-            password
+            mac::text
         FROM bookable_connectors;"#
     )
     .fetch_all(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(get, path = "/bookables/connectors/{id}", responses((status = 200, description = "OK")))]
 pub async fn get(
     Path(id): Path<i32>,
     Extension(user): Extension<User>,
@@ -98,26 +105,22 @@ pub async fn get(
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
     let record = conditional_query_as!(
-        BookableConnectorWithOptionalPassword,
+        BookableConnector,
         r#"SELECT id,
                 endpoint,
                 num_outputs,
                 device_name,
                 serial_number,
-                mac::text,
-                username,
-                password
+                mac::text
             FROM bookable_connectors WHERE id = {id};"#,
     )
     .fetch_one(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(post, path = "/bookables/connectors", responses((status = 201, description = "Created")))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -130,8 +133,18 @@ pub async fn post(
     check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
+    // Encrypt username and password if provided
+    let username = username
+        .as_ref()
+        .map(encryption::encrypt)
+        .transpose()?;
+    let password = password
+        .as_ref()
+        .map(encryption::encrypt)
+        .transpose()?;
+
     let record = conditional_query_as!(
-        BookableConnectorWithOptionalPassword,
+        BookableConnector,
         r#"INSERT INTO bookable_connectors (endpoint, username, password)
         VALUES ({endpoint}, {username}, {password})
         RETURNING
@@ -140,20 +153,16 @@ pub async fn post(
             num_outputs,
             device_name,
             serial_number,
-            mac::text,
-            username,
-            password
+            mac::text
         ;"#
     )
     .fetch_one(&mut *conn)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(put, path = "/bookables/connectors/{id}", responses((status = 200, description = "Updated")))]
 pub async fn put(
     Path(id): Path<i32>,
     Extension(user): Extension<User>,
@@ -165,9 +174,11 @@ pub async fn put(
     }): JsonE<BookableConnectorPatch>,
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
+    let username = username.try_map(|s| encryption::encrypt(&s))?;
+    let password = password.try_map(|s| encryption::encrypt(&s))?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
-    let record = conditional_query_as!(BookableConnectorWithOptionalPassword,
+    let record = conditional_query_as!(BookableConnector,
         r#"UPDATE bookable_connectors SET
         endpoint = {endpoint} {#username} {#password} WHERE id = {id}
         RETURNING
@@ -176,9 +187,7 @@ pub async fn put(
             num_outputs,
             device_name,
             serial_number,
-            mac::text,
-            username,
-            password
+            mac::text
         ;"#,
         #username = match username {
                 PatchOption::None => "",
@@ -192,12 +201,10 @@ pub async fn put(
     .fetch_one(&mut *conn)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(delete, path = "/bookables/connectors/{id}", responses((status = 200, description = "Deleted")))]
 pub async fn delete(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -209,5 +216,5 @@ pub async fn delete(
         .execute(&mut *conn)
         .await?;
 
-    return Ok((StatusCode::OK, Json(json!({"status": "success"}))));
+    Ok(StatusCode::NO_CONTENT)
 }

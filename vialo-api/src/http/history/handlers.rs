@@ -5,10 +5,10 @@ use crate::AppState;
 use crate::http::util::VialoError;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
-use serde_json::json;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 
+#[utoipa::path(get, path = "/history/schema", responses((status = 200, description = "OK")))]
 pub async fn list_schema(
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
@@ -22,12 +22,10 @@ pub async fn list_schema(
     .fetch_one(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record.res})),
-    ));
+    Ok((StatusCode::OK, Json(record.res)))
 }
 
+#[utoipa::path(get, path = "/history", responses((status = 200, description = "OK")))]
 pub async fn list_history(
     Query(opts): Query<HistoryFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -75,8 +73,5 @@ pub async fn list_history(
     )    .fetch_all(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }

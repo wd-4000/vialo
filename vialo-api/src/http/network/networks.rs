@@ -15,9 +15,9 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use serde_json::json;
 use sqlx::query_as;
 
+#[utoipa::path(get, path = "/network/networks", responses((status = 200, description = "OK")))]
 pub async fn list_networks(
     Query(opts): Query<NetworkFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -36,12 +36,10 @@ pub async fn list_networks(
     .fetch_all(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(put, path = "/network/networks/{id}", responses((status = 200, description = "Updated")))]
 pub async fn put_network(
     Path(id): Path<i32>,
     Extension(user): Extension<User>,
@@ -79,14 +77,12 @@ pub async fn put_network(
     .await?;
 
     match result.rows_affected() {
-        1 => Ok((
-            StatusCode::OK,
-            Json(json!({"status": "success","data": {}})),
-        )),
+        1 => Ok(StatusCode::NO_CONTENT),
         _ => Err(VialoError::NotFound()),
     }
 }
 
+#[utoipa::path(delete, path = "/network/networks/{id}", responses((status = 204, description = "Deleted")))]
 pub async fn delete_network(
     Path(id): Path<i32>,
     Extension(user): Extension<User>,
@@ -107,6 +103,7 @@ pub async fn delete_network(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(post, path = "/network/networks", responses((status = 201, description = "Created")))]
 pub async fn post_network(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -131,8 +128,5 @@ pub async fn post_network(
     .execute(&mut *conn)
     .await?;
 
-    return Ok((
-        StatusCode::CREATED,
-        Json(json!({"status": "success","data": {}})),
-    ));
+    Ok(StatusCode::CREATED)
 }

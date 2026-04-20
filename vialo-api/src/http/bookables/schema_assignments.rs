@@ -7,7 +7,6 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 
@@ -22,6 +21,7 @@ pub struct BookableSchemaAssignment {
     pub schema_id: i32,
 }
 
+#[utoipa::path(get, path = "/bookables/{asset_id}/schema_assignments", responses((status = 200, description = "OK")))]
 pub async fn list(
     Path(asset_id): Path<i32>,
     Query(opts): Query<ListOptions>,
@@ -45,12 +45,10 @@ pub async fn list(
     .fetch_all(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(post, path = "/bookables/{asset_id}/schema_assignments", responses((status = 204, description = "Created")))]
 pub async fn post(
     Path(asset_id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -83,9 +81,10 @@ pub async fn post(
     .execute(&mut *conn)
     .await?;
 
-    return Ok(StatusCode::NO_CONTENT);
+    Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(delete, path = "/bookables/{asset_id}/schema_assignments/{begins}", responses((status = 204, description = "Deleted")))]
 pub async fn delete(
     Path((asset_id, begins)): Path<(i32, DateTime<Utc>)>,
     State(data): State<Arc<AppState>>,
@@ -116,5 +115,5 @@ pub async fn delete(
     .execute(&mut *conn)
     .await?;
 
-    return Ok(StatusCode::NO_CONTENT);
+    Ok(StatusCode::NO_CONTENT)
 }

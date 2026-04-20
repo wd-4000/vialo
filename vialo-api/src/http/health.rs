@@ -13,6 +13,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+#[utoipa::path(get, path = "/health/status", responses((status = 200, description = "OK")))]
 pub async fn get_health_status(
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
@@ -22,9 +23,7 @@ pub async fn get_health_status(
     .fetch_optional(&data.db)
     .await?.flatten().unwrap_or(0);
 
-    return Ok(Json(
-        serde_json::json!({"status": "success","data":badness}),
-    ));
+    Ok(Json(badness))
 }
 
 #[derive(Deserialize, Serialize)]
@@ -40,6 +39,7 @@ struct HealthEvent {
     pub resolved: bool,
 }
 
+#[utoipa::path(get, path = "/health", responses((status = 200, description = "OK")))]
 pub async fn get_health_events(
     Query(opts): Query<ListOptions>,
     State(data): State<Arc<AppState>>,
@@ -57,15 +57,15 @@ pub async fn get_health_events(
     .fetch_all(&data.db)
     .await?;
 
-    return Ok(Json(serde_json::json!({"status": "success","data":events})));
+    Ok(Json(events))
 }
 
 pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
-    return Router::new()
+    Router::new()
         .route("/", get(get_health_events))
         .route("/status", get(get_health_status))
         .route_layer(middleware::from_fn_with_state(
             app_state.clone(),
             |state, ext, req, next| require_app_role(AppRole::HealthViewer, state, ext, req, next),
-        ));
+        ))
 }

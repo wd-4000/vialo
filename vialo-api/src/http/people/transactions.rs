@@ -25,6 +25,7 @@ use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 use uuid::Uuid;
 
+#[utoipa::path(get, path = "/people/transactions", responses((status = 200, description = "OK")))]
 pub async fn list(
     Query(opts): Query<TransactionFilterOptions>,
     Extension(User { id: user_id }): Extension<User>,
@@ -50,12 +51,10 @@ pub async fn list(
         })
         .fetch_all(&data.db)
     .await?;
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(get, path = "/people/transactions/{id}", responses((status = 200, description = "OK")))]
 pub async fn get(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -72,10 +71,7 @@ pub async fn get(
         WHERE cl.id = $1"#,id)
         .fetch_one(&data.db)
     .await?;
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -86,6 +82,7 @@ pub struct CreateTransactionSchema {
     pub credits: i32,
 }
 
+#[utoipa::path(post, path = "/people/transactions", responses((status = 201, description = "Created")))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -103,10 +100,7 @@ pub async fn post(
     .fetch_one(&mut *conn)
     .await?;
 
-    return Ok((
-        StatusCode::CREATED,
-        Json(json!({"status": "ok", "data":{"id": id}})),
-    ));
+    Ok((StatusCode::CREATED, Json(json!({"id": id}))))
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -114,6 +108,7 @@ pub struct UndoTransactionSchema {
     pub cancel_associated_product: Option<bool>,
 }
 
+#[utoipa::path(post, path = "/people/transactions/{id}/undo", responses((status = 204, description = "Undone")))]
 pub async fn undo(
     State(data): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
@@ -159,5 +154,5 @@ pub async fn undo(
 
     trans.commit().await?;
 
-    return Ok(StatusCode::NO_CONTENT);
+    Ok(StatusCode::NO_CONTENT)
 }

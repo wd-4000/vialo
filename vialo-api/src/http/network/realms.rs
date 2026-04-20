@@ -16,11 +16,11 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use serde_json::json;
 use sqlx::query_as;
 use sqlx_conditional_queries::conditional_query_as;
 use uuid::Uuid;
 
+#[utoipa::path(get, path = "/network/realms", responses((status = 200, description = "OK")))]
 pub async fn list_realms(
     Query(opts): Query<RealmFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -43,12 +43,10 @@ pub async fn list_realms(
     .fetch_all(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": records})),
-    ));
+    Ok((StatusCode::OK, Json(records)))
 }
 
+#[utoipa::path(get, path = "/network/realms/{id}", responses((status = 200, description = "OK")))]
 pub async fn get_realm(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -78,12 +76,10 @@ pub async fn get_realm(
         .fetch_one(&data.db)
         .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": records})),
-    ));
+    Ok((StatusCode::OK, Json(records)))
 }
 
+#[utoipa::path(put, path = "/network/realms/{id}", responses((status = 200, description = "Updated")))]
 pub async fn put_realm(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -100,14 +96,12 @@ pub async fn put_realm(
     .await?;
 
     match result.rows_affected() {
-        1 => Ok((
-            StatusCode::OK,
-            Json(json!({"status": "success","data": {}})),
-        )),
+        1 => Ok(StatusCode::NO_CONTENT),
         _ => Err(VialoError::NotFound()),
     }
 }
 
+#[utoipa::path(post, path = "/network/realms/set_default", responses((status = 200, description = "Updated")))]
 pub async fn set_default_realm(
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
@@ -123,10 +117,7 @@ pub async fn set_default_realm(
     .await?;
 
         match result.rows_affected() {
-            1 => Ok((
-                StatusCode::OK,
-                Json(json!({"status": "success","data": {}})),
-            )),
+            1 => Ok(StatusCode::NO_CONTENT),
             _ => Err(VialoError::NotFound()),
         }
     } else {
@@ -137,9 +128,6 @@ pub async fn set_default_realm(
         .execute(&mut *conn)
         .await?;
 
-        Ok((
-            StatusCode::OK,
-            Json(json!({"status": "success","data": {}})),
-        ))
+        Ok(StatusCode::NO_CONTENT)
     }
 }

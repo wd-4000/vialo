@@ -11,7 +11,6 @@ use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResp
 use axum_extra::extract::Query;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sqlx::query_as;
 use sqlx::types::JsonValue;
 use sqlx_conditional_queries::conditional_query_as;
@@ -51,6 +50,7 @@ pub struct BookableAppointmentType {
     pub maintenance: Option<bool>,
 }
 
+#[utoipa::path(post, path = "/bookables/appointments/{id}/activate", responses((status = 200, description = "Activated")))]
 pub async fn activate(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -70,9 +70,10 @@ pub async fn activate(
             .await;
     });
 
-    return Ok((StatusCode::OK, Json(json!({"status": "success"}))));
+    Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(get, path = "/bookables/appointments", responses((status = 200, description = "OK")))]
 pub async fn list(
     Query(opts): Query<BookableAppointmentFilterOptions>,
     Extension(user): Extension<User>,
@@ -127,8 +128,5 @@ pub async fn list(
     .fetch_all(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }

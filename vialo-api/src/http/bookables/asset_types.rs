@@ -1,5 +1,6 @@
 use super::{handlers::BookableFilterOptions, models::BoardPostIdModel};
 use crate::AppState;
+use crate::helpers::LangVariant;
 use crate::http::util::{JsonE, User, VialoError};
 use crate::http::util::{grab_authd_conn_user, grab_trans};
 use crate::permissions::{AppRole, check_app_role, check_member_of_group_or_app_role};
@@ -7,7 +8,6 @@ use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sqlx::query;
 use sqlx::types::JsonValue;
 use sqlx_conditional_queries::conditional_query_as;
@@ -23,6 +23,7 @@ pub struct BookableAssetTypeTranslated {
     pub group_id: Option<Uuid>,
 }
 
+#[utoipa::path(get, path = "/bookables/types", responses((status = 200, description = "OK")))]
 pub async fn list(
     Query(opts): Query<BookableFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -48,10 +49,7 @@ pub async fn list(
     .fetch_all(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -61,6 +59,7 @@ pub struct PostBookableTypeSchema {
     pub group_id: Uuid,
 }
 
+#[utoipa::path(post, path = "/bookables/types", responses((status = 201, description = "Created")))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -87,9 +86,9 @@ pub async fn post(
     .fetch_one(&mut *trans)
     .await?;
 
-    let device_response = json!({"status": "success","data": record});
+    let device_response = record;
     trans.commit().await?;
-    return Ok((StatusCode::CREATED, Json(device_response)));
+    Ok((StatusCode::CREATED, Json(device_response)))
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -100,6 +99,7 @@ pub struct BookableType {
     pub group_id: Option<Uuid>,
 }
 
+#[utoipa::path(get, path = "/bookables/types/{id}", responses((status = 200, description = "OK")))]
 pub async fn get(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -123,7 +123,7 @@ pub async fn get(
         .fetch_one(&data.db)
         .await?;
 
-        return Ok(Json(json!({"status": "success","data": post})));
+        Ok(Json(LangVariant::AllLangs(post)))
     } else {
         let post = sqlx::query_as!(
             BookableAssetTypeTranslated,
@@ -140,10 +140,11 @@ pub async fn get(
         .fetch_one(&data.db)
         .await?;
 
-        return Ok(Json(json!({"status": "success","data": post})));
+        Ok(Json(LangVariant::Localized(post)))
     }
 }
 
+#[utoipa::path(put, path = "/bookables/types/{id}", responses((status = 200, description = "Updated")))]
 pub async fn put(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -179,9 +180,10 @@ pub async fn put(
 
     trans.commit().await?;
 
-    return Ok(StatusCode::NO_CONTENT);
+    Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(delete, path = "/bookables/types/{id}", responses((status = 200, description = "Deleted")))]
 pub async fn delete(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -216,5 +218,5 @@ pub async fn delete(
 
     trans.commit().await?;
 
-    return Ok((StatusCode::OK, Json(json!({"status": "success"}))));
+    Ok(StatusCode::NO_CONTENT)
 }

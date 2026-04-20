@@ -32,9 +32,9 @@ pub async fn update_identity(
     let mut trans = crate::http::util::grab_trans(&mut conn).await?;
     helpers::people::update_identity(body, &mut trans)
         .await
-        .map_err(|e| VialoError::Anyhow(e.into()))?;
+        .map_err(|e| VialoError::Anyhow(e))?;
     trans.commit().await?;
-    return Ok(StatusCode::OK);
+    Ok(StatusCode::OK)
 }
 
 use super::AppState;

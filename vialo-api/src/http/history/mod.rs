@@ -16,11 +16,11 @@ pub mod models;
 pub mod schemas;
 
 pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
-    return Router::new()
+    Router::new()
         .route("/", get(handlers::list_history))
         .route("/schema", get(handlers::list_schema))
         .route_layer(middleware::from_fn_with_state(
             app_state.clone(),
             |state, ext, req, next| require_app_role(AppRole::HistoryViewer, state, ext, req, next),
-        ));
+        ))
 }

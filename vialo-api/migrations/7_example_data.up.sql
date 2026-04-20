@@ -21,7 +21,6 @@ $$;
 
 call ddl_create_example_rooms ();
 
--- Add up migration script here
 create or replace procedure ddl_create_example_realms () language plpgsql as $$
 declare
   _sql varchar;
@@ -30,9 +29,9 @@ begin
         _sql := CONCAT(
             'insert into net_realms (ipv4_subnet, ipv4_nat, ipv6_prefix, ipv4_dns, ipv4_router, vlan) VALUES (''10.123.',
             i, '.0/24'',
-            ''189.213.123.', i, ''', null, ''10.123.',
+            ''123.123.123.', i, ''', null, ''10.123.',
             i, '.2/24'', ''10.123.',
-            i, '.1/24'', 111);'
+            i, '.1/24'', 123);'
         );
         execute _sql;
     END LOOP;

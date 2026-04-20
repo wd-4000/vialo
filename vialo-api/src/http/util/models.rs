@@ -22,17 +22,14 @@ impl<'de> Deserialize<'de> for IdOrAllQuery {
 }
 
 #[derive(Debug, PartialEq)]
+#[derive(Default)]
 pub enum IdOrMeOrAllQuery {
     Id(Uuid),
     Me,
+    #[default]
     All,
 }
 
-impl Default for IdOrMeOrAllQuery {
-    fn default() -> Self {
-        Self::All
-    }
-}
 
 impl<'de> Deserialize<'de> for IdOrMeOrAllQuery {
     fn deserialize<D>(de: D) -> Result<Self, D::Error>
@@ -71,16 +68,23 @@ impl<'de> Deserialize<'de> for IdOrMeQuery {
 
 /** This is, like, an insane wrapper for an Option inside a uhhh Struct. So none = not present, some is either null or a value */
 #[derive(Debug)]
+#[derive(Default)]
 pub enum PatchOption<T> {
     /** Field NOT THERE  */
+    #[default]
     None,
     /** This might be null if you didn't understand */
     Some(Option<T>),
 }
 
-impl<T> Default for PatchOption<T> {
-    fn default() -> Self {
-        PatchOption::None
+
+impl<T> PatchOption<T> {
+    pub fn try_map<U, E>(self, f: impl Fn(T) -> Result<U, E>) -> Result<PatchOption<U>, E> {
+        match self {
+            PatchOption::None => Ok(PatchOption::None),
+            PatchOption::Some(None) => Ok(PatchOption::Some(None)),
+            PatchOption::Some(Some(v)) => Ok(PatchOption::Some(Some(f(v)?))),
+        }
     }
 }
 

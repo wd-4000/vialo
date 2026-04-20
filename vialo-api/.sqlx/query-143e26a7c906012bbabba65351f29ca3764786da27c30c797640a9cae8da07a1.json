@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE subsystem_printer_context\n           SET printer_username = data.printer_username\n           FROM (\n               SELECT UNNEST($1::integer[]) AS printer_id,\n                      UNNEST($2::text[]) AS printer_username\n           ) AS data\n           WHERE subsystem_printer_context.printer_id = data.printer_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4Array",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "143e26a7c906012bbabba65351f29ca3764786da27c30c797640a9cae8da07a1"
+}

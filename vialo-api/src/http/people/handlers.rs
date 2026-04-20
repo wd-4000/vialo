@@ -7,16 +7,19 @@ use super::{
     schemas::{CreateUserSchema, UserFilterOptions},
 };
 
-// #[cfg(feature = "printer")]
-// use crate::printer::{self, models::JobData};
+#[cfg(feature = "printer")]
+use crate::printer::{self, models::JobData};
 
-use crate::helpers::PgDate;
 use crate::{
     AppState, helpers,
     http::{
         people::models::GroupStubListModel,
         util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans},
     },
+};
+use crate::{
+    helpers::{PgDate, encryption},
+    permissions::check_app_role,
 };
 use crate::{http::people::models::PersonalNetRealmOverviewModel, permissions::AppRole};
 use axum::{
@@ -56,11 +59,14 @@ use uuid::Uuid;
 // WHERE (to_account = $1 OR from_account = $1) AND tl.table_name = 'credit_ledger' ORDER BY created_at LIMIT 3", id)
 // .fetch_all(&data.db)
 
+#[utoipa::path(get, path = "/people", responses((status = 200, description = "OK")))]
 pub async fn list_people(
     Query(opts): Query<UserFilterOptions>,
-    Extension(_user): Extension<User>,
+    Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user, AppRole::AccountManager, &data.db).await?;
+
     let limit = opts.limit.unwrap_or(10);
     // let search = opts.search.unwrap_or("".to_string());
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
@@ -93,27 +99,44 @@ pub async fn list_people(
     )
         .fetch_all(&data.db)
         .await?;
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
-pub async fn get_person_roles(
-    id_path: Option<Path<Uuid>>,
-    Extension(User { id }): Extension<User>,
-    State(data): State<Arc<AppState>>,
+async fn get_person_roles_impl(
+    target_id: Uuid,
+    data: Arc<AppState>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let target_id = id_path.map(|p| p.0).unwrap_or(id);
+    // permission check in the caller!
 
     let roles: Vec<AppRole> = sqlx::query_scalar!(
         r#"SELECT agra.role as "role: AppRole" FROM account_group_memberships agm JOIN account_group_app_roles agra ON
                 agm.group_id = agra.group_id WHERE agm.account_id = $1"#,
         target_id
     )
-    .fetch_all(&data.db).await?;
+    .fetch_all(&data.db)
+    .await?;
 
-    return Ok(Json(serde_json::json!({"status": "success","data":roles})));
+    Ok(Json(roles))
+}
+
+#[utoipa::path(get, path = "/people/me/roles", responses((status = 200, description = "OK")))]
+pub async fn get_person_roles_me(
+    Extension(User { id }): Extension<User>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    get_person_roles_impl(id, data).await
+}
+
+#[utoipa::path(get, path = "/people/{id}/roles", responses((status = 200, description = "OK")))]
+pub async fn get_person_roles_by_id(
+    Path(id): Path<Uuid>,
+    State(data): State<Arc<AppState>>,
+    Extension(user): Extension<User>,
+) -> Result<impl IntoResponse, VialoError> {
+    if user.id != id {
+        check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
+    }
+    get_person_roles_impl(id, data).await
 }
 
 #[derive(Serialize)]
@@ -124,13 +147,10 @@ pub struct AccountCapabilities {
     pub can_interact_with_some_boards: bool,
 }
 
-pub async fn get_person_capabilities(
-    id_path: Option<Path<Uuid>>,
-    Extension(User { id }): Extension<User>,
-    State(data): State<Arc<AppState>>,
+async fn get_person_capabilities_impl(
+    target_id: Uuid,
+    data: Arc<AppState>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let target_id = id_path.map(|p| p.0).unwrap_or(id);
-
     let roles_future = sqlx::query_scalar!(
         r#"SELECT agra.role as "role: AppRole"
            FROM account_group_memberships agm
@@ -165,24 +185,35 @@ pub async fn get_person_capabilities(
     let (roles, can_manage_some_bookables, can_interact_with_some_boards) =
         tokio::try_join!(roles_future, bookable_future, board_future)?;
 
-    return Ok(Json(serde_json::json!({
-        "status": "success",
-        "data": AccountCapabilities {
-            roles,
-            can_manage_some_bookables,
-            can_interact_with_some_boards
-        }
-    })));
+    Ok(Json(AccountCapabilities {
+        roles,
+        can_manage_some_bookables,
+        can_interact_with_some_boards,
+    }))
 }
 
-pub async fn get_person_groups(
-    Path(id_path): Path<Uuid>,
-    Extension(User { id: _ }): Extension<User>,
+/// Used in the admin panel to detect which navbar items to show (see useConditionalUI)
+#[utoipa::path(get, path = "/people/me/capabilities", responses((status = 200, description = "OK")))]
+pub async fn get_person_capabilities_me(
+    Extension(User { id }): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    get_person_capabilities_impl(id, data).await
+}
+
+#[utoipa::path(get, path = "/people/{id}/groups", responses((status = 200, description = "OK")))]
+pub async fn get_person_groups(
+    Path(id_path): Path<Uuid>,
+    Extension(user): Extension<User>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    if user.id != id_path {
+        check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
+    }
+
     let groups = sqlx::query_as!(GroupStubListModelWithRole, "select id, label, role::text from account_group_memberships agm join account_groups ag on agm.group_id = ag.id WHERE account_id = $1", id_path)
         .fetch_all(&data.db).await?;
-    return Ok(Json(serde_json::json!({"status": "success","data":groups})));
+    Ok(Json(groups))
 }
 
 #[derive(Serialize, Debug, FromRow)]
@@ -191,21 +222,27 @@ pub struct PersonAppRoleReport {
     pub role: Option<AppRole>,
 }
 
+#[utoipa::path(get, path = "/people/{id}/app_roles", responses((status = 200, description = "OK")))]
 pub async fn get_person_app_roles(
     Path(id_path): Path<Uuid>,
-    Extension(User { id: _ }): Extension<User>,
+    Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    if user.id != id_path {
+        check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
+    }
+
     let groups = sqlx::query_as!(PersonAppRoleReport, r#"select array_agg(jsonb_build_object('id',agm.group_id, 'label',ag.label)) as groups, agra.role as "role: AppRole" from account_group_memberships agm join account_group_app_roles agra on agm.group_id = agra.group_id join account_groups ag on agra.group_id = ag.id where agm.account_id = $1 group by agra.role;"#, id_path)
         .fetch_all(&data.db).await?;
-    return Ok(Json(serde_json::json!({"status": "success","data":groups})));
+    Ok(Json(groups))
 }
 
-pub async fn get_person(
-    id_path: Option<Path<Uuid>>,
-    Extension(User { id: user_id }): Extension<User>,
-    State(data): State<Arc<AppState>>,
+async fn get_person_impl(
+    target_id: Uuid,
+    data: Arc<AppState>,
 ) -> Result<impl IntoResponse, VialoError> {
+    // permission check in the caller!
+
     let person = conditional_query_as!(
         AccountModel,
         r#"SELECT    id,
@@ -216,44 +253,62 @@ pub async fn get_person(
        membership_end as "membership_end: PgDate",
         full_name,
         manually_suspended,
-       credit_balance FROM accounts_people WHERE id = {#wh_account}"#,
-        #wh_account = match (id_path) {
-            Some(Path(id_p)) =>"{id_p}",
-            None => "{user_id}"
-        }
+       credit_balance FROM accounts_people WHERE id = {target_id}"#
     )
     .fetch_one(&data.db)
     .await?;
 
-    return Ok(Json(
-        serde_json::json!({"status": "success","data": json!(person)}),
-    ));
+    Ok(Json(person))
 }
 
+#[utoipa::path(get, path = "/people/me", responses((status = 200, description = "OK")))]
+pub async fn get_me(
+    Extension(User { id: user_id }): Extension<User>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    get_person_impl(user_id, data).await
+}
+
+#[utoipa::path(get, path = "/people/{id}", responses((status = 200, description = "OK")))]
+pub async fn get_person(
+    Path(id): Path<Uuid>,
+    State(data): State<Arc<AppState>>,
+    Extension(user): Extension<User>,
+) -> Result<impl IntoResponse, VialoError> {
+    if user.id != id {
+        check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
+    }
+
+    get_person_impl(id, data).await
+}
+
+#[utoipa::path(get, path = "/people/{id}/overview", responses((status = 200, description = "OK")))]
 pub async fn get_person_overview(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
+    Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
+    // theoretically nothing prevents us from also letting regular users query this but I don't think it's needed
+    check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
+
     let account_task;
 
     // what if conditional_query_as was evil
-    // cfg_if::cfg_if! {
-    // if #[cfg(feature = "printer")] {
-    //      account_task =  sqlx::query_as!(AccountModelForOverview, r#"SELECT ap.id,
-    //      ap.label,
-    //    ap.auth_id,
-    //     ap.email,
-    //    ap.membership_start,
-    //      ap.membership_end as "membership_end: PgDate",
-    //       ap.full_name,
-    //       ap.manually_suspended,
-    //      ap.credit_balance, spc.printer_username, spc.printer_id as "printer_id?"
-    //      FROM accounts_people ap LEFT JOIN subsystem_printer_context spc ON ap.id = spc.id WHERE ap.id = $1"#, id).fetch_one(&data.db)
+    cfg_if::cfg_if! {
+    if #[cfg(feature = "printer")] {
+         account_task =  sqlx::query_as!(AccountModelForOverview, r#"SELECT ap.id,
+         ap.label,
+       ap.auth_id,
+        ap.email,
+       ap.membership_start,
+         ap.membership_end as "membership_end: PgDate",
+          ap.full_name,
+          ap.manually_suspended,
+         ap.credit_balance, spc.printer_username, spc.printer_id as "printer_id?"
+         FROM accounts_people ap LEFT JOIN subsystem_printer_context spc ON ap.id = spc.id WHERE ap.id = $1"#, id).fetch_one(&data.db)
 
-    //      } else {
-    account_task = sqlx::query_as!(
-        AccountModelForOverview,
-        r#"SELECT ap.id,
+         } else {
+              account_task =  sqlx::query_as!(AccountModelForOverview, r#"SELECT ap.id,
              ap.label,
            ap.auth_id,
             ap.email,
@@ -261,12 +316,9 @@ pub async fn get_person_overview(
              ap.membership_end as "membership_end: PgDate",
               ap.full_name,
               ap.manually_suspended,
-             ap.credit_balance FROM accounts_people ap WHERE ap.id = $1"#,
-        id
-    )
-    .fetch_one(&data.db);
-    // }
-    // }
+             ap.credit_balance FROM accounts_people ap WHERE ap.id = $1"#, id).fetch_one(&data.db)
+      }
+      }
 
     let q = try_join!(
         account_task,
@@ -312,26 +364,20 @@ pub async fn get_person_overview(
             user_json["transactions"] = serde_json::json!(transactions);
             user_json["network"] = serde_json::json!({"realms":fetch_realms, "devices": fetch_devices.count.unwrap_or(0)});
 
-            return Ok(Json(
-                serde_json::json!({"status": "success","data": user_json}),
-            ));
+            Ok(Json(user_json))
         }
-        Err(err) => {
-            tracing::error!("{:?}", err);
-            let _error_response = serde_json::json!({
-                "status": "fail",
-                "message": format!("user with ID: {} not found", id)
-            });
-            return Err(VialoError::NotFound());
-        }
+        Err(err) => Err(VialoError::NotFound()),
     }
 }
 
+#[utoipa::path(post, path = "/people", responses((status = 201, description = "Created")))]
 pub async fn add_person(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
     JsonE(body): JsonE<CreateUserSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
+
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?; // begin transaction
 
@@ -398,37 +444,40 @@ pub async fn add_person(
         );
     }
 
-    // #[cfg(feature = "printer")]
-    // if body.auto_setup_printer.unwrap_or(false) {
-    //     let username = Alphanumeric.sample_string(&mut rng(), 8);
-    //     let password = Alphanumeric.sample_string(&mut rng(), 16);
+    #[cfg(feature = "printer")]
+    if body.auto_setup_printer.unwrap_or(false) {
+        let username = Alphanumeric.sample_string(&mut rng(), 8);
+        let password = Alphanumeric.sample_string(&mut rng(), 16);
 
-    //     printer::add_task(
-    //         trans.deref_mut(),
-    //         JobData::CreateAccount {
-    //             account_id: created_user.id,
-    //             username: username.clone(),
-    //             password: password.clone(),
-    //         },
-    //     )
-    //     .await?;
+        printer::add_task(
+            trans.deref_mut(),
+            JobData::CreateAccount {
+                account_id: created_user.id,
+                username: username.clone(),
+                password: encryption::encrypt(&password)?,
+            },
+        )
+        .await?;
 
-    //     response.as_object_mut().unwrap().insert(
-    //         "printer".into(),
-    //         json!({"username": username, "password": password}),
-    //     );
-    // }
+        response.as_object_mut().unwrap().insert(
+            "printer".into(),
+            json!({"username": username, "password": password}),
+        );
+    }
 
     trans.commit().await?;
-    return Ok((StatusCode::CREATED, Json(response)));
+    Ok((StatusCode::CREATED, Json(response)))
 }
 
+#[utoipa::path(put, path = "/people/{id}", responses((status = 200, description = "Updated")))]
 pub async fn put_person(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
     JsonE(body): JsonE<CreateUserSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
+
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
@@ -471,10 +520,7 @@ pub async fn put_person(
                 .await?;
 
         trans.commit().await?;
-        return Ok((
-            StatusCode::OK,
-            Json(json!({"status": "success","data": json!({"id":  updated_user.id})})),
-        ));
+        Ok(StatusCode::NO_CONTENT)
     } else {
         sqlx::query!(
             "DELETE FROM res_leases WHERE tenant_id = $1",
@@ -484,18 +530,18 @@ pub async fn put_person(
         .await?;
 
         trans.commit().await?;
-        return Ok((
-            StatusCode::CREATED,
-            Json(json!({"status": "success","data": json!({"id":  updated_user.id})})),
-        ));
+        Ok(StatusCode::NO_CONTENT)
     }
 }
 
+#[utoipa::path(delete, path = "/people/{id}", responses((status = 204, description = "Deleted")))]
 pub async fn delete_person(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
+
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
@@ -507,30 +553,42 @@ pub async fn delete_person(
         .await
         .map_err(|e| VialoError::Anyhow(e.into()))?;
 
-    return Ok(StatusCode::NO_CONTENT);
+    Ok(StatusCode::NO_CONTENT)
 }
 
+/// Sets credits to 0 if it was null.
+#[utoipa::path(post, path = "/people/{id}/credits", responses((status = 204, description = "Enabled")))]
 pub async fn enable_credits(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::CreditManager, &data.db).await?;
+
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
-    query!(
+    let result = query!(
         "UPDATE accounts_people SET credit_balance = 0 WHERE id = $1 AND credit_balance IS NULL",
         id
     )
-    .fetch_one(&mut *conn)
+    .execute(&mut *conn)
     .await?;
 
-    return Ok(StatusCode::NO_CONTENT);
+    if result.rows_affected() == 0 {
+        return Err(VialoError::NotFound());
+    }
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(get, path = "/people/{id}/credits", responses((status = 200, description = "OK")))]
 pub async fn get_credits(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
+    if user.id != id {
+        check_app_role(user.clone(), AppRole::CreditManager, &data.db).await?;
+    }
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let record = sqlx::query_scalar!(
         "SELECT credit_balance FROM accounts_people WHERE id = $1",
@@ -539,8 +597,5 @@ pub async fn get_credits(
     .fetch_one(&mut *conn)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": {"credit_balance": record}})),
-    ));
+    Ok((StatusCode::OK, Json(json!({"credit_balance": record}))))
 }

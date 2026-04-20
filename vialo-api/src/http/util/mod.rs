@@ -68,7 +68,7 @@ impl IntoResponse for VialoError {
             VialoError::AppErrorWithDetails(..) => unreachable!(),
         };
 
-        return (status, Json(json!({"status":"error", "code":message}))).into_response();
+        (status, Json(json!({"status":"error", "code":message}))).into_response()
     }
 }
 
@@ -76,6 +76,12 @@ impl IntoResponse for VialoError {
 // `Result<_, AppError>`. That way you don't need to do that manually.
 //
 //
+
+impl From<anyhow::Error> for VialoError {
+    fn from(err: anyhow::Error) -> Self {
+        Self::Anyhow(err)
+    }
+}
 
 impl From<sqlx::Error> for VialoError {
     fn from(err: sqlx::Error) -> Self {
@@ -101,9 +107,9 @@ pub fn get_i18n_arg_arrays(
             lang_strings.push(lang);
             content_strings.push(content);
         }
-        return (lang_strings, content_strings);
+        (lang_strings, content_strings)
     } else {
-        return (vec![], vec![]);
+        (vec![], vec![])
     }
 }
 
@@ -142,7 +148,7 @@ pub async fn insert_i18n_strings(
         }
     }
 
-    return Ok(processed_i18n_fields);
+    Ok(processed_i18n_fields)
 }
 
 /**
@@ -152,7 +158,7 @@ pub async fn grab_trans(
     conn: &mut PoolConnection<Postgres>,
 ) -> Result<PgTransaction<'_>, VialoError> {
     let trans = conn.begin().await?;
-    return Ok(trans);
+    Ok(trans)
 }
 
 /**
@@ -171,7 +177,7 @@ pub async fn grab_authd_conn_user<T: ToString>(
     .fetch_optional(&mut *conn)
     .await?;
 
-    return Ok(conn);
+    Ok(conn)
 }
 
 // We define our own `Json` extractor that customizes the error from `axum::Json`
@@ -205,14 +211,13 @@ struct ParsedSerdeError {
 /// into their constituent parts.
 fn parse_serde_error(msg: &str) -> ParsedSerdeError {
     for prefix in ["invalid type: ", "invalid value: "] {
-        if let Some(rest) = msg.strip_prefix(prefix) {
-            if let Some(sep) = rest.find(", expected ") {
+        if let Some(rest) = msg.strip_prefix(prefix)
+            && let Some(sep) = rest.find(", expected ") {
                 return ParsedSerdeError {
                     received: Some(rest[..sep].to_string()),
                     expected: Some(rest[sep + ", expected ".len()..].to_string()),
                 };
             }
-        }
     }
     ParsedSerdeError {
         received: None,

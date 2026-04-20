@@ -1,6 +1,7 @@
 use super::super::util::grab_authd_conn_user;
 use super::models::PostVisibility;
 use super::schemas::PostFilterOptions;
+use crate::helpers::LangVariant;
 use crate::http::posts::models::BoardPostIdModel;
 use crate::http::util::{JsonE, User, VialoError, grab_trans};
 use crate::permissions::{AppRole, check_app_role, check_manager_of_group};
@@ -14,7 +15,6 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sqlx::{query_as, types::JsonValue};
 use sqlx_conditional_queries::conditional_query_as;
 use std::collections::HashMap;
@@ -73,6 +73,7 @@ pub struct BoardModelTranslatedAllLanguages {
     pub slug: String,
 }
 
+#[utoipa::path(get, path = "/posts/boards", responses((status = 200, description = "OK")))]
 pub async fn list_boards(
     Query(opts): Query<PostFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -103,6 +104,7 @@ pub async fn list_boards(
     );
 }
 
+#[utoipa::path(get, path = "/posts/boards/{id}", responses((status = 200, description = "OK")))]
 pub async fn get_board(
     Query(opts): Query<PostFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -134,9 +136,8 @@ pub async fn get_board(
                 )
         .fetch_one(&data.db)
         .await?;
-        let device_response = serde_json::json!({"status": "success","data": post});
 
-        return Ok(Json(device_response));
+        Ok(Json(LangVariant::AllLangs(post)))
     } else {
         let post = conditional_query_as!(
             BoardModelTranslated,
@@ -155,9 +156,7 @@ pub async fn get_board(
         .fetch_one(&data.db)
         .await?;
 
-        let device_response = serde_json::json!({"status": "success","data": post});
-
-        return Ok(Json(device_response));
+        Ok(Json(LangVariant::Localized(post)))
     }
 }
 
@@ -206,6 +205,7 @@ async fn check_board_perm(
     }
 }
 
+#[utoipa::path(get, path = "/posts/boards/{id}/permissions", responses((status = 200, description = "OK")))]
 pub async fn get_permissions(
     Query(opts): Query<PostFilterOptions>,
     Extension(user): Extension<User>,
@@ -222,10 +222,7 @@ pub async fn get_permissions(
         r#"SELECT bgp.group_id, ag.label, bgp.perm as "perm!: BoardPerm" from board_group_perms bgp JOIN account_groups ag ON bgp.group_id = ag.id WHERE board_id = $1 LIMIT $2 OFFSET $3"#,
         id, limit, offset).fetch_all(&data.db).await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": res})),
-    ));
+    Ok((StatusCode::OK, Json(res)))
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -233,6 +230,7 @@ pub struct PermSchema {
     pub perm: BoardPerm,
 }
 
+#[utoipa::path(put, path = "/posts/boards/{board_id}/permissions/{group_id}", responses((status = 204, description = "Updated")))]
 pub async fn put_permission(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -251,9 +249,10 @@ pub async fn put_permission(
     .execute(&mut *conn)
     .await?;
 
-    return Ok((StatusCode::NO_CONTENT, {}));
+    Ok((StatusCode::NO_CONTENT, {}))
 }
 
+#[utoipa::path(delete, path = "/posts/boards/{board_id}/permissions/{group_id}", responses((status = 204, description = "Deleted")))]
 pub async fn delete_permission(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -270,9 +269,10 @@ pub async fn delete_permission(
     .execute(&mut *conn)
     .await?;
 
-    return Ok((StatusCode::NO_CONTENT, {}));
+    Ok((StatusCode::NO_CONTENT, {}))
 }
 
+#[utoipa::path(post, path = "/posts/boards", responses((status = 201, description = "Created")))]
 pub async fn add_board(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -306,10 +306,11 @@ pub async fn add_board(
     .fetch_one(&mut *trans)
     .await?;
 
-    let device_response = json!({"status": "success","data": record});
+    let device_response = record;
     trans.commit().await?;
-    return Ok((StatusCode::CREATED, Json(device_response)));
+    Ok((StatusCode::CREATED, Json(device_response)))
 }
+#[utoipa::path(put, path = "/posts/boards/{id}", responses((status = 200, description = "Updated")))]
 pub async fn put_board(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -359,9 +360,9 @@ pub async fn put_board(
         processed_i18n_fields.get("label"), body.group_id, body.default_post_visibility as PostVisibility, body.slug, body.icon, id).fetch_one(&mut *trans)
     .await?;
 
-    let device_response = json!({"status": "success","data": record});
+    let device_response = record;
     trans.commit().await?;
-    return Ok((StatusCode::CREATED, Json(device_response)));
+    Ok((StatusCode::CREATED, Json(device_response)))
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -369,6 +370,7 @@ pub struct PinPostSchema {
     pub post_id: i32,
     pub pinned_until: chrono::DateTime<chrono::Utc>,
 }
+#[utoipa::path(post, path = "/posts/boards/{id}/pin", responses((status = 201, description = "Created")))]
 pub async fn pin_post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -387,12 +389,10 @@ pub async fn pin_post(
     .execute(&mut *conn)
     .await?;
 
-    return Ok((
-        StatusCode::CREATED,
-        Json(json!({"status": "success","data": {}})),
-    ));
+    Ok(StatusCode::CREATED)
 }
 
+#[utoipa::path(delete, path = "/posts/boards/{board_id}/pin/{post_id}", responses((status = 204, description = "Deleted")))]
 pub async fn unpin_post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -409,8 +409,5 @@ pub async fn unpin_post(
     .execute(&mut *conn)
     .await?;
 
-    return Ok((
-        StatusCode::NO_CONTENT,
-        Json(json!({"status": "success","data": {}})),
-    ));
+    Ok(StatusCode::NO_CONTENT)
 }

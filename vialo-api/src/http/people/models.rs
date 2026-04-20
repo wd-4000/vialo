@@ -89,10 +89,10 @@ pub struct AccountModelForOverview {
     pub full_name: Option<String>,
     pub manually_suspended: Option<bool>,
     pub credit_balance: Option<i32>,
-    // #[cfg(feature = "printer")]
-    // pub printer_username: Option<String>,
-    // #[cfg(feature = "printer")]
-    // pub printer_id: Option<i32>,
+    #[cfg(feature = "printer")]
+    pub printer_username: Option<String>,
+    #[cfg(feature = "printer")]
+    pub printer_id: Option<i32>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]

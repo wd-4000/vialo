@@ -1,8 +1,12 @@
-use crate::{AppState, health::add_health_event, helpers::grab_authd_conn_subsystem};
+use crate::{
+    AppState,
+    health::add_health_event,
+    helpers::{encryption::Encrypted, grab_authd_conn_subsystem},
+};
 use serde_json::json;
 use sqlx::{Executor, PgPool, Postgres, types::Json};
 use std::{collections::HashMap, sync::Arc};
-use tokio::time;
+use tokio::{sync::watch, time};
 use tracing::{error, info, warn};
 mod lib;
 mod models;
@@ -16,8 +20,17 @@ where
     sqlx::query_scalar!("INSERT INTO subsystem_jobs (subsystem, data, created_at, last_updated, status) VALUES ('ppsk',$1,NOW(),NOW(), 'pending') RETURNING id", Json(job) as _).fetch_one(db).await
 }
 
-pub async fn main(db_pool: PgPool, _app_state: Arc<AppState>) -> Result<(), anyhow::Error> {
+pub async fn main(
+    db_pool: PgPool,
+    _app_state: Arc<AppState>,
+    mut shutdown: watch::Receiver<bool>,
+) -> Result<(), anyhow::Error> {
     loop {
+        if *shutdown.borrow() {
+            info!("Arrividerci!");
+            break;
+        }
+
         let mut current_job_id = None;
 
         let mut conn = grab_authd_conn_subsystem(&db_pool.clone(), "ppsk")
@@ -37,17 +50,25 @@ pub async fn main(db_pool: PgPool, _app_state: Arc<AppState>) -> Result<(), anyh
         current_job_id = Some(job.id);
     }else{
         info!("Nothing to do.");
-        time::sleep(time::Duration::from_secs(30)).await;
+        tokio::select! {
+            _ = time::sleep(time::Duration::from_secs(30)) => {}
+            changed = shutdown.changed() => {
+                if changed.is_ok() && *shutdown.borrow() {
+                    info!("Arrividerci");
+                    break;
+                }
+            }
+        }
     }
         if let Some(job_id) = current_job_id {
             let mut run_task = async || -> Result<(), anyhow::Error> {
-                let credentials = sqlx::query!(r#"SELECT hostname, api_key as "api_key!", site_id as "site_id!" FROM net_nms_connectors WHERE type = 'unifi'"#)
+                let credentials = sqlx::query!(r#"SELECT hostname, api_key as "api_key!: Encrypted<String>", site_id as "site_id!" FROM net_nms_connectors WHERE type = 'unifi'"#)
         .fetch_one(&db_pool)
         .await?;
                 // https://i.kym-cdn.com/photos/images/newsfeed/002/425/217/e06
                 let session = UniFiApi::new(
                     credentials.hostname,
-                    credentials.api_key,
+                    credentials.api_key.expose(),
                     credentials.site_id,
                 )?;
 
@@ -82,13 +103,14 @@ pub async fn main(db_pool: PgPool, _app_state: Arc<AppState>) -> Result<(), anyh
                     let mut old_wlan_unifi = session.get_wlan(&wlan_summary_id).await?;
                     let mut ppsk: Vec<WlanPresharedKey> = vec![];
                     for p in sqlx::query!(
-            r#"select nc.password as "password!", nr.vlan as "vlan!" from net_cred nc JOIN net_realm_assignments nra ON nc.account_id = nra.account_ID JOIN net_realms nr ON nr.id = nra.realm_id WHERE nc.network_id = $1 AND nc.password IS NOT NULL AND nr.vlan IS NOT NULL"#,
+            r#"select nc.password as "password!: Encrypted<String>", nr.vlan as "vlan!", nc.id from net_cred nc JOIN net_realm_assignments nra ON nc.account_id = nra.account_ID JOIN net_realms nr ON nr.id = nra.realm_id WHERE nc.network_id = $1 AND nc.password IS NOT NULL AND nr.vlan IS NOT NULL"#,
             net_id
         ).fetch_all(&db_pool)
         .await? {
-            if p.password.len() < 8 || p.password.len() > 63 {
-                error!("Invalid password length. Ignoring \"{}\".", p.password);
-                add_health_event(&mut *conn, Subsystem::Ppsk, "bad_password", Some(json!({"password": p.password})), 2, false).await?;
+            let password = p.password.expose();
+            if password.len() < 8 || password.len() > 63 {
+                error!("Invalid password length. Ignoring password for cred \"{}\".", p.id);
+                add_health_event(&mut *conn, Subsystem::Ppsk, "bad_password", Some(json!({"cred_id": p.id})), 2, false).await?;
                 continue;
             }
             let networkconf_id = if let Some(unifi_vlan) = unifi_vlans.get(&p.vlan.into()) {
@@ -101,7 +123,7 @@ pub async fn main(db_pool: PgPool, _app_state: Arc<AppState>) -> Result<(), anyh
                     network_type: WlanPresharedKeyNetworkType::Specific,
                     network_id: Some(networkconf_id),
                 },
-                passphrase: p.password,
+                passphrase: password,
             });
         }
                     // UniFi doesn't like empty PPSK
@@ -152,4 +174,6 @@ pub async fn main(db_pool: PgPool, _app_state: Arc<AppState>) -> Result<(), anyh
             .await?;
         }
     }
+
+    Ok(())
 }

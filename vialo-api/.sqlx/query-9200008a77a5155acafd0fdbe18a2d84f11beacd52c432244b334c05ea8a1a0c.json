@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT printer_id, printer_username FROM subsystem_printer_context WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "printer_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "printer_username",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "9200008a77a5155acafd0fdbe18a2d84f11beacd52c432244b334c05ea8a1a0c"
+}

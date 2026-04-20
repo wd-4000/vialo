@@ -13,7 +13,7 @@ pub async fn dump(uri: &str) -> Result<(), anyhow::Error> {
         .to_string();
     // database: uri, Format: custom, clean, Create, file: path
     let output = Command::new("pg_dump")
-        .args(&["-d", uri, "-F", "c", "-c", "-C", "-f", &*filename])
+        .args(["-d", uri, "-F", "c", "-c", "-C", "-f", &*filename])
         .output()
         .await?;
     if !output.status.success() {

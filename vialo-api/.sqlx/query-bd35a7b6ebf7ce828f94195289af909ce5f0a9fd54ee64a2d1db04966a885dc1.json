@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT nc.id, nc.username, nc.password, nc.network_id, nc.last_updated,\n        jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account\n        FROM net_cred nc LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n         WHERE account_id::text ILIKE '%' || $1 || '%' ORDER BY id ASC LIMIT $2 OFFSET $3",
+  "query": "SELECT nc.id, nc.username, nc.password AS \"password: Encrypted<String>\", nc.network_id, nc.last_updated,\n         jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account\n         FROM net_cred nc\n         LEFT JOIN accounts_people ap ON nc.account_id = ap.id\n         LEFT JOIN account_groups ag ON nc.account_id = ag.id\n         WHERE nc.id = $1",
   "describe": {
     "columns": [
       {
@@ -15,8 +15,8 @@
       },
       {
         "ordinal": 2,
-        "name": "password",
-        "type_info": "Text"
+        "name": "password: Encrypted<String>",
+        "type_info": "Bytea"
       },
       {
         "ordinal": 3,
@@ -36,9 +36,7 @@
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Int8",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -50,5 +48,5 @@
       null
     ]
   },
-  "hash": "ae5d78c2195c5586f6306fdb0cfe21462395f3cce99fa8ee85fa74c59f4d75bc"
+  "hash": "bd35a7b6ebf7ce828f94195289af909ce5f0a9fd54ee64a2d1db04966a885dc1"
 }

@@ -6,6 +6,7 @@ use axum::{body::Body, extract::State, http::StatusCode, response::IntoResponse}
 use sqlx::query;
 use std::sync::Arc;
 
+#[utoipa::path(get, path = "/etc/mail-recipients", responses((status = 200, description = "OK")))]
 pub async fn list_mail_recipients(
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
@@ -17,12 +18,12 @@ pub async fn list_mail_recipients(
     .fetch_one(&data.db)
     .await?;
 
-    return Ok((
+    Ok((
         StatusCode::OK,
         [
             (header::CONTENT_TYPE, "text/plain"),
             (header::CACHE_CONTROL, "no-cache"),
         ],
         Body::from(record.emails.map_or(String::from(""), |h| h.join("\n"))),
-    ));
+    ))
 }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE subsystem_printer_context SET id = $1 WHERE printer_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "07f1db447a4852eeed8106f19741334a25462c9106ecc746bbe9fad20a251f6d"
+}

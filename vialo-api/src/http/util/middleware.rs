@@ -57,7 +57,7 @@ pub async fn auth_middleware(
 
         // Call Kratos to validate session
         match to_session(
-            &kratos_frontend,
+            kratos_frontend,
             x_session_token.as_deref(),
             cookie.as_deref(),
             None,
@@ -94,7 +94,7 @@ pub async fn auth_middleware(
                                 false,
                             )
                             .await
-                            .map_err(|e| VialoError::Anyhow(e.into()))?;
+                            .map_err(|e| VialoError::Anyhow(e))?;
 
                             // Do the same thing as the jsonnet transform in the Kratos config
                             // This is a bit messy but frankly shouldn't happen in prod anyway
@@ -116,7 +116,7 @@ pub async fn auth_middleware(
                             let mut trans = grab_trans(&mut conn).await?;
                             helpers::people::update_identity(transformed_identity, &mut trans)
                                 .await
-                                .map_err(|e| VialoError::Anyhow(e.into()))?;
+                                .map_err(|e| VialoError::Anyhow(e))?;
                             trans.commit().await?;
                         }
                     } else {

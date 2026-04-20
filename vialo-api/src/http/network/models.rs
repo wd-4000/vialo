@@ -1,3 +1,4 @@
+use crate::helpers::encryption::{self as encryption, Encrypted};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -40,10 +41,11 @@ pub struct RealmModel {
 }
 
 #[derive(FromRow, Serialize, Deserialize)]
-pub struct CredentialModel {
+pub struct CredentialModelWithPassword {
     pub id: Uuid,
     pub username: Option<String>,
-    pub password: Option<String>,
+    #[serde(serialize_with = "encryption::serialize_exposed_opt")]
+    pub password: Option<Encrypted<String>>,
     pub account_id: Uuid,
     pub network_id: i32,
     pub last_updated: Option<DateTime<Utc>>,
@@ -53,7 +55,18 @@ pub struct CredentialModel {
 pub struct CredentialModelWithAccountEmbed {
     pub id: Uuid,
     pub username: Option<String>,
-    pub password: Option<String>,
+    pub network_id: i32,
+    pub last_updated: Option<DateTime<Utc>>,
+
+    pub account: Option<Value>, // TODO Make not optional
+}
+
+#[derive(FromRow, Serialize, Deserialize)]
+pub struct CredentialModelWithPasswordAndAccountEmbed {
+    pub id: Uuid,
+    pub username: Option<String>,
+    #[serde(serialize_with = "encryption::serialize_exposed_opt")]
+    pub password: Option<Encrypted<String>>,
     pub network_id: i32,
     pub last_updated: Option<DateTime<Utc>>,
 

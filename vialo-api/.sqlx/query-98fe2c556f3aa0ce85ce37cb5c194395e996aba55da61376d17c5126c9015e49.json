@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE subsystem_printer_context SET bw = 0, color = 0 WHERE id = $1 RETURNING OLD.bw as bw, OLD.color as color",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bw",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "color",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "98fe2c556f3aa0ce85ce37cb5c194395e996aba55da61376d17c5126c9015e49"
+}

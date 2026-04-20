@@ -24,10 +24,10 @@ CREATE TABLE net_nms_connectors (
   id int PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   type net_nms_type NOT NULL,
   hostname text NOT NULL,
-  api_key text,
+  api_key BYTEA,
   site_id text,
-  username text,
-  password text
+  username BYTEA,
+  password BYTEA
 );
 
 CREATE TABLE net_network_nms_link (
@@ -41,7 +41,7 @@ CREATE TABLE net_network_nms_link (
 CREATE TABLE net_cred (
   id uuid PRIMARY KEY default gen_random_uuid(),
   username text,
-  password text,
+  password BYTEA,
   account_id uuid NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
   network_id int NOT NULL REFERENCES net_networks (id) ON DELETE CASCADE,
   last_updated timestamptz
@@ -116,58 +116,6 @@ CREATE TABLE net_ip_assignments (
   device_id uuid UNIQUE REFERENCES net_devices (id) ON DELETE CASCADE, -- Device that this IP is currently occupied by
   expires timestamptz -- Lease expiration date and time
 );
-
-CREATE OR REPLACE FUNCTION radius_auth (
-  r_username text,
-  r_password text,
-  r_network_id int,
-  r_mac macaddr
-) RETURNS TABLE (vlan int) LANGUAGE plpgsql AS $$
-DECLARE
-  f_vlan int;
-  f_vlan_override int;
-  f_cred_id uuid;
-  f_add_on_auth boolean;
-  f_multi_device boolean;
-  f_existing_device_id uuid;
-BEGIN
-    -- Check that we pass authentication & get some required variables
-     SELECT nr.vlan, nc.id, nt.auto_add_on_auth, nt.multi_device INTO f_vlan, f_cred_id, f_add_on_auth, f_multi_device FROM net_cred nc
-        JOIN net_networks nt ON nc.network_id = nt.id
-        LEFT JOIN net_realm_assignments nra ON nc.account_id = nra.account_id
-        LEFT JOIN net_realms nr ON nr.id = nra.realm_id
-        WHERE nc.network_id = r_network_id AND nt.auth = 'username_password'::net_auth AND nc.username = r_username AND nc.password = r_password LIMIT 1;
-
-    IF f_cred_id IS NULL THEN
-        RAISE EXCEPTION 'nonexistent_cred' USING DETAIL = format('username: %s', r_username);
-    END IF;
-
-    IF f_vlan IS NULL THEN
-        RAISE EXCEPTION 'no_vlan_assigned' USING DETAIL = format('cred_id: %s', f_cred_id);
-    END IF;
-
-     SELECT nr.vlan INTO f_vlan_override FROM net_devices nd JOIN net_realms nr ON nd.realm_id = nr.id WHERE nd.mac = r_mac;
-    -- Update device (if needed)
-    IF f_add_on_auth THEN
-        IF NOT f_multi_device THEN
-            -- Singular device per credential mode
-            SELECT id INTO f_existing_device_id FROM net_devices WHERE cred_id = f_cred_id;
-        ELSE
-            -- There's a free slot for a multi-device credential
-            SELECT id INTO f_existing_device_id FROM net_devices WHERE cred_id = f_cred_id AND mac IS NULL;
-        END IF;
-
-        IF f_existing_device_id IS NOT NULL THEN
-            UPDATE net_devices SET (cred_id, mac, hostname) = (f_cred_id, r_mac, NULL) WHERE id = f_existing_device_id;
-        ELSE
-            INSERT INTO net_devices (cred_id, mac) VALUES (f_cred_id, r_mac) ON CONFLICT (mac)
-            DO UPDATE SET (cred_id, mac, hostname) = (f_cred_id, r_mac, NULL);
-        END IF;
-    END IF;
-
-    RETURN QUERY SELECT COALESCE(f_vlan_override, f_vlan) AS vlan;
-END;
-$$;
 
 CREATE OR REPLACE FUNCTION radius_dhcp (r_mac macaddr, r_vlan int) RETURNS TABLE (ipv4_addr inet, ipv4_subnet cidr) LANGUAGE plpgsql AS $$
 DECLARE

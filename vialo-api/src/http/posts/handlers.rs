@@ -11,6 +11,7 @@ use ammonia;
 use pulldown_cmark::{Parser, html};
 
 use crate::AppState;
+use crate::helpers::LangVariant;
 use crate::http::util::{JsonE, User, VialoError, get_i18n_arg_arrays, grab_trans};
 use crate::permissions::{AppRole, check_app_role};
 use axum::Extension;
@@ -21,7 +22,6 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::Query;
-use serde_json::json;
 use sqlx_conditional_queries::conditional_query_as;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -35,14 +35,14 @@ fn render_post(
     let content_html: &Option<HashMap<String, String>> = &content.as_ref().map(|yes_content| {
         // option
         yes_content
-            .into_iter()
+            .iter()
             .map(|(k, v)| {
                 // langs
 
-                let parser = Parser::new(&v);
+                let parser = Parser::new(v);
                 let mut html_buf = String::new();
                 html::push_html(&mut html_buf, parser);
-                let rendered_html = ammonia::clean(&*html_buf);
+                let rendered_html = ammonia::clean(&html_buf);
 
                 (k.clone(), rendered_html)
             })
@@ -53,10 +53,10 @@ fn render_post(
         &content_html.as_ref().map(|yes_content| {
             // option
             yes_content
-                .into_iter()
+                .iter()
                 .map(|(k, v)| {
                     // langs
-                    let rendered_plain = ammonia::Builder::empty().clean(&*v).to_string();
+                    let rendered_plain = ammonia::Builder::empty().clean(v).to_string();
                     (k.clone(), rendered_plain)
                 })
                 .collect()
@@ -65,6 +65,7 @@ fn render_post(
     (content_html.to_owned(), content_plain.to_owned())
 }
 
+#[utoipa::path(get, path = "/posts", responses((status = 200, description = "OK")))]
 pub async fn list_posts(
     Query(opts): Query<PostFilterOptions>,
     Extension(user_o): Extension<Option<User>>,
@@ -74,11 +75,11 @@ pub async fn list_posts(
        PERM
        Some posts are only visible to logged-in users. TODO
     */
-    let limit = opts.limit.unwrap_or(10) as i64;
+    let limit = opts.limit.unwrap_or(10);
     let langs = &(opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]));
-    let offset = (opts.page.unwrap_or(1) - 1) as i64 * limit;
+    let offset = ((opts.page.unwrap_or(1) - 1)) * limit;
 
     // This might be red in rust-analyzer. Ignore that.
     let posts = conditional_query_as!(BoardPostModelTranslatedWithPinnedOn, "SELECT * FROM (SELECT
@@ -127,10 +128,7 @@ pub async fn list_posts(
                               _ => "TRUE"
                           }).fetch_all(&data.db).await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": posts})),
-    ));
+    Ok((StatusCode::OK, Json(posts)))
 }
 
 /// Returns Ok(()) if the user may post to the given board:
@@ -170,6 +168,7 @@ async fn check_can_post_to_board(
     }
 }
 
+#[utoipa::path(post, path = "/posts", responses((status = 201, description = "Created")))]
 pub async fn add_post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -208,12 +207,10 @@ pub async fn add_post(
 
     trans.commit().await?;
 
-    return Ok((
-        StatusCode::CREATED,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::CREATED, Json(record)))
 }
 
+#[utoipa::path(put, path = "/posts/{id}", responses((status = 200, description = "Updated")))]
 pub async fn update_post(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -285,12 +282,10 @@ pub async fn update_post(
     .await?;
 
     trans.commit().await?;
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(get, path = "/posts/{id}", responses((status = 200, description = "OK")))]
 pub async fn get_post(
     Path(id): Path<i32>,
     Extension(user_o): Extension<Option<User>>,
@@ -358,7 +353,7 @@ pub async fn get_post(
         .await?
         .ok_or(VialoError::NotFound())?;
 
-        return Ok(Json(json!({"status": "success","data": post})));
+        Ok(Json(LangVariant::AllLangs(post)))
     } else {
         let langs = &langs;
         let post = conditional_query_as!(
@@ -404,12 +399,11 @@ pub async fn get_post(
         .await?
         .ok_or(VialoError::NotFound())?;
 
-        let device_response = serde_json::json!({"status": "success","data": post});
-
-        return Ok(Json(device_response));
+        Ok(Json(LangVariant::Localized(post)))
     }
 }
 
+#[utoipa::path(delete, path = "/posts/{id}", responses((status = 200, description = "Deleted")))]
 pub async fn delete_post(
     Path(id): Path<i32>,
     Extension(user): Extension<User>,
@@ -470,7 +464,5 @@ pub async fn delete_post(
 
     trans.commit().await?;
 
-    let device_response = serde_json::json!({"status": "success","data": {}});
-
-    return Ok(Json(device_response));
+    Ok(StatusCode::NO_CONTENT)
 }

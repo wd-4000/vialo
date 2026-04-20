@@ -22,11 +22,11 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::Query;
-use serde_json::json;
 use sqlx_conditional_queries::conditional_query_as;
 use std::{collections::HashSet, sync::Arc};
 use uuid::Uuid;
 
+#[utoipa::path(get, path = "/people/groups", responses((status = 200, description = "OK")))]
 pub async fn list_groups(
     Query(opts): Query<UserFilterOptions>,
     Extension(user): Extension<User>,
@@ -51,12 +51,10 @@ pub async fn list_groups(
     .fetch_all(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(get, path = "/people/groups/{group_id}/members", responses((status = 200, description = "OK")))]
 pub async fn list_group_members(
     Path(group_id): Path<Uuid>,
     Query(opts): Query<UserFilterOptions>,
@@ -113,12 +111,10 @@ pub async fn list_group_members(
     )
         .fetch_all(&data.db)
         .await?;
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(get, path = "/people/groups/members", responses((status = 200, description = "OK")))]
 pub async fn list_all_group_members(
     Query(opts): Query<UserFilterOptions>,
     Extension(user): Extension<User>,
@@ -150,12 +146,10 @@ pub async fn list_all_group_members(
     .fetch_all(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(get, path = "/people/groups/{id}", responses((status = 200, description = "OK")))]
 pub async fn get_group(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -171,11 +165,10 @@ pub async fn get_group(
     .fetch_one(&data.db)
     .await?;
 
-    return Ok(Json(
-        serde_json::json!({"status": "success","data": json!(group)}),
-    ));
+    Ok(Json(group))
 }
 
+#[utoipa::path(delete, path = "/people/groups/{group_id}/members/{account_id}", responses((status = 200, description = "Deleted")))]
 pub async fn delete_account(
     Path((group_id, account_id)): Path<(Uuid, Uuid)>,
     Extension(user): Extension<User>,
@@ -193,7 +186,7 @@ pub async fn delete_account(
     .fetch_one(&mut *conn)
     .await?;
 
-    return Ok(Json(serde_json::json!({"status": "success"})));
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -202,6 +195,7 @@ pub struct AddUserToGroupSchema {
     pub role: Option<GroupRole>,
 }
 
+#[utoipa::path(post, path = "/people/groups/{group_id}/members", responses((status = 200, description = "Created")))]
 pub async fn add_account(
     Path(group_id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -221,7 +215,7 @@ pub async fn add_account(
     .execute(&mut *conn)
     .await?;
 
-    return Ok(Json(serde_json::json!({"status": "success"})));
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[serde_as]
@@ -235,6 +229,7 @@ pub struct CreateGroupSchema {
     pub app_roles: Option<HashSet<AppRole>>,
 }
 
+#[utoipa::path(post, path = "/people/groups", responses((status = 201, description = "Created")))]
 pub async fn post_group(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -254,11 +249,10 @@ pub async fn post_group(
     .fetch_one(&mut *conn)
     .await?;
 
-    return Ok(Json(
-        serde_json::json!({"status": "success", "data": json!(new_group)}),
-    ));
+    Ok(Json(new_group))
 }
 
+#[utoipa::path(delete, path = "/people/groups/{id}", responses((status = 200, description = "Deleted")))]
 pub async fn delete_group(
     Path(group_id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -271,9 +265,10 @@ pub async fn delete_group(
         .execute(&mut *conn)
         .await?;
 
-    return Ok(Json(serde_json::json!({"status": "success"})));
+    Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(put, path = "/people/groups/{id}", responses((status = 200, description = "Updated")))]
 pub async fn put_group(
     Path(group_id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -333,7 +328,7 @@ pub async fn put_group(
 
     trans.commit().await?;
 
-    return Ok(Json(serde_json::json!({"status": "success"})));
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -341,6 +336,7 @@ pub struct PatchUserInGroupSchema {
     pub role: GroupRole,
 }
 
+#[utoipa::path(patch, path = "/people/groups/{group_id}/members/{account_id}", responses((status = 200, description = "Updated")))]
 pub async fn patch_account(
     Path((group_id, account_id)): Path<(Uuid, Uuid)>,
     State(data): State<Arc<AppState>>,
@@ -360,5 +356,5 @@ pub async fn patch_account(
     .fetch_one(&mut *conn)
     .await?;
 
-    return Ok(Json(serde_json::json!({"status": "success"})));
+    Ok(StatusCode::NO_CONTENT)
 }

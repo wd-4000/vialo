@@ -6,7 +6,7 @@ pub mod schema_assignments;
 pub mod schemas;
 pub mod slots;
 
-mod asset_types;
+pub mod asset_types;
 
 use std::sync::Arc;
 
@@ -20,7 +20,7 @@ use axum::{
 use crate::AppState;
 
 pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
-    return Router::new()
+    Router::new()
         .route(
             "/",
             post(handlers::post_bookable).get(handlers::list_bookables),
@@ -67,5 +67,5 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
                 app_state.clone(),
                 super::util::middleware::auth_middleware,
             ))),
-        );
+        )
 }

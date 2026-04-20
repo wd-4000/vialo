@@ -13,11 +13,11 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::Query;
-use serde_json::json;
 use sqlx::query_as;
 use std::sync::Arc;
 use uuid::Uuid;
 
+#[utoipa::path(post, path = "/people/rooms", responses((status = 201, description = "Created")))]
 pub async fn add_room(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -34,12 +34,10 @@ pub async fn add_room(
     .fetch_one(&mut *conn)
     .await?;
 
-    return Ok((
-        StatusCode::CREATED,
-        Json(json!({"status": "success","data": json!(created_room)})),
-    ));
+    Ok((StatusCode::CREATED, Json(created_room)))
 }
 
+#[utoipa::path(get, path = "/people/rooms", responses((status = 200, description = "OK")))]
 pub async fn list_rooms(
     Query(opts): Query<UserFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -58,12 +56,10 @@ pub async fn list_rooms(
     .fetch_all(&data.db)
     .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
 
+#[utoipa::path(put, path = "/people/rooms/{id}", responses((status = 200, description = "Updated")))]
 pub async fn put_room(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -82,12 +78,10 @@ pub async fn put_room(
     .fetch_one(&mut *conn)
     .await?;
 
-    return Ok((
-        StatusCode::CREATED,
-        Json(json!({"status": "success","data": json!(created_room)})),
-    ));
+    Ok((StatusCode::CREATED, Json(created_room)))
 }
 
+#[utoipa::path(delete, path = "/people/rooms/{id}", responses((status = 200, description = "Deleted")))]
 pub async fn delete_room(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -98,9 +92,10 @@ pub async fn delete_room(
         .execute(&mut *conn)
         .await?;
 
-    return Ok((StatusCode::CREATED, Json(json!({"status": "success"}))));
+    Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(get, path = "/people/rooms/{id}", responses((status = 200, description = "OK")))]
 pub async fn get_room(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -109,8 +104,5 @@ pub async fn get_room(
         .fetch_one(&data.db)
         .await?;
 
-    return Ok((
-        StatusCode::OK,
-        Json(json!({"status": "success","data": record})),
-    ));
+    Ok((StatusCode::OK, Json(record)))
 }
