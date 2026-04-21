@@ -9,7 +9,10 @@ use std::{env, sync::Arc};
 use yaml_rust2::{Yaml, YamlLoader};
 mod custom_headers;
 mod date;
-use crate::AppState;
+use crate::{
+    AppState,
+    config::{Config, OrgConfig},
+};
 use custom_headers::*;
 use date::get_event_timespan;
 use tracing::{debug, error};
@@ -55,18 +58,18 @@ struct EmailAccountInfo<'a> {
 struct EmailContext<'a> {
     pub message: &'a MessageType,
     pub account: EmailAccountInfo<'a>,
+    pub org: OrgConfig,
     pub group: Option<EmailGroupInfo<'a>>,
     pub url_email_preferences: String,
 }
 
 async fn form_email<'a>(
+    config: &Config,
     context: EmailContext<'a>,
     locale: Yaml,
     locale_plain: Yaml,
 ) -> Result<Message, anyhow::Error> {
-    // Init mailer
-
-    let email_domain = env::var("EMAIL_DOMAIN").expect("No SMTP URL provided!");
+    let email_domain = config.email_domain();
 
     // Init templating engine
     let mut handlebars = Handlebars::new();
@@ -120,13 +123,16 @@ async fn form_email<'a>(
     builder = builder.from(
         (if let Some(group) = context.group {
             format!(
-                "XYZ {} <{}@{}>",
+                "{org_name_short} {} <{}@{email_domain}>",
                 group.label,
                 group.email.as_ref().map_or("noreply", |f| { f.as_str() }),
-                email_domain
+                org_name_short = context.org.short_name,
             )
         } else {
-            format!("XYZ <noreply@{}>", email_domain)
+            format!(
+                "{org_name_short} <noreply@{email_domain}>",
+                org_name_short = context.org.short_name,
+            )
         })
         .parse::<Mailbox>()?,
     );
@@ -202,6 +208,7 @@ pub async fn main(app_state: Arc<AppState>) -> Result<(), anyhow::Error> {
 
     for person in people.iter() {
         let email = form_email(
+            &app_state.config,
             EmailContext {
                 message: &message,
                 account: EmailAccountInfo {
@@ -218,6 +225,7 @@ pub async fn main(app_state: Arc<AppState>) -> Result<(), anyhow::Error> {
                 } else {
                     None
                 },
+                org: app_state.config.org.clone(),
                 url_email_preferences: url_prefixes.preferences.clone(),
             },
             locale[0].clone(),

@@ -56,30 +56,29 @@ async fn main() {
         .expect("Error reading config");
 
     // Load encryption key
-    let encryption_key: chacha20poly1305::Key =
-        if let Ok(s) = std::env::var("ENCRYPTION_KEY") {
-            let bytes: [u8; 32] = hex::decode(s.trim())
-                .expect("ENCRYPTION_KEY: invalid hex")
-                .try_into()
-                .expect("ENCRYPTION_KEY: must be 32 bytes (64 hex chars)");
-            chacha20poly1305::Key::from(bytes)
-        } else if let Ok(key_path) = std::env::var("ENCRYPTION_KEY_PATH") {
-            let bytes: [u8; 32] = hex::decode(
-                std::fs::read_to_string(&key_path)
-                    .expect("Error reading encryption key file")
-                    .trim(),
-            )
-            .expect("ENCRYPTION_KEY_PATH: invalid hex")
+    let encryption_key: chacha20poly1305::Key = if let Ok(s) = std::env::var("ENCRYPTION_KEY") {
+        let bytes: [u8; 32] = hex::decode(s.trim())
+            .expect("ENCRYPTION_KEY: invalid hex")
             .try_into()
-            .expect("ENCRYPTION_KEY_PATH: the file must be 32 bytes (64 hex chars)");
-            chacha20poly1305::Key::from(bytes)
-        } else if cfg!(debug_assertions) {
-            warn!("¡Inseguro! Using default encryption key.");
-            warn!("This better not be production!!!");
-            ([104; 32]).into()
-        } else {
-            panic!("ENCRYPTION_KEY or ENCRYPTION_KEY_PATH must be set in prod.")
-        };
+            .expect("ENCRYPTION_KEY: must be 32 bytes (64 hex chars)");
+        chacha20poly1305::Key::from(bytes)
+    } else if let Ok(key_path) = std::env::var("ENCRYPTION_KEY_PATH") {
+        let bytes: [u8; 32] = hex::decode(
+            std::fs::read_to_string(&key_path)
+                .expect("Error reading encryption key file")
+                .trim(),
+        )
+        .expect("ENCRYPTION_KEY_PATH: invalid hex")
+        .try_into()
+        .expect("ENCRYPTION_KEY_PATH: the file must be 32 bytes (64 hex chars)");
+        chacha20poly1305::Key::from(bytes)
+    } else if cfg!(debug_assertions) {
+        warn!("¡Inseguro! Using default encryption key.");
+        warn!("This better not be production!!!");
+        ([104; 32]).into()
+    } else {
+        panic!("ENCRYPTION_KEY or ENCRYPTION_KEY_PATH must be set in prod.")
+    };
 
     encryption::init(encryption_key);
 
@@ -290,8 +289,12 @@ async fn main() {
         });
 
     let email_subsystem_set = tokio::task::LocalSet::new();
-    let _email_subsystem_asp = asp.clone();
-    let _email_subsystem_shutdown = shutdown_rx.clone();
+
+    #[cfg(feature = "email")]
+    let email_subsystem_asp = asp.clone();
+    #[cfg(feature = "email")]
+    let mut email_subsystem_shutdown = shutdown_rx.clone();
+
     let email_subsystem_task = email_subsystem_set.run_until(async move {
         #[cfg(feature = "email")]
         loop {

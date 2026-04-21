@@ -8,6 +8,7 @@ use axum::{
 };
 use tower_http::trace::TraceLayer;
 pub mod bookables;
+mod config;
 pub mod docs;
 mod etc;
 mod health;
@@ -88,6 +89,7 @@ pub async fn create_router(app_state: Arc<AppState>) -> Router {
             app_state.clone(),
             util::middleware::auth_middleware,
         ))
+        .route("/config", get(config::get_config))
         .route("/etc/mail-recipients", get(etc::list_mail_recipients))
         // TODO expose openapi.json (Maybe) .route("/openapi.json", get(docs::openapi_json))
         .layer(
