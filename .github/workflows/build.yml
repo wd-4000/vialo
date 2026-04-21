@@ -42,3 +42,56 @@ jobs:
         # You must include the subfolder path explicitly.
         path: ./vialo-api/openapi.json
         if-no-files-found: error
+  deploy-docs:
+    # This ensures the deploy job only runs after the build job is successful
+    needs: build 
+    
+    # Required permissions for GitHub Pages deployments
+    permissions:
+      pages: write
+      id-token: write
+      
+    # Links this job to the built-in GitHub Pages environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+      
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Download OpenAPI Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: openapi-spec
+          # Downloads the artifact into a new temporary folder
+          path: ./pages-build 
+
+      - name: Generate index.html
+        run: |
+          cat << 'EOF' > ./pages-build/index.html
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Vialo API</title>
+              <meta charset="utf-8"/>
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>body { margin: 0; padding: 0; }</style>
+            </head>
+            <body>
+              <redoc spec-url="openapi.json"></redoc>
+              <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+            </body>
+          </html>
+          EOF
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./pages-build
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
