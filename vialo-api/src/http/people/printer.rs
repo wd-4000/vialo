@@ -27,6 +27,7 @@ use serde_json::json;
 use sqlx::prelude::FromRow;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 #[derive(Serialize, Debug, FromRow)]
@@ -53,7 +54,7 @@ pub struct PrinterListModel {
     pub printer_id: Option<i32>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
 pub struct PrinterFilterOptions {
     pub search: Option<String>,
     pub page: Option<i64>,
@@ -61,7 +62,7 @@ pub struct PrinterFilterOptions {
     pub account_id_is_null: Option<bool>,
 }
 
-#[utoipa::path(get, path = "/people/printer", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/printer", params(PrinterFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn list(
     Query(opts): Query<PrinterFilterOptions>,
     Extension(_user): Extension<User>,
@@ -118,12 +119,12 @@ pub async fn get(
     ))
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, ToSchema)]
 pub struct LinkOrCreate {
     pub printer_id: Option<i32>,
 }
 
-#[utoipa::path(post, path = "/people/{id}/printer", responses((status = 204, description = "Linked")))]
+#[utoipa::path(post, path = "/people/{id}/printer", request_body=LinkOrCreate, responses((status = 204, description = "Linked")))]
 pub async fn link_or_create(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,

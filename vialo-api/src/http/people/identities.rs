@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::prelude::FromRow;
 use std::sync::Arc;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Serialize, Debug, FromRow)]
@@ -84,12 +85,12 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct MergeUserSchema {
     pub account_id: Uuid,
 }
 
-#[utoipa::path(post, path = "/people/identities/{id}/merge", responses((status = 200, description = "Merged")))]
+#[utoipa::path(post, path = "/people/identities/{id}/merge", request_body=MergeUserSchema, responses((status = 200, description = "Merged")))]
 pub async fn merge(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,

@@ -1,10 +1,42 @@
 use serde::{Deserialize, Deserializer, de::Error};
+use utoipa::ToSchema;
+use utoipa::openapi::{
+    KnownFormat, ObjectBuilder, OneOfBuilder, RefOr, Schema, SchemaFormat,
+    schema::{SchemaType, Type},
+};
 use uuid::Uuid;
 
 #[derive(Debug, PartialEq)]
 pub enum IdOrAllQuery {
     Id(Uuid),
     All,
+}
+
+impl utoipa::PartialSchema for IdOrAllQuery {
+    fn schema() -> RefOr<Schema> {
+        RefOr::T(Schema::OneOf(
+            OneOfBuilder::new()
+                .item(
+                    ObjectBuilder::new()
+                        .schema_type(SchemaType::new(Type::String))
+                        .format(Some(SchemaFormat::KnownFormat(KnownFormat::Uuid)))
+                        .build(),
+                )
+                .item(
+                    ObjectBuilder::new()
+                        .schema_type(SchemaType::new(Type::String))
+                        .enum_values(Some(["all"]))
+                        .build(),
+                )
+                .build(),
+        ))
+    }
+}
+
+impl utoipa::ToSchema for IdOrAllQuery {
+    fn name() -> std::borrow::Cow<'static, str> {
+        "IdOrAllQuery".into()
+    }
 }
 
 impl<'de> Deserialize<'de> for IdOrAllQuery {
@@ -21,8 +53,7 @@ impl<'de> Deserialize<'de> for IdOrAllQuery {
     }
 }
 
-#[derive(Debug, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, PartialEq, Default)]
 pub enum IdOrMeOrAllQuery {
     Id(Uuid),
     Me,
@@ -30,6 +61,32 @@ pub enum IdOrMeOrAllQuery {
     All,
 }
 
+impl utoipa::PartialSchema for IdOrMeOrAllQuery {
+    fn schema() -> RefOr<Schema> {
+        RefOr::T(Schema::OneOf(
+            OneOfBuilder::new()
+                .item(
+                    ObjectBuilder::new()
+                        .schema_type(SchemaType::new(Type::String))
+                        .format(Some(SchemaFormat::KnownFormat(KnownFormat::Uuid)))
+                        .build(),
+                )
+                .item(
+                    ObjectBuilder::new()
+                        .schema_type(SchemaType::new(Type::String))
+                        .enum_values(Some(["me", "all"]))
+                        .build(),
+                )
+                .build(),
+        ))
+    }
+}
+
+impl utoipa::ToSchema for IdOrMeOrAllQuery {
+    fn name() -> std::borrow::Cow<'static, str> {
+        "IdOrMeOrAllQuery".into()
+    }
+}
 
 impl<'de> Deserialize<'de> for IdOrMeOrAllQuery {
     fn deserialize<D>(de: D) -> Result<Self, D::Error>
@@ -52,6 +109,33 @@ pub enum IdOrMeQuery {
     Me,
 }
 
+impl utoipa::PartialSchema for IdOrMeQuery {
+    fn schema() -> RefOr<Schema> {
+        RefOr::T(Schema::OneOf(
+            OneOfBuilder::new()
+                .item(
+                    ObjectBuilder::new()
+                        .schema_type(SchemaType::new(Type::String))
+                        .format(Some(SchemaFormat::KnownFormat(KnownFormat::Uuid)))
+                        .build(),
+                )
+                .item(
+                    ObjectBuilder::new()
+                        .schema_type(SchemaType::new(Type::String))
+                        .enum_values(Some(["me"]))
+                        .build(),
+                )
+                .build(),
+        ))
+    }
+}
+
+impl utoipa::ToSchema for IdOrMeQuery {
+    fn name() -> std::borrow::Cow<'static, str> {
+        "IdOrMeQuery".into()
+    }
+}
+
 impl<'de> Deserialize<'de> for IdOrMeQuery {
     fn deserialize<D>(de: D) -> Result<Self, D::Error>
     where
@@ -63,48 +147,5 @@ impl<'de> Deserialize<'de> for IdOrMeQuery {
             "me" => Self::Me,
             id => Self::Id(id.parse::<Uuid>().map_err(Error::custom)?),
         })
-    }
-}
-
-/** This is, like, an insane wrapper for an Option inside a uhhh Struct. So none = not present, some is either null or a value */
-#[derive(Debug)]
-#[derive(Default)]
-pub enum PatchOption<T> {
-    /** Field NOT THERE  */
-    #[default]
-    None,
-    /** This might be null if you didn't understand */
-    Some(Option<T>),
-}
-
-
-impl<T> PatchOption<T> {
-    pub fn try_map<U, E>(self, f: impl Fn(T) -> Result<U, E>) -> Result<PatchOption<U>, E> {
-        match self {
-            PatchOption::None => Ok(PatchOption::None),
-            PatchOption::Some(None) => Ok(PatchOption::Some(None)),
-            PatchOption::Some(Some(v)) => Ok(PatchOption::Some(Some(f(v)?))),
-        }
-    }
-}
-
-impl<T> From<Option<T>> for PatchOption<T> {
-    fn from(opt: Option<T>) -> PatchOption<T> {
-        match opt {
-            Some(v) => PatchOption::Some(Some(v)),
-            None => PatchOption::Some(None),
-        }
-    }
-}
-
-impl<'de, T> Deserialize<'de> for PatchOption<T>
-where
-    T: Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Option::deserialize(deserializer).map(Into::into)
     }
 }

@@ -1,8 +1,8 @@
 use super::handlers::BookableFilterOptions;
 use crate::AppState;
+use crate::helpers::PatchOption;
 use crate::helpers::encryption::{self, Encrypted};
 use crate::http::util::grab_authd_conn_user;
-use crate::http::util::models::PatchOption;
 use crate::http::util::{JsonE, User, VialoError};
 use crate::permissions::{AppRole, check_app_role};
 use axum::{
@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::query;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
+use utoipa::ToSchema;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct BookableConnector {
@@ -51,21 +52,21 @@ pub struct BookableConnectorWithOptionalPassword {
     pub password: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, ToSchema)]
 pub struct BookableConnectorPatch {
     pub endpoint: String,
     pub username: PatchOption<String>,
     pub password: PatchOption<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, ToSchema)]
 pub struct BookableConnectorPost {
     pub endpoint: String,
     pub username: Option<String>,
     pub password: Option<String>,
 }
 
-#[utoipa::path(get, path = "/bookables/connectors", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/connectors", params(BookableFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn list(
     Query(opts): Query<BookableFilterOptions>,
     Extension(user): Extension<User>,
@@ -120,7 +121,7 @@ pub async fn get(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(post, path = "/bookables/connectors", responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/bookables/connectors", request_body=BookableConnectorPost, responses((status = 201, description = "Created")))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -134,14 +135,8 @@ pub async fn post(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     // Encrypt username and password if provided
-    let username = username
-        .as_ref()
-        .map(encryption::encrypt)
-        .transpose()?;
-    let password = password
-        .as_ref()
-        .map(encryption::encrypt)
-        .transpose()?;
+    let username = username.as_ref().map(encryption::encrypt).transpose()?;
+    let password = password.as_ref().map(encryption::encrypt).transpose()?;
 
     let record = conditional_query_as!(
         BookableConnector,
@@ -162,7 +157,7 @@ pub async fn post(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(put, path = "/bookables/connectors/{id}", responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/bookables/connectors/{id}", request_body=BookableConnectorPatch, responses((status = 200, description = "Updated")))]
 pub async fn put(
     Path(id): Path<i32>,
     Extension(user): Extension<User>,

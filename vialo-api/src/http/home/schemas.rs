@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
-#[derive(Deserialize, Debug, Default, ToSchema)]
+#[derive(Deserialize, Debug, Default, ToSchema, IntoParams)]
 pub struct PostFilterOptions {
     pub lang: Option<Vec<String>>,
     pub page: Option<usize>,

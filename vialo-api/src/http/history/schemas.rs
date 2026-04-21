@@ -1,8 +1,7 @@
-
 use serde::Deserialize;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
-#[derive(Deserialize, Debug, Default, ToSchema)]
+#[derive(Deserialize, Debug, Default, ToSchema, IntoParams)]
 pub struct HistoryFilterOptions {
     pub page: Option<i64>,
     pub limit: Option<i64>,

@@ -9,19 +9,20 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
+use utoipa::ToSchema;
 
 use crate::{
     AppState,
     http::util::{JsonE, ListOptions, User, VialoError, grab_authd_conn_user},
 };
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct BookableSchemaAssignment {
     pub begins: DateTime<Utc>,
     pub schema_id: i32,
 }
 
-#[utoipa::path(get, path = "/bookables/{asset_id}/schema_assignments", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/{asset_id}/schema_assignments", params(ListOptions), responses((status = 200, description = "OK")))]
 pub async fn list(
     Path(asset_id): Path<i32>,
     Query(opts): Query<ListOptions>,
@@ -48,7 +49,7 @@ pub async fn list(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(post, path = "/bookables/{asset_id}/schema_assignments", responses((status = 204, description = "Created")))]
+#[utoipa::path(post, path = "/bookables/{asset_id}/schema_assignments", request_body = BookableSchemaAssignment, responses((status = 204, description = "Created")))]
 pub async fn post(
     Path(asset_id): Path<i32>,
     State(data): State<Arc<AppState>>,

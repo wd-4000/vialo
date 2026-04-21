@@ -1,4 +1,5 @@
 use serde_with::{NoneAsEmptyString, serde_as};
+use utoipa::ToSchema;
 
 use super::{
     models::{GroupListModel, GroupMemberModel},
@@ -26,7 +27,7 @@ use sqlx_conditional_queries::conditional_query_as;
 use std::{collections::HashSet, sync::Arc};
 use uuid::Uuid;
 
-#[utoipa::path(get, path = "/people/groups", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/groups", params(UserFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn list_groups(
     Query(opts): Query<UserFilterOptions>,
     Extension(user): Extension<User>,
@@ -54,7 +55,7 @@ pub async fn list_groups(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/people/groups/{group_id}/members", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/groups/{group_id}/members", params(UserFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn list_group_members(
     Path(group_id): Path<Uuid>,
     Query(opts): Query<UserFilterOptions>,
@@ -114,7 +115,7 @@ pub async fn list_group_members(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/people/groups/members", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/groups/members", params(UserFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn list_all_group_members(
     Query(opts): Query<UserFilterOptions>,
     Extension(user): Extension<User>,
@@ -189,13 +190,13 @@ pub async fn delete_account(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct AddUserToGroupSchema {
     pub account_id: Uuid,
     pub role: Option<GroupRole>,
 }
 
-#[utoipa::path(post, path = "/people/groups/{group_id}/members", responses((status = 200, description = "Created")))]
+#[utoipa::path(post, path = "/people/groups/{group_id}/members", request_body=AddUserToGroupSchema, responses((status = 200, description = "Created")))]
 pub async fn add_account(
     Path(group_id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -219,7 +220,7 @@ pub async fn add_account(
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreateGroupSchema {
     pub label: String,
     #[serde_as(as = "NoneAsEmptyString")]
@@ -229,7 +230,7 @@ pub struct CreateGroupSchema {
     pub app_roles: Option<HashSet<AppRole>>,
 }
 
-#[utoipa::path(post, path = "/people/groups", responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/people/groups", request_body=CreateGroupSchema, responses((status = 201, description = "Created")))]
 pub async fn post_group(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -268,7 +269,7 @@ pub async fn delete_group(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(put, path = "/people/groups/{id}", responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/people/groups/{id}", request_body=CreateGroupSchema, responses((status = 200, description = "Updated")))]
 pub async fn put_group(
     Path(group_id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -331,12 +332,12 @@ pub async fn put_group(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct PatchUserInGroupSchema {
     pub role: GroupRole,
 }
 
-#[utoipa::path(patch, path = "/people/groups/{group_id}/members/{account_id}", responses((status = 200, description = "Updated")))]
+#[utoipa::path(patch, path = "/people/groups/{group_id}/members/{account_id}", request_body=PatchUserInGroupSchema, responses((status = 200, description = "Updated")))]
 pub async fn patch_account(
     Path((group_id, account_id)): Path<(Uuid, Uuid)>,
     State(data): State<Arc<AppState>>,

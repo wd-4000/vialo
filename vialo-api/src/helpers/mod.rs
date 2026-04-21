@@ -4,10 +4,11 @@ use sqlx::{PgPool, Postgres, pool::PoolConnection};
 use std::path::PathBuf;
 
 pub mod encryption;
+mod patch_option;
 pub mod people;
 mod pg_date;
 mod pg_date_time;
-pub use {pg_date::*, pg_date_time::*};
+pub use {patch_option::*, pg_date::*, pg_date_time::*};
 
 pub fn find_upward(filename: &str) -> Option<PathBuf> {
     let mut dir = std::env::current_dir().ok()?;

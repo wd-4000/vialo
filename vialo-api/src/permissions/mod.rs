@@ -8,6 +8,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::PgExecutor;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
@@ -17,7 +18,7 @@ use crate::{
 
 pub mod bookables;
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
 #[sqlx(type_name = "group_role", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum GroupRole {
@@ -25,7 +26,9 @@ pub enum GroupRole {
     Manager,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, sqlx::Type, Deserialize, Serialize)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema,
+)]
 #[sqlx(type_name = "app_role", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum AppRole {

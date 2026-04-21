@@ -370,7 +370,7 @@ pub async fn get_person_overview(
     }
 }
 
-#[utoipa::path(post, path = "/people", responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/people", request_body=CreateUserSchema, responses((status = 201, description = "Created")))]
 pub async fn add_person(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -469,7 +469,7 @@ pub async fn add_person(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-#[utoipa::path(put, path = "/people/{id}", responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/people/{id}", request_body=CreateUserSchema, responses((status = 200, description = "Updated")))]
 pub async fn put_person(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,

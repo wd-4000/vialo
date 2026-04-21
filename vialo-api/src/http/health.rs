@@ -39,7 +39,7 @@ struct HealthEvent {
     pub resolved: bool,
 }
 
-#[utoipa::path(get, path = "/health", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/health", params(ListOptions), responses((status = 200, description = "OK")))]
 pub async fn get_health_events(
     Query(opts): Query<ListOptions>,
     State(data): State<Arc<AppState>>,
