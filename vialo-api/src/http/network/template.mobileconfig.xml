@@ -65,7 +65,7 @@
 	<key>PayloadIdentifier</key>
 	<string>vialo-{network_id}-{cred_id}</string>
 	<key>PayloadOrganization</key>
-	<string>{copyright}</string>
+	<string>{org_name}</string>
 	<key>PayloadRemovalDisallowed</key>
 	<false/>
 	<key>PayloadType</key>

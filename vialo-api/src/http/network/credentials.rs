@@ -130,10 +130,10 @@ pub async fn get_mobileconfig(
         password = record.password.map(|p| p.expose()).unwrap_or_default(),
         cred_id = record.id,
         network_id = record.network_id,
-        network_ssid = record.network_label,              // TODO
-        network_tlstrust = "xyz.uni.example.com",         // TODO
-        outer_identity = "anonymous@xyz.uni.example.com", // TODO
-        copyright = "COPYRIGHT"                           // TODO
+        network_ssid = record.network_label,       // TODO
+        network_tlstrust = data.config.org.domain, // TODO: make configurable per network
+        outer_identity = format!("anonymous@{}", data.config.org.domain), // TODO: make configurable per network
+        org_name = data.config.org.name
     );
     Ok((
         StatusCode::OK,
