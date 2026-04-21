@@ -75,6 +75,7 @@ impl Config {
 
 #[derive(Serialize, ToSchema)]
 pub struct PublicConfig {
+    #[cfg(feature = "email")]
     pub email_domain: String,
     pub org: OrgConfig,
 }
