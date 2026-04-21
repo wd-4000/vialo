@@ -1,5 +1,9 @@
 use axum::{Json, response::IntoResponse};
-use utoipa::OpenApi;
+use std::collections::BTreeMap;
+use utoipa::{
+    OpenApi,
+    openapi::{extensions::ExtensionsBuilder, tag::TagBuilder},
+};
 use utoipauto::utoipauto;
 
 /// Fixes these ugly tags. Now.
@@ -10,6 +14,9 @@ struct FixTheseUglyTagsNow;
 
 impl utoipa::Modify for FixTheseUglyTagsNow {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        let mut all_tags: std::collections::BTreeSet<Vec<String>> = Default::default();
+        openapi.tags = Some(vec![]);
+
         for (_, path_item) in openapi.paths.paths.iter_mut() {
             for op in [
                 &mut path_item.get,
@@ -20,15 +27,64 @@ impl utoipa::Modify for FixTheseUglyTagsNow {
             ] {
                 if let Some(operation) = op {
                     if let Some(tags) = &mut operation.tags {
-                        *tags = tags.iter().map(|t| clean_tag(t)).collect();
+                        let new_tags: Vec<Vec<String>> =
+                            tags.iter().map(|t| clean_tag(t)).collect();
+                        *tags = new_tags.iter().map(|t| t.join("/")).collect();
+                        all_tags.extend(new_tags.iter().cloned());
                     }
                 }
             }
         }
+
+        // Group tags by root segment for x-tagGroups (used by Redoc)
+        let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for tag_parts in &all_tags {
+            let root = tag_parts
+                .first()
+                .map(|s| s.as_str())
+                .unwrap_or("")
+                .to_string();
+            groups.entry(root).or_default().push(tag_parts.join("/"));
+
+            let extensions_builder = ExtensionsBuilder::new();
+
+            // Trim first element unless that's all we've got
+            let trimmed_parts = match tag_parts.as_slice() {
+                [] => vec![],
+                [single] => vec![single.clone()],
+                [_, rest @ ..] => rest.to_vec(),
+            };
+            let extensions = extensions_builder
+                .add("x-displayName", trimmed_parts.join("/"))
+                .build();
+
+            let tb = TagBuilder::new();
+            openapi.tags.get_or_insert_with(Vec::new).push(
+                tb.name(tag_parts.join("/"))
+                    .extensions(Some(extensions))
+                    .build(),
+            );
+        }
+
+        println!(
+            "{:?}",
+            openapi.tags.as_mut().map(|s| s
+                .into_iter()
+                .map(|t| t.name.clone())
+                .collect::<Vec<String>>())
+        );
+
+        let tag_groups: Vec<serde_json::Value> = groups
+            .into_iter()
+            .map(|(name, tags)| serde_json::json!({"name": name, "tags": tags}))
+            .collect();
+
+        let extensions = openapi.extensions.get_or_insert_with(Default::default);
+        extensions.insert("x-tagGroups".into(), serde_json::json!(tag_groups));
     }
 }
 
-fn clean_tag(tag: &str) -> String {
+fn clean_tag(tag: &str) -> Vec<String> {
     let stripped = tag.strip_prefix("crate::http::").unwrap_or(tag);
     let parts: Vec<String> = stripped
         .split("::")
@@ -36,9 +92,9 @@ fn clean_tag(tag: &str) -> String {
         .map(to_title_case)
         .collect();
     if parts.is_empty() {
-        to_title_case(stripped.split("::").last().unwrap_or(tag))
+        vec![to_title_case(stripped.split("::").last().unwrap_or(tag)).into()]
     } else {
-        parts.join("/")
+        parts
     }
 }
 
