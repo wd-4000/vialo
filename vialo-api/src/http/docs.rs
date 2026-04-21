@@ -66,14 +66,6 @@ impl utoipa::Modify for FixTheseUglyTagsNow {
             );
         }
 
-        println!(
-            "{:?}",
-            openapi.tags.as_mut().map(|s| s
-                .into_iter()
-                .map(|t| t.name.clone())
-                .collect::<Vec<String>>())
-        );
-
         let tag_groups: Vec<serde_json::Value> = groups
             .into_iter()
             .map(|(name, tags)| serde_json::json!({"name": name, "tags": tags}))
