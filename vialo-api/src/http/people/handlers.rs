@@ -192,8 +192,7 @@ async fn get_person_capabilities_impl(
     }))
 }
 
-/// Used in the admin panel to detect which navbar items to show (see useConditionalUI)
-#[utoipa::path(get, path = "/people/me/capabilities", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/me/capabilities", description = "Used in the admin panel to detect which navbar items to show (see useConditionalUI)" ,responses((status = 200, description = "OK")))]
 pub async fn get_person_capabilities_me(
     Extension(User { id }): Extension<User>,
     State(data): State<Arc<AppState>>,
