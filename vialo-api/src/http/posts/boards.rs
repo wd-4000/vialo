@@ -19,9 +19,10 @@ use sqlx::{query_as, types::JsonValue};
 use sqlx_conditional_queries::conditional_query_as;
 use std::collections::HashMap;
 use std::sync::Arc;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
 #[sqlx(type_name = "board_perm", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum BoardPerm {
@@ -31,7 +32,7 @@ pub enum BoardPerm {
     Admin,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreateBoardSchema {
     pub group_id: Uuid,
     pub label: HashMap<String, String>,
@@ -73,7 +74,7 @@ pub struct BoardModelTranslatedAllLanguages {
     pub slug: String,
 }
 
-#[utoipa::path(get, path = "/posts/boards", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/posts/boards", params(PostFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn list_boards(
     Query(opts): Query<PostFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -104,7 +105,7 @@ pub async fn list_boards(
     );
 }
 
-#[utoipa::path(get, path = "/posts/boards/{id}", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/posts/boards/{id}", params(PostFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn get_board(
     Query(opts): Query<PostFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -205,7 +206,7 @@ async fn check_board_perm(
     }
 }
 
-#[utoipa::path(get, path = "/posts/boards/{id}/permissions", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/posts/boards/{id}/permissions", params(PostFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn get_permissions(
     Query(opts): Query<PostFilterOptions>,
     Extension(user): Extension<User>,
@@ -225,12 +226,12 @@ pub async fn get_permissions(
     Ok((StatusCode::OK, Json(res)))
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct PermSchema {
     pub perm: BoardPerm,
 }
 
-#[utoipa::path(put, path = "/posts/boards/{board_id}/permissions/{group_id}", responses((status = 204, description = "Updated")))]
+#[utoipa::path(put, path = "/posts/boards/{board_id}/permissions/{group_id}", request_body = PermSchema, responses((status = 204, description = "Updated")))]
 pub async fn put_permission(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -272,7 +273,7 @@ pub async fn delete_permission(
     Ok((StatusCode::NO_CONTENT, {}))
 }
 
-#[utoipa::path(post, path = "/posts/boards", responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/posts/boards", request_body = CreateBoardSchema, responses((status = 201, description = "Created")))]
 pub async fn add_board(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -310,7 +311,7 @@ pub async fn add_board(
     trans.commit().await?;
     Ok((StatusCode::CREATED, Json(device_response)))
 }
-#[utoipa::path(put, path = "/posts/boards/{id}", responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/posts/boards/{id}", request_body = CreateBoardSchema, responses((status = 200, description = "Updated")))]
 pub async fn put_board(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -365,12 +366,12 @@ pub async fn put_board(
     Ok((StatusCode::CREATED, Json(device_response)))
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct PinPostSchema {
     pub post_id: i32,
     pub pinned_until: chrono::DateTime<chrono::Utc>,
 }
-#[utoipa::path(post, path = "/posts/boards/{id}/pin", responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/posts/boards/{id}/pin", request_body = PinPostSchema, responses((status = 201, description = "Created")))]
 pub async fn pin_post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,

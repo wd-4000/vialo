@@ -2,6 +2,7 @@ use std::error::Error;
 
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
+use utoipa::openapi::{ObjectBuilder, OneOfBuilder, RefOr, Schema, SchemaFormat, KnownFormat, schema::{SchemaType, Type}};
 use sqlx::{
     Encode,
     encode::IsNull,
@@ -14,6 +15,40 @@ pub enum PgDateTime {
     Infinity,
     NegativeInfinity,
     DateTime(NaiveDateTime),
+}
+
+impl utoipa::PartialSchema for PgDateTime {
+    fn schema() -> RefOr<Schema> {
+        RefOr::T(Schema::OneOf(
+            OneOfBuilder::new()
+                .item(
+                    ObjectBuilder::new()
+                        .schema_type(SchemaType::new(Type::String))
+                        .enum_values(Some(["infinity", "negative_infinity"]))
+                        .build(),
+                )
+                .item(
+                    ObjectBuilder::new()
+                        .schema_type(SchemaType::new(Type::Object))
+                        .property(
+                            "date_time",
+                            ObjectBuilder::new()
+                                .schema_type(SchemaType::new(Type::String))
+                                .format(Some(SchemaFormat::KnownFormat(KnownFormat::DateTime)))
+                                .build(),
+                        )
+                        .required("date_time")
+                        .build(),
+                )
+                .build(),
+        ))
+    }
+}
+
+impl utoipa::ToSchema for PgDateTime {
+    fn name() -> std::borrow::Cow<'static, str> {
+        "PgDateTime".into()
+    }
 }
 
 impl sqlx::Type<sqlx::Postgres> for PgDateTime {

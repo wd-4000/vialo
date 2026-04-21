@@ -20,7 +20,7 @@ use sqlx::query_as;
 use sqlx_conditional_queries::conditional_query_as;
 use uuid::Uuid;
 
-#[utoipa::path(get, path = "/network/realms", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/network/realms", params(RealmFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn list_realms(
     Query(opts): Query<RealmFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -79,7 +79,7 @@ pub async fn get_realm(
     Ok((StatusCode::OK, Json(records)))
 }
 
-#[utoipa::path(put, path = "/network/realms/{id}", responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/network/realms/{id}", request_body = UpdateRealmSchema, responses((status = 200, description = "Updated")))]
 pub async fn put_realm(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -101,7 +101,7 @@ pub async fn put_realm(
     }
 }
 
-#[utoipa::path(post, path = "/network/realms/set_default", responses((status = 200, description = "Updated")))]
+#[utoipa::path(post, path = "/network/realms/set_default", request_body = SetDefaultRealmSchema, responses((status = 200, description = "Updated")))]
 pub async fn set_default_realm(
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,

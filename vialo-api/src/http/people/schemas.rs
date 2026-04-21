@@ -1,18 +1,19 @@
 use crate::{helpers::PgDate, http::util::models::IdOrMeOrAllQuery};
 use serde::{Deserialize, Serialize};
 use serde_with::{NoneAsEmptyString, serde_as};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use super::models::LessorModel;
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct TransactionFilterOptions {
     pub page: Option<i64>,
     pub limit: Option<i64>,
     pub account_id: IdOrMeOrAllQuery,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct UserFilterOptions {
     pub search: Option<String>,
     pub group: Option<Vec<Uuid>>,
@@ -36,7 +37,7 @@ pub struct UserFilterOptions {
 }
 */
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ContractInfo {
     pub room: String,
     pub begins: chrono::NaiveDate,
@@ -45,7 +46,7 @@ pub struct ContractInfo {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreateUserSchema {
     pub full_name: String,
     #[serde_as(as = "NoneAsEmptyString")]
@@ -58,7 +59,7 @@ pub struct CreateUserSchema {
     pub auto_setup_printer: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreateRoomSchema {
     pub label: String,
     pub capacity: i32,

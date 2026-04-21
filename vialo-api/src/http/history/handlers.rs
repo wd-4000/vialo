@@ -25,7 +25,7 @@ pub async fn list_schema(
     Ok((StatusCode::OK, Json(record.res)))
 }
 
-#[utoipa::path(get, path = "/history", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/history", params(HistoryFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn list_history(
     Query(opts): Query<HistoryFilterOptions>,
     State(data): State<Arc<AppState>>,

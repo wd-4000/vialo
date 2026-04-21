@@ -14,6 +14,7 @@ use sqlx_conditional_queries::conditional_query_as;
 use std::collections::HashMap;
 use std::i64;
 use std::sync::Arc;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Serialize)]
@@ -23,7 +24,9 @@ pub struct BookableAssetTypeTranslated {
     pub group_id: Option<Uuid>,
 }
 
-#[utoipa::path(get, path = "/bookables/types", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/types", params(
+    BookableFilterOptions
+), responses((status = 200, description = "OK")))]
 pub async fn list(
     Query(opts): Query<BookableFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -52,14 +55,14 @@ pub async fn list(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct PostBookableTypeSchema {
     //pub group_id: Option<i32>,
     pub name: HashMap<String, String>,
     pub group_id: Uuid,
 }
 
-#[utoipa::path(post, path = "/bookables/types", responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/bookables/types", request_body = PostBookableTypeSchema, responses((status = 201, description = "Created")))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -99,7 +102,7 @@ pub struct BookableType {
     pub group_id: Option<Uuid>,
 }
 
-#[utoipa::path(get, path = "/bookables/types/{id}", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/types/{id}", params(BookableFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn get(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -144,7 +147,7 @@ pub async fn get(
     }
 }
 
-#[utoipa::path(put, path = "/bookables/types/{id}", responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/bookables/types/{id}", request_body = PostBookableTypeSchema, responses((status = 200, description = "Updated")))]
 pub async fn put(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,

@@ -7,6 +7,7 @@ use sqlx::{
         ipnetwork::{self},
     },
 };
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
@@ -95,7 +96,7 @@ pub struct AccountModelForOverview {
     pub printer_id: Option<i32>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, ToSchema)]
 pub struct LessorModel {
     pub id: Uuid,
     pub name: Option<String>,

@@ -23,9 +23,10 @@ use serde_json::json;
 use sqlx::query_as;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[utoipa::path(get, path = "/people/transactions", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/transactions", params(TransactionFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn list(
     Query(opts): Query<TransactionFilterOptions>,
     Extension(User { id: user_id }): Extension<User>,
@@ -74,7 +75,7 @@ pub async fn get(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreateTransactionSchema {
     pub from_account: Option<Uuid>,
     pub to_account: Option<Uuid>,
@@ -82,7 +83,7 @@ pub struct CreateTransactionSchema {
     pub credits: i32,
 }
 
-#[utoipa::path(post, path = "/people/transactions", responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/people/transactions", request_body=CreateTransactionSchema, responses((status = 201, description = "Created")))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -103,12 +104,12 @@ pub async fn post(
     Ok((StatusCode::CREATED, Json(json!({"id": id}))))
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct UndoTransactionSchema {
     pub cancel_associated_product: Option<bool>,
 }
 
-#[utoipa::path(post, path = "/people/transactions/{id}/undo", responses((status = 204, description = "Undone")))]
+#[utoipa::path(post, path = "/people/transactions/{id}/undo", request_body=UndoTransactionSchema, responses((status = 204, description = "Undone")))]
 pub async fn undo(
     State(data): State<Arc<AppState>>,
     Path(id): Path<Uuid>,

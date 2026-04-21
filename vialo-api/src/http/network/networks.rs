@@ -39,7 +39,7 @@ pub async fn list_networks(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(put, path = "/network/networks/{id}", responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/network/networks/{id}", request_body = PostOrPutNetworkSchema, responses((status = 200, description = "Updated")))]
 pub async fn put_network(
     Path(id): Path<i32>,
     Extension(user): Extension<User>,
@@ -103,7 +103,7 @@ pub async fn delete_network(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(post, path = "/network/networks", responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/network/networks", request_body = PostOrPutNetworkSchema, responses((status = 201, description = "Created")))]
 pub async fn post_network(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,

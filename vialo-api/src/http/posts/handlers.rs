@@ -65,7 +65,7 @@ fn render_post(
     (content_html.to_owned(), content_plain.to_owned())
 }
 
-#[utoipa::path(get, path = "/posts", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/posts", params(PostFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn list_posts(
     Query(opts): Query<PostFilterOptions>,
     Extension(user_o): Extension<Option<User>>,
@@ -79,7 +79,7 @@ pub async fn list_posts(
     let langs = &(opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]));
-    let offset = ((opts.page.unwrap_or(1) - 1)) * limit;
+    let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
     // This might be red in rust-analyzer. Ignore that.
     let posts = conditional_query_as!(BoardPostModelTranslatedWithPinnedOn, "SELECT * FROM (SELECT
@@ -168,7 +168,7 @@ async fn check_can_post_to_board(
     }
 }
 
-#[utoipa::path(post, path = "/posts", responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/posts", request_body = CreatePostSchema, responses((status = 201, description = "Created")))]
 pub async fn add_post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -210,7 +210,7 @@ pub async fn add_post(
     Ok((StatusCode::CREATED, Json(record)))
 }
 
-#[utoipa::path(put, path = "/posts/{id}", responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/posts/{id}", request_body = CreatePostSchema, responses((status = 200, description = "Updated")))]
 pub async fn update_post(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -285,7 +285,7 @@ pub async fn update_post(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/posts/{id}", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/posts/{id}", params(PostFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn get_post(
     Path(id): Path<i32>,
     Extension(user_o): Extension<Option<User>>,

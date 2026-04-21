@@ -10,7 +10,7 @@ use axum::{
 
 pub mod credentials;
 pub mod devices;
-mod mac;
+pub mod mac;
 pub mod models;
 pub mod networks;
 pub mod realms;

@@ -1,4 +1,8 @@
 use std::{fmt, str::FromStr};
+use utoipa::openapi::{
+    ObjectBuilder, RefOr, Schema,
+    schema::{SchemaType, Type as UtoipaType},
+};
 
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
@@ -8,6 +12,21 @@ use sqlx::{postgres::PgValueFormat, types::mac_address::MacAddress};
 
 #[derive(Debug)]
 pub struct MacAddressWrapper(mac_address::MacAddress);
+
+impl utoipa::PartialSchema for MacAddressWrapper {
+    fn schema() -> RefOr<Schema> {
+        ObjectBuilder::new()
+            .schema_type(SchemaType::new(UtoipaType::String))
+            .build()
+            .into()
+    }
+}
+
+impl utoipa::ToSchema for MacAddressWrapper {
+    fn name() -> std::borrow::Cow<'static, str> {
+        "MacAddress".into()
+    }
+}
 
 impl Serialize for MacAddressWrapper {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -67,7 +86,7 @@ impl From<MacAddressWrapper> for mac_address::MacAddress {
 }
 
 use sqlx::postgres::PgValueRef;
-use sqlx::{Decode, Postgres, Type};
+use sqlx::{Decode, Postgres, Type as SqlxType};
 
 // Ridiculous impl to handle Option<MacAddressWrapper>
 impl<'r> Decode<'r, Postgres> for MacAddressWrapper {
@@ -91,8 +110,8 @@ impl<'r> Decode<'r, Postgres> for MacAddressWrapper {
     }
 }
 
-impl Type<Postgres> for MacAddressWrapper {
+impl SqlxType<Postgres> for MacAddressWrapper {
     fn type_info() -> <Postgres as sqlx::Database>::TypeInfo {
-        <String as Type<Postgres>>::type_info()
+        <String as SqlxType<Postgres>>::type_info()
     }
 }

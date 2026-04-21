@@ -20,6 +20,7 @@ use axum::{
 use serde::Deserialize;
 use sqlx::{query, query_as};
 use sqlx_conditional_queries::conditional_query_as;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// Returns Ok(()) if the user owns the credential OR holds NetworkManager.
@@ -52,7 +53,7 @@ async fn check_own_or_network_manager(
     }
 }
 
-#[utoipa::path(get, path = "/network/credentials", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/network/credentials", params(NetworkFilterOptions), responses((status = 200, description = "OK")))]
 pub async fn list_credentials(
     Query(opts): Query<NetworkFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -142,13 +143,13 @@ pub async fn get_mobileconfig(
     ))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct PutCredentialSchema {
     pub username: Option<String>,
     pub password: Option<String>,
 }
 
-#[utoipa::path(put, path = "/network/credentials/{id}", responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/network/credentials/{id}", request_body = PutCredentialSchema, responses((status = 200, description = "Updated")))]
 pub async fn put_credential(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,

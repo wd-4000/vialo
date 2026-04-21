@@ -13,12 +13,13 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::{Acquire, PgConnection, PgPool, PgTransaction, Postgres, pool::PoolConnection};
+use utoipa::IntoParams;
 use uuid::Uuid;
 
 pub mod middleware;
 pub mod models;
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct ListOptions {
     pub page: Option<i64>,
     pub limit: Option<i64>,
@@ -212,12 +213,13 @@ struct ParsedSerdeError {
 fn parse_serde_error(msg: &str) -> ParsedSerdeError {
     for prefix in ["invalid type: ", "invalid value: "] {
         if let Some(rest) = msg.strip_prefix(prefix)
-            && let Some(sep) = rest.find(", expected ") {
-                return ParsedSerdeError {
-                    received: Some(rest[..sep].to_string()),
-                    expected: Some(rest[sep + ", expected ".len()..].to_string()),
-                };
-            }
+            && let Some(sep) = rest.find(", expected ")
+        {
+            return ParsedSerdeError {
+                received: Some(rest[..sep].to_string()),
+                expected: Some(rest[sep + ", expected ".len()..].to_string()),
+            };
+        }
     }
     ParsedSerdeError {
         received: None,

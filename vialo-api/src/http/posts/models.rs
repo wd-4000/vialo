@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use sqlx::types::JsonValue;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
 #[sqlx(type_name = "post_visibility", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum PostVisibility {

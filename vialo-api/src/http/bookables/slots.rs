@@ -14,8 +14,9 @@ use sqlx::{query, query_as};
 use sqlx_conditional_queries::conditional_query_as;
 use std::i64;
 use std::sync::Arc;
+use utoipa::{IntoParams, ToSchema};
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct TakenSlotQuery {
     pub from: NaiveDate,
     pub to: NaiveDate,
@@ -27,7 +28,7 @@ pub struct TakenSlots {
     pub taken: JsonValue,
 }
 
-#[utoipa::path(get, path = "/bookables/slots/taken", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/slots/taken", params(TakenSlotQuery), responses((status = 200, description = "OK")))]
 pub async fn taken_slots(
     Query(opts): Query<TakenSlotQuery>,
     State(data): State<Arc<AppState>>,
@@ -52,7 +53,7 @@ pub struct SchemaPages {
     pub transitions: Option<Vec<JsonValue>>,
     pub assets: Option<Vec<i32>>,
 }
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct SlotSchemaQuery {
     pub from: NaiveDate,
     pub to: NaiveDate,
@@ -61,7 +62,7 @@ pub struct SlotSchemaQuery {
     pub lang: Option<Vec<String>>,
 }
 
-#[utoipa::path(get, path = "/bookables/slots/schemas", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/slots/schemas", params(SlotSchemaQuery), responses((status = 200, description = "OK")))]
 pub async fn slot_schemas(
     Query(opts): Query<SlotSchemaQuery>,
     State(data): State<Arc<AppState>>,
@@ -137,7 +138,7 @@ pub async fn slot_schemas(
     Err(VialoError::NotFound())
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct BookSlotSchemaSlot {
     pub asset_id: i32,
     pub slot_index: u16,
@@ -145,7 +146,7 @@ pub struct BookSlotSchemaSlot {
     pub expected_end: Option<DateTime<Local>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct BookSlotSchema {
     pub expected_sum_total: i32,
     pub slots: Vec<BookSlotSchemaSlot>,
@@ -161,7 +162,7 @@ pub struct MaterializedSlots {
     pub price: Option<i32>,
 }
 
-#[utoipa::path(post, path = "/bookables/slots/book", responses((status = 200, description = "Booked")))]
+#[utoipa::path(post, path = "/bookables/slots/book", request_body = BookSlotSchema, responses((status = 200, description = "Booked")))]
 pub async fn book_slots(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -273,12 +274,13 @@ pub async fn book_slots(
     if let Err(insert_error) = slot_insert_result {
         if let sqlx::Error::Database(db_err) = &insert_error
             && let Some(constraint) = db_err.constraint()
-                && constraint == "no_overlapping_appointments_per_asset" {
-                    return Err(VialoError::AppError(
-                        StatusCode::BAD_REQUEST,
-                        "overlap".to_string(),
-                    ));
-                };
+            && constraint == "no_overlapping_appointments_per_asset"
+        {
+            return Err(VialoError::AppError(
+                StatusCode::BAD_REQUEST,
+                "overlap".to_string(),
+            ));
+        };
         return Err(VialoError::Anyhow(insert_error.into()));
     }
 

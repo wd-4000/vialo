@@ -21,6 +21,7 @@ use rand::{
     distr::{Alphanumeric, SampleString},
     rng,
 };
+use utoipa::{IntoParams, ToSchema};
 
 use super::models::{DeviceModelWithAccountEmbed, DeviceWithRefs};
 
@@ -37,14 +38,14 @@ use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 use uuid::Uuid;
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct DeviceQuerySchema {
     pub page: Option<i64>,
     pub limit: Option<i64>,
     pub search: Option<String>,
     pub account_id: Option<IdOrMeOrAllQuery>,
 }
-#[utoipa::path(get, path = "/network/devices", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/network/devices", params(DeviceQuerySchema), responses((status = 200, description = "OK")))]
 pub async fn list_devices(
     Query(opts): Query<DeviceQuerySchema>,
     Extension(user): Extension<User>,
@@ -69,9 +70,9 @@ pub async fn list_devices(
         .await
         .map_err(|e| VialoError::Anyhow(e.into()))?
         .unwrap_or(false)
-        {
-            return Err(VialoError::Forbidden());
-        }
+    {
+        return Err(VialoError::Forbidden());
+    }
 
     if let Some(IdOrMeOrAllQuery::All) = opts.account_id {
         let devices = conditional_query_as!(DeviceModelWithAccountEmbed,
@@ -112,7 +113,7 @@ pub async fn list_devices(
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, ToSchema)]
 #[serde(untagged)]
 pub enum PostDeviceSchema {
     ForAccount {
@@ -127,7 +128,7 @@ pub enum PostDeviceSchema {
         cred_id: Uuid,
     },
 }
-#[utoipa::path(post, path = "/network/devices", responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/network/devices", request_body = PostDeviceSchema, responses((status = 201, description = "Created")))]
 pub async fn post_device(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -328,13 +329,13 @@ pub async fn get_device_overview(
     };
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct UpdateDeviceSchema {
     pub label: Option<String>,
     pub mac: Option<MacAddressWrapper>,
     pub cred: Option<Uuid>,
 }
-#[utoipa::path(patch, path = "/network/devices/{id}", responses((status = 200, description = "Updated")))]
+#[utoipa::path(patch, path = "/network/devices/{id}", request_body = UpdateDeviceSchema, responses((status = 200, description = "Updated")))]
 pub async fn update_device(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,

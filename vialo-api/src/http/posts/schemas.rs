@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 #[derive(Deserialize, Debug, PartialEq, Eq, Hash, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -11,7 +11,7 @@ pub enum PostContentFormat {
     Plain,
 }
 
-#[derive(Deserialize, Debug, Default, ToSchema)]
+#[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct PostFilterOptions {
     pub lang: Option<Vec<String>>,
     pub page: Option<i64>,
