@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT net_devices.id, label, hostname,  mac AS \"mac: MacAddressWrapper\", cred_id, realm_id, net_devices.last_updated,  net_devices.last_seen FROM net_devices\n             JOIN net_cred ON cred_id = net_cred.id WHERE FALSE AND (label ILIKE '%' || $1 || '%' OR mac::text ILIKE '%' || $1 || '%') ORDER by net_devices.id LIMIT $2 OFFSET $3",
+  "query": "SELECT net_devices.id, label, hostname,  mac AS \"mac: MacAddressWrapper\", cred_id, realm_id, net_devices.last_updated,  net_devices.last_seen, net_cred.network_id FROM net_devices\n             JOIN net_cred ON cred_id = net_cred.id WHERE FALSE  ORDER by net_devices.id LIMIT $1 OFFSET $2",
   "describe": {
     "columns": [
       {
@@ -42,11 +42,15 @@
         "ordinal": 7,
         "name": "last_seen",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "network_id",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
         "Int8",
         "Int8"
       ]
@@ -59,8 +63,9 @@
       true,
       true,
       true,
-      true
+      true,
+      false
     ]
   },
-  "hash": "55ca9c9ef6f17048f76088bb42f7ce3c2a8c71205c07f242b3691b16de338f7c"
+  "hash": "0dd20b1bc2ff0af65d2a82d7f78873943ea1d8dcbbba9702beab2110f01cf2b7"
 }
