@@ -11,6 +11,9 @@ env:
 
 jobs:
   build:
+    permissions:
+      contents: read
+
     runs-on: ubuntu-latest
 
     # Applies to all 'run' steps in this job
