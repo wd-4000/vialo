@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     helpers::PgDate,
+    http::util::models::AccountEmbed,
     permissions::{AppRole, GroupRole},
 };
 
@@ -157,8 +158,8 @@ pub enum ProductType {
 #[derive(Serialize, Debug, ToSchema)]
 pub struct PersonalTransactionModel {
     pub id: Option<Uuid>,
-    pub to_account: Option<JsonValue>,
-    pub from_account: Option<JsonValue>,
+    pub to_account: Option<AccountEmbed>,
+    pub from_account: Option<AccountEmbed>,
     pub product: Option<ProductType>,
     pub credits: Option<i32>,
     pub status: TransactionStatus,
@@ -169,8 +170,8 @@ pub struct PersonalTransactionModel {
 #[derive(Serialize, Debug, ToSchema)]
 pub struct PersonalTransactionModelWithProductDetails {
     pub id: Option<Uuid>,
-    pub to_account: Option<JsonValue>,
-    pub from_account: Option<JsonValue>,
+    pub to_account: Option<AccountEmbed>,
+    pub from_account: Option<AccountEmbed>,
     pub product: Option<JsonValue>,
     pub label: Option<String>,
     pub credits: Option<i32>,
