@@ -27,7 +27,7 @@ use sqlx_conditional_queries::conditional_query_as;
 use std::{collections::HashSet, sync::Arc};
 use uuid::Uuid;
 
-#[utoipa::path(get, path = "/people/groups", params(UserFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/groups", params(UserFilterOptions), responses((status = 200, description = "OK", body=Vec<GroupListModel>)))]
 pub async fn list_groups(
     Query(opts): Query<UserFilterOptions>,
     Extension(user): Extension<User>,
@@ -55,7 +55,7 @@ pub async fn list_groups(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/people/groups/{group_id}/members", params(UserFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/groups/{group_id}/members", params(UserFilterOptions), responses((status = 200, description = "OK", body=Vec<GroupMemberModel>)))]
 pub async fn list_group_members(
     Path(group_id): Path<Uuid>,
     Query(opts): Query<UserFilterOptions>,
@@ -115,7 +115,17 @@ pub async fn list_group_members(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/people/groups/members", params(UserFilterOptions), responses((status = 200, description = "OK")))]
+#[derive(Serialize, ToSchema)]
+pub struct GroupMemberReport {
+    pub id: Uuid,
+    pub label: String,
+    pub icon: Option<String>,
+    #[schema(format = Email)]
+    pub email: Option<String>,
+    pub accounts: Option<Vec<JsonValue>>,
+}
+
+#[utoipa::path(get, path = "/people/groups/members", params(UserFilterOptions), responses((status = 200, description = "OK", body = Vec<GroupMemberReport>)))]
 pub async fn list_all_group_members(
     Query(opts): Query<UserFilterOptions>,
     Extension(user): Extension<User>,
@@ -124,15 +134,6 @@ pub async fn list_all_group_members(
     let limit = opts.limit.unwrap_or(10);
     // let search = opts.search.unwrap_or("".to_string());
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
-
-    #[derive(Serialize)]
-    pub struct GroupMemberReport {
-        pub id: Uuid,
-        pub label: String,
-        pub icon: Option<String>,
-        pub email: Option<String>,
-        pub accounts: Option<Vec<JsonValue>>,
-    }
 
     // This might be red in rust-analyzer. Ignore this.
     let record = conditional_query_as!(
@@ -150,7 +151,7 @@ pub async fn list_all_group_members(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/people/groups/{id}", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/groups/{id}", responses((status = 200, description = "OK", body=GroupGetModel)))]
 pub async fn get_group(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -169,7 +170,7 @@ pub async fn get_group(
     Ok(Json(group))
 }
 
-#[utoipa::path(delete, path = "/people/groups/{group_id}/members/{account_id}", responses((status = 200, description = "Deleted")))]
+#[utoipa::path(delete, path = "/people/groups/{group_id}/members/{account_id}", responses((status = 204, description = "Deleted")))] // no body
 pub async fn delete_account(
     Path((group_id, account_id)): Path<(Uuid, Uuid)>,
     Extension(user): Extension<User>,
@@ -196,7 +197,7 @@ pub struct AddUserToGroupSchema {
     pub role: Option<GroupRole>,
 }
 
-#[utoipa::path(post, path = "/people/groups/{group_id}/members", request_body=AddUserToGroupSchema, responses((status = 200, description = "Created")))]
+#[utoipa::path(post, path = "/people/groups/{group_id}/members", request_body=AddUserToGroupSchema, responses((status = 204, description = "Created")))] // no body
 pub async fn add_account(
     Path(group_id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -224,13 +225,14 @@ pub async fn add_account(
 pub struct CreateGroupSchema {
     pub label: String,
     #[serde_as(as = "NoneAsEmptyString")]
+    #[schema(format = Email)]
     pub email: Option<String>,
     pub icon: Option<String>,
     pub public: bool,
     pub app_roles: Option<HashSet<AppRole>>,
 }
 
-#[utoipa::path(post, path = "/people/groups", request_body=CreateGroupSchema, responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/people/groups", request_body=CreateGroupSchema, responses((status = 201, description = "Created", body=GroupListModel)))]
 pub async fn post_group(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -253,7 +255,7 @@ pub async fn post_group(
     Ok(Json(new_group))
 }
 
-#[utoipa::path(delete, path = "/people/groups/{id}", responses((status = 200, description = "Deleted")))]
+#[utoipa::path(delete, path = "/people/groups/{id}", responses((status = 204, description = "Deleted")))] // no body
 pub async fn delete_group(
     Path(group_id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -269,7 +271,7 @@ pub async fn delete_group(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(put, path = "/people/groups/{id}", request_body=CreateGroupSchema, responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/people/groups/{id}", request_body=CreateGroupSchema, responses((status = 204, description = "Updated")))] // no body
 pub async fn put_group(
     Path(group_id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -337,7 +339,7 @@ pub struct PatchUserInGroupSchema {
     pub role: GroupRole,
 }
 
-#[utoipa::path(patch, path = "/people/groups/{group_id}/members/{account_id}", request_body=PatchUserInGroupSchema, responses((status = 200, description = "Updated")))]
+#[utoipa::path(patch, path = "/people/groups/{group_id}/members/{account_id}", request_body=PatchUserInGroupSchema, responses((status = 204, description = "Updated")))] // no body
 pub async fn patch_account(
     Path((group_id, account_id)): Path<(Uuid, Uuid)>,
     State(data): State<Arc<AppState>>,

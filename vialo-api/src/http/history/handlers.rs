@@ -1,5 +1,6 @@
 use super::models::{HistoryEntryModel, Subsystem, TgOp};
 use super::schemas::HistoryFilterOptions;
+use std::collections::HashMap;
 
 use crate::AppState;
 use crate::http::util::VialoError;
@@ -8,7 +9,7 @@ use axum_extra::extract::Query;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 
-#[utoipa::path(get, path = "/history/schema", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/history/schema", responses((status = 200, description = "OK", body = HashMap<String, Vec<String>>)))]
 pub async fn list_schema(
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
@@ -25,7 +26,7 @@ pub async fn list_schema(
     Ok((StatusCode::OK, Json(record.res)))
 }
 
-#[utoipa::path(get, path = "/history", params(HistoryFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/history", params(HistoryFilterOptions), responses((status = 200, description = "OK", body=Vec<HistoryEntryModel>)))]
 pub async fn list_history(
     Query(opts): Query<HistoryFilterOptions>,
     State(data): State<Arc<AppState>>,

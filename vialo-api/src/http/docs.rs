@@ -17,15 +17,16 @@ impl utoipa::Modify for FixTheseUglyTagsNow {
         let mut all_tags: std::collections::BTreeSet<Vec<String>> = Default::default();
         openapi.tags = Some(vec![]);
 
-        for (_, path_item) in openapi.paths.paths.iter_mut() {
-            for op in [
-                &mut path_item.get,
-                &mut path_item.put,
-                &mut path_item.post,
-                &mut path_item.delete,
-                &mut path_item.patch,
+        for (path, path_item) in openapi.paths.paths.iter_mut() {
+            for (method, op) in [
+                ("get", &mut path_item.get),
+                ("put", &mut path_item.put),
+                ("post", &mut path_item.post),
+                ("delete", &mut path_item.delete),
+                ("patch", &mut path_item.patch),
             ] {
                 if let Some(operation) = op {
+                    operation.operation_id = Some(method.to_lowercase() + &path_to_camel(path));
                     if let Some(tags) = &mut operation.tags {
                         let new_tags: Vec<Vec<String>> =
                             tags.iter().map(|t| clean_tag(t)).collect();
@@ -122,4 +123,18 @@ pub fn openapi_doc() -> utoipa::openapi::OpenApi {
 #[utoipa::path(get, path = "/openapi.json", responses((status = 200, description = "OpenAPI document")))]
 pub async fn openapi_json() -> impl IntoResponse {
     Json(openapi_doc())
+}
+
+fn path_to_camel(path: &str) -> String {
+    path.split('/')
+        .flat_map(|seg| seg.trim_matches(['{', '}'].as_slice()).split('-'))
+        .filter(|s| !s.is_empty())
+        .map(|word| {
+            let mut c = word.chars();
+            match c.next() {
+                None => String::new(),
+                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+            }
+        })
+        .collect()
 }

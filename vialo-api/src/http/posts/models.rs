@@ -1,3 +1,4 @@
+use crate::helpers::I18nMap;
 use serde::{Deserialize, Serialize};
 use sqlx::types::JsonValue;
 use utoipa::ToSchema;
@@ -27,7 +28,7 @@ pub struct BoardPostModelRaw {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BoardPostModelTranslated {
     pub id: Option<i32>,
     pub account_id: Option<Uuid>,
@@ -47,7 +48,7 @@ pub struct BoardPostModelTranslated {
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BoardPostModelTranslatedWithPinnedOn {
     pub id: Option<i32>,
     pub account_id: Option<Uuid>,
@@ -63,19 +64,24 @@ pub struct BoardPostModelTranslatedWithPinnedOn {
     pub pinned_on: Option<Vec<i32>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BoardPostModelTranslatedAllLanguages {
     pub id: Option<i32>,
     pub account_id: Option<Uuid>,
     pub board_id: Option<i32>,
     pub icon: Option<String>,
+    #[schema(value_type = Option<I18nMap>)]
     pub title: Option<JsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<I18nMap>)]
     pub content: Option<JsonValue>, // markdown
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<I18nMap>)]
     pub content_html: Option<JsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<I18nMap>)]
     pub content_plain: Option<JsonValue>,
+    #[schema(value_type = Option<I18nMap>)]
     pub location: Option<JsonValue>,
     // pub pinned_until: Option<chrono::DateTime<chrono::Utc>>,
     pub event_from: Option<chrono::DateTime<chrono::Utc>>,
@@ -83,7 +89,7 @@ pub struct BoardPostModelTranslatedAllLanguages {
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BoardPostIdModel {
     pub id: i32,
 }

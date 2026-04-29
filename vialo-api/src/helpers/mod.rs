@@ -2,13 +2,15 @@ use crate::http::util::VialoError;
 use serde::{self, Serialize};
 use sqlx::{PgPool, Postgres, pool::PoolConnection};
 use std::path::PathBuf;
+use utoipa::ToSchema;
 
 pub mod encryption;
+mod i18n;
 mod patch_option;
 pub mod people;
 mod pg_date;
 mod pg_date_time;
-pub use {patch_option::*, pg_date::*, pg_date_time::*};
+pub use {i18n::*, patch_option::*, pg_date::*, pg_date_time::*};
 
 pub fn find_upward(filename: &str) -> Option<PathBuf> {
     let mut dir = std::env::current_dir().ok()?;
@@ -25,7 +27,7 @@ pub fn find_upward(filename: &str) -> Option<PathBuf> {
 
 /// Utility enum for handling response variants while keeping type safety
 /// Didn't feel like adding ``either``
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(untagged)]
 pub enum ResponseVariant<A, B> {
     A(A),
@@ -34,7 +36,7 @@ pub enum ResponseVariant<A, B> {
 
 /// Utility enum for handling language variants (all languages vs. localized).
 /// basically the same as ResponseVariant, here for semantical reasons.
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(untagged)]
 pub enum LangVariant<A, L> {
     AllLangs(A),

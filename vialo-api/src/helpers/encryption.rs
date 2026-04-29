@@ -5,6 +5,7 @@ use chacha20poly1305::{
 use secrecy::{ExposeSecret, SecretBox};
 use serde::{Deserialize, Serialize};
 use std::{fmt, marker::PhantomData, sync::OnceLock};
+use utoipa::ToSchema;
 
 /// Globally store the encryption key
 static KEY: OnceLock<[u8; 32]> = OnceLock::new();

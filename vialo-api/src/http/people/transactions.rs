@@ -19,14 +19,13 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sqlx::query_as;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[utoipa::path(get, path = "/people/transactions", params(TransactionFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/transactions", params(TransactionFilterOptions), responses((status = 200, description = "OK", body=Vec<PersonalTransactionModel>)))]
 pub async fn list(
     Query(opts): Query<TransactionFilterOptions>,
     Extension(User { id: user_id }): Extension<User>,
@@ -55,7 +54,7 @@ pub async fn list(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/people/transactions/{id}", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/transactions/{id}", responses((status = 200, description = "OK", body=PersonalTransactionModelWithProductDetails)))]
 pub async fn get(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -83,7 +82,12 @@ pub struct CreateTransactionSchema {
     pub credits: i32,
 }
 
-#[utoipa::path(post, path = "/people/transactions", request_body=CreateTransactionSchema, responses((status = 201, description = "Created")))]
+#[derive(Serialize, ToSchema)]
+pub struct CreatedTransactionResponse {
+    pub id: Uuid,
+}
+
+#[utoipa::path(post, path = "/people/transactions", request_body=CreateTransactionSchema, responses((status = 201, description = "Created", body=CreatedTransactionResponse)))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -101,7 +105,7 @@ pub async fn post(
     .fetch_one(&mut *conn)
     .await?;
 
-    Ok((StatusCode::CREATED, Json(json!({"id": id}))))
+    Ok((StatusCode::CREATED, Json(CreatedTransactionResponse { id })))
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]

@@ -50,6 +50,7 @@ pub struct ContractInfo {
 pub struct CreateUserSchema {
     pub full_name: String,
     #[serde_as(as = "NoneAsEmptyString")]
+    #[schema(format = Email)]
     pub email: Option<String>,
     pub auth_id: Option<Uuid>,
     pub contract: Option<ContractInfo>,

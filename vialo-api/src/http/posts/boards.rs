@@ -1,7 +1,7 @@
 use super::super::util::grab_authd_conn_user;
 use super::models::PostVisibility;
 use super::schemas::PostFilterOptions;
-use crate::helpers::LangVariant;
+use crate::helpers::{I18nMap, LangVariant};
 use crate::http::posts::models::BoardPostIdModel;
 use crate::http::util::{JsonE, User, VialoError, grab_trans};
 use crate::permissions::{AppRole, check_app_role, check_manager_of_group};
@@ -42,7 +42,7 @@ pub struct CreateBoardSchema {
     pub default_post_visibility: PostVisibility,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BoardModelTranslatedEmbeddedGroup {
     pub id: i32,
     pub icon: Option<String>,
@@ -52,7 +52,7 @@ pub struct BoardModelTranslatedEmbeddedGroup {
     pub default_post_visibility: PostVisibility,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BoardModelTranslated {
     pub group_id: Option<Uuid>,
     pub label: Option<String>,
@@ -63,9 +63,10 @@ pub struct BoardModelTranslated {
     pub slug: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BoardModelTranslatedAllLanguages {
     pub group_id: Option<Uuid>,
+    #[schema(value_type = Option<I18nMap>)]
     pub label: Option<JsonValue>,
     pub icon: Option<String>,
 
@@ -74,7 +75,7 @@ pub struct BoardModelTranslatedAllLanguages {
     pub slug: String,
 }
 
-#[utoipa::path(get, path = "/posts/boards", params(PostFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/posts/boards", params(PostFilterOptions), responses((status = 200, description = "OK", body=Vec<BoardModelTranslatedEmbeddedGroup>)))]
 pub async fn list_boards(
     Query(opts): Query<PostFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -105,7 +106,7 @@ pub async fn list_boards(
     );
 }
 
-#[utoipa::path(get, path = "/posts/boards/{id}", params(PostFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/posts/boards/{id}", params(PostFilterOptions), responses((status = 200, description = "OK", body=LangVariant<BoardModelTranslatedAllLanguages, BoardModelTranslated>)))]
 pub async fn get_board(
     Query(opts): Query<PostFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -161,7 +162,7 @@ pub async fn get_board(
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BoardPermissions {
     pub group_id: Uuid,
     pub label: Option<String>,
@@ -206,7 +207,7 @@ async fn check_board_perm(
     }
 }
 
-#[utoipa::path(get, path = "/posts/boards/{id}/permissions", params(PostFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/posts/boards/{id}/permissions", params(PostFilterOptions), responses((status = 200, description = "OK", body=Vec<BoardPermissions>)))]
 pub async fn get_permissions(
     Query(opts): Query<PostFilterOptions>,
     Extension(user): Extension<User>,
@@ -273,7 +274,7 @@ pub async fn delete_permission(
     Ok((StatusCode::NO_CONTENT, {}))
 }
 
-#[utoipa::path(post, path = "/posts/boards", request_body = CreateBoardSchema, responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/posts/boards", request_body = CreateBoardSchema, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
 pub async fn add_board(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -311,7 +312,7 @@ pub async fn add_board(
     trans.commit().await?;
     Ok((StatusCode::CREATED, Json(device_response)))
 }
-#[utoipa::path(put, path = "/posts/boards/{id}", request_body = CreateBoardSchema, responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/posts/boards/{id}", request_body = CreateBoardSchema, responses((status = 200, description = "Updated", body=BoardPostIdModel)))]
 pub async fn put_board(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -363,7 +364,7 @@ pub async fn put_board(
 
     let device_response = record;
     trans.commit().await?;
-    Ok((StatusCode::CREATED, Json(device_response)))
+    Ok((StatusCode::OK, Json(device_response)))
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -371,7 +372,7 @@ pub struct PinPostSchema {
     pub post_id: i32,
     pub pinned_until: chrono::DateTime<chrono::Utc>,
 }
-#[utoipa::path(post, path = "/posts/boards/{id}/pin", request_body = PinPostSchema, responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/posts/boards/{id}/pin", request_body = PinPostSchema, responses((status = 201, description = "Created")))] // no body
 pub async fn pin_post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,

@@ -16,7 +16,7 @@ use sqlx::types::JsonValue;
 use sqlx_conditional_queries::conditional_query_as;
 use std::i64;
 use std::sync::Arc;
-use utoipa::IntoParams;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 // CREATE TABLE bookable_appointments (
 //     id uuid PRIMARY KEY default gen_random_uuid (),
@@ -39,7 +39,7 @@ pub struct BookableAppointmentFilterOptions {
     pub search: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BookableAppointmentType {
     pub id: Uuid,
     pub asset_id: i32,
@@ -47,11 +47,12 @@ pub struct BookableAppointmentType {
     pub account: Option<JsonValue>,
     pub begins: Option<NaiveDateTime>,
     pub ends: Option<PgDateTime>,
+    #[schema(format = DateTime)]
     pub activated: Option<chrono::DateTime<chrono::Utc>>,
     pub maintenance: Option<bool>,
 }
 
-#[utoipa::path(post, path = "/bookables/appointments/{id}/activate", responses((status = 200, description = "Activated")))]
+#[utoipa::path(post, path = "/bookables/appointments/{id}/activate", responses((status = 204, description = "Activated")))] // no body
 pub async fn activate(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -76,7 +77,7 @@ pub async fn activate(
 
 #[utoipa::path(get, path = "/bookables/appointments", params(
     BookableAppointmentFilterOptions
-), responses((status = 200, description = "OK")))]
+), responses((status = 200, description = "OK", body=Vec<BookableAppointmentType>)))]
 pub async fn list(
     Query(opts): Query<BookableAppointmentFilterOptions>,
     Extension(user): Extension<User>,
