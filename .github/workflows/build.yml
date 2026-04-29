@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -19,52 +19,52 @@ jobs:
         working-directory: ./vialo-api
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Rust Cache
-      uses: Swatinem/rust-cache@v2
-      with:
+      - uses: actions/checkout@v6
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
           workspaces: "./vialo-api"
-    # - name: Build
-    #   run: cargo build --verbose
-      
-    # - name: Run tests
-    #   run: cargo test --verbose
-      
-    - name: Generate OpenAPI spec
-      run: cargo run --bin openapi-spec -- openapi.json
-      
-    - name: Upload OpenAPI Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: openapi-spec
-        # Since this is an action, it ignores the default working directory above.
-        # You must include the subfolder path explicitly.
-        path: ./vialo-api/openapi.json
-        if-no-files-found: error
+      # - name: Build
+      #   run: cargo build --verbose
+
+      # - name: Run tests
+      #   run: cargo test --verbose
+
+      - name: Generate OpenAPI spec
+        run: cargo run --bin openapi-spec -- openapi.json
+
+      - name: Upload OpenAPI Artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: openapi-spec
+          # Since this is an action, it ignores the default working directory above.
+          # You must include the subfolder path explicitly.
+          path: ./vialo-api/openapi.json
+          if-no-files-found: error
   deploy-docs:
     # This ensures the deploy job only runs after the build job is successful
-    needs: build 
-    
+    needs: build
+
     # Required permissions for GitHub Pages deployments
     permissions:
       pages: write
       id-token: write
-      
+
     # Links this job to the built-in GitHub Pages environment
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-      
+
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Download OpenAPI Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: openapi-spec
           # Downloads the artifact into a new temporary folder
-          path: ./pages-build 
+          path: ./pages-build
 
       - name: Generate index.html
         run: |
@@ -85,13 +85,13 @@ jobs:
           EOF
 
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./pages-build
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
