@@ -1,8 +1,9 @@
 use super::{
     models::{
-        AccountModel, AccountModelForOverview, CurrentRoomOccupantsViewModel,
-        GroupStubListModelWithRole, LeaseModelWithEmbeddedSublease, PersonalTransactionModel,
-        ProductType, TransactionStatus,
+        AccountModel, AccountModelForOverview, CreatePersonResponse, CurrentRoomOccupantsViewModel,
+        GroupStubListModel, GroupStubListModelWithRole, LeaseModelWithEmbeddedSublease,
+        PersonOverviewModel, PersonOverviewNetworkModel, PersonalTransactionModel, ProductType,
+        TransactionStatus,
     },
     schemas::{CreateUserSchema, UserFilterOptions},
 };
@@ -12,10 +13,7 @@ use crate::printer::{self, models::JobData};
 
 use crate::{
     AppState, helpers,
-    http::{
-        people::models::GroupStubListModel,
-        util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans},
-    },
+    http::util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans},
 };
 use crate::{
     helpers::{PgDate, encryption},
@@ -39,6 +37,7 @@ use sqlx::{prelude::FromRow, query, types::JsonValue};
 use sqlx_conditional_queries::conditional_query_as;
 use std::{ops::DerefMut, sync::Arc};
 use tokio::try_join;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 // "SELECT cl.id, from_account, to_account, credits, cl.created_at,
@@ -59,7 +58,7 @@ use uuid::Uuid;
 // WHERE (to_account = $1 OR from_account = $1) AND tl.table_name = 'credit_ledger' ORDER BY created_at LIMIT 3", id)
 // .fetch_all(&data.db)
 
-#[utoipa::path(get, path = "/people", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people", responses((status = 200, description = "OK", body=Vec<CurrentRoomOccupantsViewModel>)))]
 pub async fn list_people(
     Query(opts): Query<UserFilterOptions>,
     Extension(user): Extension<User>,
@@ -119,7 +118,7 @@ async fn get_person_roles_impl(
     Ok(Json(roles))
 }
 
-#[utoipa::path(get, path = "/people/me/roles", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/me/roles", responses((status = 200, description = "OK", body=Vec<AppRole>)))]
 pub async fn get_person_roles_me(
     Extension(User { id }): Extension<User>,
     State(data): State<Arc<AppState>>,
@@ -127,7 +126,7 @@ pub async fn get_person_roles_me(
     get_person_roles_impl(id, data).await
 }
 
-#[utoipa::path(get, path = "/people/{id}/roles", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/{id}/roles", responses((status = 200, description = "OK", body=Vec<AppRole>)))]
 pub async fn get_person_roles_by_id(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -139,7 +138,7 @@ pub async fn get_person_roles_by_id(
     get_person_roles_impl(id, data).await
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct AccountCapabilities {
     pub roles: Vec<AppRole>,
     // These boolean flags represent "derived" access based on group memberships
@@ -192,7 +191,7 @@ async fn get_person_capabilities_impl(
     }))
 }
 
-#[utoipa::path(get, path = "/people/me/capabilities", description = "Used in the admin panel to detect which navbar items to show (see useConditionalUI)" ,responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/me/capabilities", description = "Used in the admin panel to detect which navbar items to show (see useConditionalUI)" ,responses((status = 200, description = "OK", body=AccountCapabilities)))]
 pub async fn get_person_capabilities_me(
     Extension(User { id }): Extension<User>,
     State(data): State<Arc<AppState>>,
@@ -200,7 +199,7 @@ pub async fn get_person_capabilities_me(
     get_person_capabilities_impl(id, data).await
 }
 
-#[utoipa::path(get, path = "/people/{id}/groups", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/{id}/groups", responses((status = 200, description = "OK", body=Vec<GroupStubListModelWithRole>)))]
 pub async fn get_person_groups(
     Path(id_path): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -215,13 +214,13 @@ pub async fn get_person_groups(
     Ok(Json(groups))
 }
 
-#[derive(Serialize, Debug, FromRow)]
+#[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct PersonAppRoleReport {
     pub groups: Option<Vec<JsonValue>>,
     pub role: Option<AppRole>,
 }
 
-#[utoipa::path(get, path = "/people/{id}/app_roles", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/{id}/app_roles", responses((status = 200, description = "OK", body=Vec<PersonAppRoleReport>)))]
 pub async fn get_person_app_roles(
     Path(id_path): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -260,7 +259,7 @@ async fn get_person_impl(
     Ok(Json(person))
 }
 
-#[utoipa::path(get, path = "/people/me", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/me", responses((status = 200, description = "OK", body=AccountModel)))]
 pub async fn get_me(
     Extension(User { id: user_id }): Extension<User>,
     State(data): State<Arc<AppState>>,
@@ -268,7 +267,7 @@ pub async fn get_me(
     get_person_impl(user_id, data).await
 }
 
-#[utoipa::path(get, path = "/people/{id}", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/{id}", responses((status = 200, description = "OK", body=AccountModel)))]
 pub async fn get_person(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -281,7 +280,7 @@ pub async fn get_person(
     get_person_impl(id, data).await
 }
 
-#[utoipa::path(get, path = "/people/{id}/overview", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/{id}/overview", responses((status = 200, description = "OK", body=PersonOverviewModel)))]
 pub async fn get_person_overview(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -351,25 +350,27 @@ pub async fn get_person_overview(
             .fetch_all(&data.db),
 
     sqlx::query_as!(PersonalNetRealmOverviewModel, "select nr.ipv4_nat, nr.id from net_realm_assignments nra JOIN net_realms nr ON nra.realm_id = nr.id WHERE nra.account_id = $1", id).fetch_all(&data.db),
-    sqlx::query!("select count(*) from net_devices nd JOIN net_cred nc on nd.cred_id = nc.id WHERE nc.account_id = $1", id).fetch_one(&data.db)
+    sqlx::query_scalar!("select count(*) from net_devices nd JOIN net_cred nc on nd.cred_id = nc.id WHERE nc.account_id = $1", id).fetch_one(&data.db)
     );
 
     match q {
-        Ok((user, groups, contract, transactions, fetch_realms, fetch_devices)) => {
-            let mut user_json = serde_json::json!(user);
-
-            user_json["groups"] = serde_json::json!(groups);
-            user_json["contract"] = serde_json::json!(contract);
-            user_json["transactions"] = serde_json::json!(transactions);
-            user_json["network"] = serde_json::json!({"realms":fetch_realms, "devices": fetch_devices.count.unwrap_or(0)});
-
-            Ok(Json(user_json))
+        Ok((user, groups, contract, transactions, fetch_realms, device_count)) => {
+            Ok(Json(PersonOverviewModel {
+                account: user,
+                groups,
+                contract,
+                transactions,
+                network: PersonOverviewNetworkModel {
+                    realms: fetch_realms,
+                    devices: device_count.unwrap_or(0),
+                },
+            }))
         }
-        Err(err) => Err(VialoError::NotFound()),
+        Err(_) => Err(VialoError::NotFound()),
     }
 }
 
-#[utoipa::path(post, path = "/people", request_body=CreateUserSchema, responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/people", request_body=CreateUserSchema, responses((status = 201, description = "Created", body=CreatePersonResponse)))]
 pub async fn add_person(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -468,7 +469,7 @@ pub async fn add_person(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-#[utoipa::path(put, path = "/people/{id}", request_body=CreateUserSchema, responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/people/{id}", request_body=CreateUserSchema, responses((status = 204, description = "Updated")))] // no body
 pub async fn put_person(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -579,7 +580,12 @@ pub async fn enable_credits(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(get, path = "/people/{id}/credits", responses((status = 200, description = "OK")))]
+#[derive(Serialize, ToSchema)]
+pub struct CreditBalanceResponse {
+    pub credit_balance: i32,
+}
+
+#[utoipa::path(get, path = "/people/{id}/credits", responses((status = 200, description = "OK", body=CreditBalanceResponse)))]
 pub async fn get_credits(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -596,5 +602,10 @@ pub async fn get_credits(
     .fetch_one(&mut *conn)
     .await?;
 
-    Ok((StatusCode::OK, Json(json!({"credit_balance": record}))))
+    Ok((
+        StatusCode::OK,
+        Json(CreditBalanceResponse {
+            credit_balance: record,
+        }),
+    ))
 }

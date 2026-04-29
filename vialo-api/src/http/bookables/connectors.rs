@@ -18,7 +18,7 @@ use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 use utoipa::ToSchema;
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, ToSchema)]
 pub struct BookableConnector {
     pub id: i32,
     pub endpoint: String,
@@ -28,7 +28,7 @@ pub struct BookableConnector {
     pub mac: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, ToSchema)]
 pub struct BookableConnectorWithPassword {
     pub id: i32,
     pub endpoint: String,
@@ -36,7 +36,9 @@ pub struct BookableConnectorWithPassword {
     pub device_name: Option<String>,
     pub serial_number: Option<String>,
     pub mac: Option<String>,
+    #[schema(value_type = String)]
     pub username: Encrypted<String>,
+    #[schema(value_type = String)]
     pub password: Encrypted<String>,
 }
 
@@ -66,7 +68,7 @@ pub struct BookableConnectorPost {
     pub password: Option<String>,
 }
 
-#[utoipa::path(get, path = "/bookables/connectors", params(BookableFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/connectors", params(BookableFilterOptions), responses((status = 200, description = "OK", body = Vec<BookableConnector>)))]
 pub async fn list(
     Query(opts): Query<BookableFilterOptions>,
     Extension(user): Extension<User>,
@@ -98,7 +100,7 @@ pub async fn list(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/bookables/connectors/{id}", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/connectors/{id}", responses((status = 200, description = "OK", body = BookableConnector)))]
 pub async fn get(
     Path(id): Path<i32>,
     Extension(user): Extension<User>,
@@ -121,7 +123,7 @@ pub async fn get(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(post, path = "/bookables/connectors", request_body=BookableConnectorPost, responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/bookables/connectors", request_body=BookableConnectorPost, responses((status = 201, description = "Created", body=BookableConnector)))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -154,10 +156,10 @@ pub async fn post(
     .fetch_one(&mut *conn)
     .await?;
 
-    Ok((StatusCode::OK, Json(record)))
+    Ok((StatusCode::CREATED, Json(record)))
 }
 
-#[utoipa::path(put, path = "/bookables/connectors/{id}", request_body=BookableConnectorPatch, responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/bookables/connectors/{id}", request_body=BookableConnectorPatch, responses((status = 200, description = "Updated", body = BookableConnector)))]
 pub async fn put(
     Path(id): Path<i32>,
     Extension(user): Extension<User>,
@@ -199,7 +201,7 @@ pub async fn put(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(delete, path = "/bookables/connectors/{id}", responses((status = 200, description = "Deleted")))]
+#[utoipa::path(delete, path = "/bookables/connectors/{id}", responses((status = 204, description = "Deleted")))] //no body
 pub async fn delete(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,

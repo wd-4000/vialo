@@ -15,7 +15,7 @@ use crate::{
     permissions::{AppRole, GroupRole},
 };
 
-#[derive(Serialize, Debug, FromRow)]
+#[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct GroupMemberModel {
     pub id: Option<Uuid>,
     pub full_name: Option<String>,
@@ -24,7 +24,7 @@ pub struct GroupMemberModel {
     pub role: GroupRole,
 }
 
-#[derive(Serialize, Debug, FromRow)]
+#[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct CurrentRoomOccupantsViewModel {
     pub id: Option<Uuid>,
     pub auth_id: Option<Uuid>,
@@ -34,43 +34,46 @@ pub struct CurrentRoomOccupantsViewModel {
 }
 
 // id | label  | email  | created_at | public
-#[derive(Serialize, Debug, FromRow)]
+#[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct GroupListModel {
     pub id: Uuid,
     pub label: String,
+    #[schema(format = Email)]
     pub email: Option<String>,
     pub icon: Option<String>,
     pub public: bool,
 }
 
-#[derive(Serialize, Debug, FromRow)]
+#[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct GroupGetModel {
     pub id: Uuid,
     pub label: String,
+    #[schema(format = Email)]
     pub email: Option<String>,
     pub icon: Option<String>,
     pub public: bool,
     pub app_roles: Vec<AppRole>,
 }
 
-#[derive(Serialize, Debug, FromRow)]
+#[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct GroupStubListModel {
     pub id: Uuid,
     pub label: String,
 }
 
-#[derive(Serialize, Debug, FromRow)]
+#[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct GroupStubListModelWithRole {
     pub id: Uuid,
     pub label: String,
     pub role: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct AccountModel {
     pub id: Option<Uuid>,
     pub label: Option<String>,
     pub auth_id: Option<Uuid>,
+    #[schema(format = Email)]
     pub email: Option<String>,
     pub membership_start: Option<NaiveDate>,
     pub membership_end: Option<PgDate>,
@@ -79,11 +82,12 @@ pub struct AccountModel {
     pub credit_balance: Option<i32>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct AccountModelForOverview {
     pub id: Option<Uuid>,
     pub label: Option<String>,
     pub auth_id: Option<Uuid>,
+    #[schema(format = Email)]
     pub email: Option<String>,
     pub membership_start: Option<NaiveDate>,
     pub membership_end: Option<PgDate>,
@@ -102,7 +106,7 @@ pub struct LessorModel {
     pub name: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct LeaseModelWithEmbeddedSublease {
     pub id: Uuid,
     pub tenant_id: Uuid,
@@ -123,7 +127,7 @@ pub struct JumboModelTranslated {
     pub link: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct RoomModel {
     pub id: Option<Uuid>,
     pub label: String,
@@ -132,7 +136,7 @@ pub struct RoomModel {
     pub vlan: Option<i32>,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
 #[sqlx(type_name = "transaction_status", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum TransactionStatus {
@@ -141,7 +145,7 @@ pub enum TransactionStatus {
     Refunded,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
 #[sqlx(type_name = "product_type", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum ProductType {
@@ -150,7 +154,7 @@ pub enum ProductType {
     Bookable,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct PersonalTransactionModel {
     pub id: Option<Uuid>,
     pub to_account: Option<JsonValue>,
@@ -162,7 +166,7 @@ pub struct PersonalTransactionModel {
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct PersonalTransactionModelWithProductDetails {
     pub id: Option<Uuid>,
     pub to_account: Option<JsonValue>,
@@ -175,8 +179,45 @@ pub struct PersonalTransactionModelWithProductDetails {
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct PersonalNetRealmOverviewModel {
     pub id: Uuid,
+    #[schema(value_type = Option<String>, format = Ipv4)]
     pub ipv4_nat: Option<ipnetwork::IpNetwork>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct PersonOverviewNetworkModel {
+    pub realms: Vec<PersonalNetRealmOverviewModel>,
+    pub devices: i64,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct PersonOverviewModel {
+    #[serde(flatten)]
+    pub account: AccountModelForOverview,
+    pub groups: Vec<GroupStubListModel>,
+    pub contract: Option<LeaseModelWithEmbeddedSublease>,
+    pub transactions: Vec<PersonalTransactionModel>,
+    pub network: PersonOverviewNetworkModel,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct CreatePersonNetworkRealm {
+    pub id: Uuid,
+    #[schema(value_type = Option<String>, format = Ipv4)]
+    pub ipv4_nat: Option<ipnetwork::IpNetwork>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct CreatePersonNetwork {
+    pub realm: CreatePersonNetworkRealm,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct CreatePersonResponse {
+    pub id: Uuid,
+    pub full_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub network: Option<CreatePersonNetwork>,
 }

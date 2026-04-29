@@ -23,12 +23,12 @@ pub struct TakenSlotQuery {
     pub asset_id: Vec<i32>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct TakenSlots {
     pub taken: JsonValue,
 }
 
-#[utoipa::path(get, path = "/bookables/slots/taken", params(TakenSlotQuery), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/slots/taken", params(TakenSlotQuery), responses((status = 200, description = "OK", body=TakenSlots)))]
 pub async fn taken_slots(
     Query(opts): Query<TakenSlotQuery>,
     State(data): State<Arc<AppState>>,
@@ -48,7 +48,7 @@ pub async fn taken_slots(
     Ok((StatusCode::OK, Json(record.taken)))
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct SchemaPages {
     pub transitions: Option<Vec<JsonValue>>,
     pub assets: Option<Vec<i32>>,
@@ -62,7 +62,13 @@ pub struct SlotSchemaQuery {
     pub lang: Option<Vec<String>>,
 }
 
-#[utoipa::path(get, path = "/bookables/slots/schemas", params(SlotSchemaQuery), responses((status = 200, description = "OK")))]
+#[derive(Serialize, ToSchema)]
+pub struct SlotSchemaResponse {
+    pub pages: Vec<SchemaPages>,
+    pub assets: Vec<BookableAssetTranslated>,
+}
+
+#[utoipa::path(get, path = "/bookables/slots/schemas", params(SlotSchemaQuery), responses((status = 200, description = "OK", body=SlotSchemaResponse)))]
 pub async fn slot_schemas(
     Query(opts): Query<SlotSchemaQuery>,
     State(data): State<Arc<AppState>>,
@@ -129,10 +135,7 @@ pub async fn slot_schemas(
         //     }
         // }
 
-        return Ok((
-            StatusCode::OK,
-            Json(json!({"pages":pages, "assets": assets})),
-        ));
+        return Ok((StatusCode::OK, Json(SlotSchemaResponse { pages, assets })));
     }
 
     Err(VialoError::NotFound())
@@ -152,17 +155,19 @@ pub struct BookSlotSchema {
     pub slots: Vec<BookSlotSchemaSlot>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct MaterializedSlots {
     pub schema_id: i32,
     pub index: Option<i64>,
+    #[schema(format = DateTime)]
     pub begins: Option<NaiveDateTime>,
+    #[schema(format = DateTime)]
     pub ends: Option<NaiveDateTime>,
     pub asset_id: Option<i32>,
     pub price: Option<i32>,
 }
 
-#[utoipa::path(post, path = "/bookables/slots/book", request_body = BookSlotSchema, responses((status = 200, description = "Booked")))]
+#[utoipa::path(post, path = "/bookables/slots/book", request_body = BookSlotSchema, responses((status = 200, description = "Booked", body=Vec<MaterializedSlots>),(status = 400, description = "Slot expectation failed"),(status = 400, description = "Slot index failure"),(status = 400, description = "Slot info failure")))]
 pub async fn book_slots(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,

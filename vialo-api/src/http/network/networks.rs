@@ -17,7 +17,7 @@ use axum::{
 };
 use sqlx::query_as;
 
-#[utoipa::path(get, path = "/network/networks", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/network/networks", responses((status = 200, description = "OK", body=Vec<NetworkModel>)))]
 pub async fn list_networks(
     Query(opts): Query<NetworkFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -39,7 +39,7 @@ pub async fn list_networks(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(put, path = "/network/networks/{id}", request_body = PostOrPutNetworkSchema, responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/network/networks/{id}", request_body = PostOrPutNetworkSchema, responses((status = 204, description = "Updated")))] // no body
 pub async fn put_network(
     Path(id): Path<i32>,
     Extension(user): Extension<User>,
@@ -103,7 +103,7 @@ pub async fn delete_network(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(post, path = "/network/networks", request_body = PostOrPutNetworkSchema, responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/network/networks", request_body = PostOrPutNetworkSchema, responses((status = 201, description = "Created")))] // no body
 pub async fn post_network(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,

@@ -65,7 +65,7 @@ fn render_post(
     (content_html.to_owned(), content_plain.to_owned())
 }
 
-#[utoipa::path(get, path = "/posts", params(PostFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/posts", params(PostFilterOptions), responses((status = 200, description = "OK", body=Vec<BoardPostModelTranslatedWithPinnedOn>)))]
 pub async fn list_posts(
     Query(opts): Query<PostFilterOptions>,
     Extension(user_o): Extension<Option<User>>,
@@ -168,7 +168,7 @@ async fn check_can_post_to_board(
     }
 }
 
-#[utoipa::path(post, path = "/posts", request_body = CreatePostSchema, responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/posts", request_body = CreatePostSchema, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
 pub async fn add_post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -210,7 +210,7 @@ pub async fn add_post(
     Ok((StatusCode::CREATED, Json(record)))
 }
 
-#[utoipa::path(put, path = "/posts/{id}", request_body = CreatePostSchema, responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/posts/{id}", request_body = CreatePostSchema, responses((status = 200, description = "Updated", body=BoardPostIdModel)))]
 pub async fn update_post(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -285,7 +285,7 @@ pub async fn update_post(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/posts/{id}", params(PostFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/posts/{id}", params(PostFilterOptions), responses((status = 200, description = "OK", body=LangVariant<BoardPostModelTranslatedAllLanguages, BoardPostModelTranslated>)))]
 pub async fn get_post(
     Path(id): Path<i32>,
     Extension(user_o): Extension<Option<User>>,
@@ -403,7 +403,7 @@ pub async fn get_post(
     }
 }
 
-#[utoipa::path(delete, path = "/posts/{id}", responses((status = 200, description = "Deleted")))]
+#[utoipa::path(delete, path = "/posts/{id}", responses((status = 204, description = "Deleted")))] // no body
 pub async fn delete_post(
     Path(id): Path<i32>,
     Extension(user): Extension<User>,

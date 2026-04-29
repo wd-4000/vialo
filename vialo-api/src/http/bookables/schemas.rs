@@ -22,7 +22,7 @@ pub struct BookableSchema {
     pub slot_price: Option<i32>,
 }
 
-#[utoipa::path(get, path = "/bookables/schemas", params(ListOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/schemas", params(ListOptions), responses((status = 200, description = "OK", body=Vec<BookableSchema>)))]
 pub async fn list(
     Query(opts): Query<ListOptions>,
     State(data): State<Arc<AppState>>,
@@ -49,7 +49,7 @@ pub async fn list(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/bookables/schemas/{id}", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/schemas/{id}", responses((status = 200, description = "OK", body=BookableSchema)))]
 pub async fn get(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -74,7 +74,7 @@ pub async fn get(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(delete, path = "/bookables/schemas/{id}", responses((status = 204, description = "Deleted")))]
+#[utoipa::path(delete, path = "/bookables/schemas/{id}", responses((status = 204, description = "Deleted")))] //no body
 pub async fn delete(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -130,7 +130,7 @@ pub struct BookableSchemaPostOrPut {
     pub slot_price: Option<i32>,
 }
 
-#[utoipa::path(post, path = "/bookables/schemas", request_body = BookableSchemaPostOrPut, responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/bookables/schemas", request_body = BookableSchemaPostOrPut, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -173,7 +173,7 @@ pub async fn post(
     Ok((StatusCode::CREATED, Json(record)))
 }
 
-#[utoipa::path(put, path = "/bookables/schemas/{id}", request_body=BookableSchemaPostOrPut, responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/bookables/schemas/{id}", request_body=BookableSchemaPostOrPut, responses((status = 200, description = "Updated", body=BookableSchema)))]
 pub async fn put(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,

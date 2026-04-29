@@ -53,7 +53,7 @@ async fn check_own_or_network_manager(
     }
 }
 
-#[utoipa::path(get, path = "/network/credentials", params(NetworkFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/network/credentials", params(NetworkFilterOptions), responses((status = 200, description = "OK", body=Vec<CredentialModelWithAccountEmbed>)))]
 pub async fn list_credentials(
     Query(opts): Query<NetworkFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -77,7 +77,7 @@ pub async fn list_credentials(
     Ok((StatusCode::OK, Json(records)))
 }
 
-#[utoipa::path(get, path = "/network/credentials/{id}", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/network/credentials/{id}", responses((status = 200, description = "OK", body=CredentialModelWithPasswordAndAccountEmbed)))]
 pub async fn get_credential(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -101,7 +101,7 @@ pub async fn get_credential(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/network/credentials/{id}/mobileconfig/{filename}", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/network/credentials/{id}/mobileconfig/{filename}", responses((status = 200, description = "OK", content_type = "application/x-apple-aspen-config")))]
 pub async fn get_mobileconfig(
     Path((id, _filename)): Path<(Uuid, String)>,
     Extension(user): Extension<User>,
@@ -149,7 +149,7 @@ pub struct PutCredentialSchema {
     pub password: Option<String>,
 }
 
-#[utoipa::path(put, path = "/network/credentials/{id}", request_body = PutCredentialSchema, responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/network/credentials/{id}", request_body = PutCredentialSchema, responses((status = 204, description = "Updated")))]
 pub async fn put_credential(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,

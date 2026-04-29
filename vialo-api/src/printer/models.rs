@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize)]
@@ -11,8 +12,9 @@ pub enum JobStatus {
     Error,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct AccountInfo {
+    #[schema(format = Email)]
     pub email: String,
     pub username: String,
     pub password: String,

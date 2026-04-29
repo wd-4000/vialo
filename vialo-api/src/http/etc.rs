@@ -6,7 +6,7 @@ use axum::{body::Body, extract::State, http::StatusCode, response::IntoResponse}
 use sqlx::query;
 use std::sync::Arc;
 
-#[utoipa::path(get, path = "/etc/mail-recipients", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/etc/mail-recipients", responses((status = 200, description = "OK", content_type = "text/plain", body = String)))]
 pub async fn list_mail_recipients(
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {

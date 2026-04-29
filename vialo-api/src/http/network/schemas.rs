@@ -51,11 +51,11 @@ pub struct SetDefaultRealmSchema {
 
 #[derive(Deserialize, ToSchema)]
 pub struct UpdateRealmSchema {
-    #[schema(value_type = Option<String>)]
+    #[schema(value_type = Option<String>, format = Ipv4)]
     pub ipv4_subnet: Option<ipnetwork::IpNetwork>,
-    #[schema(value_type = Option<String>)]
+    #[schema(value_type = Option<String>, format = Ipv4)]
     pub ipv6_prefix: Option<ipnetwork::IpNetwork>,
-    #[schema(value_type = Option<String>)]
+    #[schema(value_type = Option<String>, format = Ipv4)]
     pub ipv4_nat: Option<ipnetwork::IpNetwork>,
     pub vlan: Option<i32>,
 }

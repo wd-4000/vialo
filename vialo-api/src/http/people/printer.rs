@@ -23,18 +23,18 @@ use rand::{
 };
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sqlx::prelude::FromRow;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-#[derive(Serialize, Debug, FromRow)]
+#[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct PrinterInfo {
     pub id: Uuid,
     pub printer_username: Option<String>,
     #[serde(serialize_with = "encryption::serialize_exposed_opt")]
+    #[schema(value_type = Option<String>)]
     pub printer_password: Option<Encrypted<String>>,
     pub printer_id: Option<i32>,
     pub color: Option<i32>,
@@ -47,7 +47,7 @@ pub struct JobWithStatus {
     pub status: JobStatus,
 }
 
-#[derive(Serialize, Debug, FromRow)]
+#[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct PrinterListModel {
     pub id: Option<Uuid>,
     pub printer_username: Option<String>,
@@ -62,7 +62,7 @@ pub struct PrinterFilterOptions {
     pub account_id_is_null: Option<bool>,
 }
 
-#[utoipa::path(get, path = "/people/printer", params(PrinterFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/printer", params(PrinterFilterOptions), responses((status = 200, description = "OK", body=Vec<PrinterListModel>)))]
 pub async fn list(
     Query(opts): Query<PrinterFilterOptions>,
     Extension(_user): Extension<User>,
@@ -92,7 +92,14 @@ pub async fn list(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/people/{id}/printer", responses((status = 200, description = "OK")))]
+#[derive(Serialize, ToSchema)]
+pub struct PersonPrinterResponse {
+    pub details: Option<PrinterInfo>,
+    pub error: Vec<String>,
+    pub pending: Vec<String>,
+}
+
+#[utoipa::path(get, path = "/people/{id}/printer", responses((status = 200, description = "OK", body=PersonPrinterResponse)))]
 pub async fn get(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -114,9 +121,7 @@ pub async fn get(
         Either::Left(j.r#type)
     } else {   Either::Right(j.r#type)}});
 
-    Ok(Json(
-        json!({"details": details, "error": error, "pending":pending}),
-    ))
+    Ok(Json(PersonPrinterResponse { details, error, pending }))
 }
 
 #[derive(Deserialize, Debug, Default, ToSchema)]

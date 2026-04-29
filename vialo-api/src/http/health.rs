@@ -12,8 +12,9 @@ use axum_extra::extract::Query;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use utoipa::ToSchema;
 
-#[utoipa::path(get, path = "/health/status", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/health/status", responses((status = 200, description = "OK", body=i64)))]
 pub async fn get_health_status(
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
@@ -26,8 +27,8 @@ pub async fn get_health_status(
     Ok(Json(badness))
 }
 
-#[derive(Deserialize, Serialize)]
-struct HealthEvent {
+#[derive(Deserialize, Serialize, ToSchema)]
+pub struct HealthEvent {
     pub id: i32,
     pub created_at: DateTime<Utc>,
     pub last_updated: Option<DateTime<Utc>>,
@@ -39,7 +40,7 @@ struct HealthEvent {
     pub resolved: bool,
 }
 
-#[utoipa::path(get, path = "/health", params(ListOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/health", params(ListOptions), responses((status = 200, description = "OK", body=Vec<HealthEvent>)))]
 pub async fn get_health_events(
     Query(opts): Query<ListOptions>,
     State(data): State<Arc<AppState>>,

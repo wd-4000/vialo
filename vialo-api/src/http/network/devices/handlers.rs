@@ -33,7 +33,6 @@ use axum::{
 };
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -45,7 +44,7 @@ pub struct DeviceQuerySchema {
     pub search: Option<String>,
     pub account_id: Option<IdOrMeOrAllQuery>,
 }
-#[utoipa::path(get, path = "/network/devices", params(DeviceQuerySchema), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/network/devices", params(DeviceQuerySchema), responses((status = 200, description = "OK", body=ResponseVariant<Vec<DeviceModelWithAccountEmbed>, Vec<DeviceWithRefs>>)))]
 pub async fn list_devices(
     Query(opts): Query<DeviceQuerySchema>,
     Extension(user): Extension<User>,
@@ -128,7 +127,14 @@ pub enum PostDeviceSchema {
         cred_id: Uuid,
     },
 }
-#[utoipa::path(post, path = "/network/devices", request_body = PostDeviceSchema, responses((status = 201, description = "Created")))]
+#[derive(Serialize, ToSchema)]
+pub struct CreatedDeviceResponse {
+    #[serde(flatten)]
+    pub device: DeviceWithRefs,
+    pub credential: CredentialModelWithPassword,
+}
+
+#[utoipa::path(post, path = "/network/devices", request_body = PostDeviceSchema, responses((status = 201, description = "Created", body=CreatedDeviceResponse)))]
 pub async fn post_device(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -258,15 +264,13 @@ pub async fn post_device(
 
     trans.commit().await?;
 
-    Ok((StatusCode::CREATED, {
-        let mut data = serde_json::to_value(&device).map_err(|e| VialoError::Anyhow(e.into()))?;
-        data["credential"] =
-            serde_json::to_value(&final_cred).map_err(|e| VialoError::Anyhow(e.into()))?;
-        Json(data)
-    }))
+    Ok((StatusCode::CREATED, Json(CreatedDeviceResponse {
+        device,
+        credential: final_cred,
+    })))
 }
 
-#[utoipa::path(get, path = "/network/devices/{id}/overview", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/network/devices/{id}/overview", responses((status = 200, description = "OK", body=DeviceWithRefsAndIpAndAccountAndCredentialEmbed)))]
 pub async fn get_device_overview(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -335,7 +339,12 @@ pub struct UpdateDeviceSchema {
     pub mac: Option<MacAddressWrapper>,
     pub cred: Option<Uuid>,
 }
-#[utoipa::path(patch, path = "/network/devices/{id}", request_body = UpdateDeviceSchema, responses((status = 200, description = "Updated")))]
+#[derive(Serialize, ToSchema)]
+pub struct UpdatedDeviceLabelResponse {
+    pub label: Option<String>,
+}
+
+#[utoipa::path(patch, path = "/network/devices/{id}", request_body = UpdateDeviceSchema, responses((status = 200, description = "Updated", body=UpdatedDeviceLabelResponse)))]
 pub async fn update_device(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -368,11 +377,7 @@ pub async fn update_device(
     .fetch_one(&data.db)
     .await?;
 
-    let device_response = json!({
-        "label"  : device.label,
-    });
-
-    Ok(Json(device_response))
+    Ok(Json(UpdatedDeviceLabelResponse { label: device.label }))
 }
 
 #[utoipa::path(delete, path = "/network/devices/{id}", responses((status = 204, description = "Deleted")))]

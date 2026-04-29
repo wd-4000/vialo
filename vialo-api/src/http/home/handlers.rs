@@ -5,11 +5,13 @@ use crate::http::util::VialoError;
 use crate::{AppState, list_i18n_generic};
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
+use serde::Serialize;
 use serde_json::json;
 use sqlx::query_as;
 use std::sync::Arc;
+use utoipa::ToSchema;
 
-#[utoipa::path(get, path = "/home/quicklinks", params(PostFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/home/quicklinks", params(PostFilterOptions), responses((status = 200, description = "OK", body=Vec<QuickLinkModelTranslated>)))]
 pub async fn list_quicklinks(
     Query(opts): Query<PostFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -22,7 +24,7 @@ pub async fn list_quicklinks(
     );
 }
 
-#[utoipa::path(get, path = "/home/jumbo", params(PostFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/home/jumbo", params(PostFilterOptions), responses((status = 200, description = "OK", body=Vec<JumboModelTranslated>)))]
 pub async fn list_jumbo(
     Query(opts): Query<PostFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -35,7 +37,20 @@ pub async fn list_jumbo(
     );
 }
 
-#[utoipa::path(get, path = "/home",  params(PostFilterOptions), responses((status = 200, description = "OK")))]
+#[derive(Serialize, ToSchema)]
+pub struct HomePosts {
+    pinned: Vec<BoardPostModelHomeTranslated>,
+    timeline: Vec<BoardPostModelHomeTranslated>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct HomeResponse {
+    quicklinks: Vec<QuickLinkModelTranslated>,
+    jumbo: Vec<JumboModelTranslated>,
+    posts: HomePosts,
+}
+
+#[utoipa::path(get, path = "/home",  params(PostFilterOptions), responses((status = 200, description = "OK", body = HomeResponse)))]
 pub async fn get_home_aggregated(
     Query(opts): Query<PostFilterOptions>,
     State(data): State<Arc<AppState>>,

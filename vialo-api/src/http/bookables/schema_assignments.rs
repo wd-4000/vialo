@@ -22,7 +22,7 @@ pub struct BookableSchemaAssignment {
     pub schema_id: i32,
 }
 
-#[utoipa::path(get, path = "/bookables/{asset_id}/schema_assignments", params(ListOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/{asset_id}/schema_assignments", params(ListOptions), responses((status = 200, description = "OK", body=Vec<BookableSchemaAssignment>)))]
 pub async fn list(
     Path(asset_id): Path<i32>,
     Query(opts): Query<ListOptions>,
@@ -49,7 +49,7 @@ pub async fn list(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(post, path = "/bookables/{asset_id}/schema_assignments", request_body = BookableSchemaAssignment, responses((status = 204, description = "Created")))]
+#[utoipa::path(post, path = "/bookables/{asset_id}/schema_assignments", request_body = BookableSchemaAssignment, responses((status = 204, description = "Created")))] //no body
 pub async fn post(
     Path(asset_id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -85,7 +85,7 @@ pub async fn post(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(delete, path = "/bookables/{asset_id}/schema_assignments/{begins}", responses((status = 204, description = "Deleted")))]
+#[utoipa::path(delete, path = "/bookables/{asset_id}/schema_assignments/{begins}", responses((status = 204, description = "Deleted")))] //no body
 pub async fn delete(
     Path((asset_id, begins)): Path<(i32, DateTime<Utc>)>,
     State(data): State<Arc<AppState>>,

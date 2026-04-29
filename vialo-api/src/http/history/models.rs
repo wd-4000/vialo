@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, types::JsonValue};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 /*
@@ -13,7 +14,7 @@ caused_by_account uuid REFERENCES accounts_people (id) ON DELETE SET NULL,
 caused_by_subsystem subsystem_type,
 diff jsonb
 */
-#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
 #[sqlx(type_name = "subsystem_type", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum Subsystem {
@@ -25,7 +26,7 @@ pub enum Subsystem {
     Sysop,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
 #[sqlx(type_name = "tgop", rename_all = "UPPERCASE")]
 #[serde(rename_all = "lowercase")]
 pub enum TgOp {
@@ -39,7 +40,7 @@ pub struct SchemaModel {
     pub res: JsonValue,
 }
 
-#[derive(Serialize, FromRow)]
+#[derive(Serialize, FromRow, ToSchema)]
 pub struct HistoryEntryModel {
     pub id: i32,
     pub table_name: Option<String>,

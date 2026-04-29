@@ -14,31 +14,32 @@ use sqlx::prelude::FromRow;
 use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-#[derive(Serialize, Debug, FromRow)]
+#[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct IdentityModel {
     pub id: Option<Uuid>,
     pub account_id: Option<Uuid>,
     pub full_name: Option<String>,
+    #[schema(format = Email)]
     pub email: Option<String>,
 }
 
-#[derive(Serialize, Debug, FromRow)]
+#[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct PersonCandidateModel {
     pub id: Uuid,
     pub full_name: Option<String>,
+    #[schema(format = Email)]
     pub email: Option<String>,
     pub room_name: Option<String>,
 }
 
-#[derive(Serialize)]
-struct IdentityResponse {
+#[derive(Serialize, ToSchema)]
+pub struct IdentityResponse {
     #[serde(flatten)]
     identity: IdentityModel,
     candidates: Vec<PersonCandidateModel>,
 }
 
-#[utoipa::path(get, path = "/people/identities/{id}", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/identities/{id}", responses((status = 200, description = "OK", body=IdentityResponse)))]
 pub async fn get(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -90,7 +91,12 @@ pub struct MergeUserSchema {
     pub account_id: Uuid,
 }
 
-#[utoipa::path(post, path = "/people/identities/{id}/merge", request_body=MergeUserSchema, responses((status = 200, description = "Merged")))]
+#[derive(Serialize, ToSchema)]
+pub struct MergedIdentityResponse {
+    pub account_id: Uuid,
+}
+
+#[utoipa::path(post, path = "/people/identities/{id}/merge", request_body=MergeUserSchema, responses((status = 200, description = "Merged", body=MergedIdentityResponse)))]
 pub async fn merge(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
@@ -107,7 +113,7 @@ pub async fn merge(
     .fetch_optional(&mut *conn)
     .await?
     {
-        return Ok(Json(json!({"account_id": account_id})));
+        return Ok(Json(MergedIdentityResponse { account_id }));
     }
 
     let person = sqlx::query!(

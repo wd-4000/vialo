@@ -17,7 +17,7 @@ use sqlx::query_as;
 use std::sync::Arc;
 use uuid::Uuid;
 
-#[utoipa::path(post, path = "/people/rooms", request_body=CreateRoomSchema, responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/people/rooms", request_body=CreateRoomSchema, responses((status = 201, description = "Created", body=RoomModel)))]
 pub async fn add_room(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -37,7 +37,7 @@ pub async fn add_room(
     Ok((StatusCode::CREATED, Json(created_room)))
 }
 
-#[utoipa::path(get, path = "/people/rooms", params(UserFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/rooms", params(UserFilterOptions), responses((status = 200, description = "OK", body=Vec<RoomModel>)))]
 pub async fn list_rooms(
     Query(opts): Query<UserFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -59,7 +59,7 @@ pub async fn list_rooms(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(put, path = "/people/rooms/{id}", request_body=CreateRoomSchema, responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/people/rooms/{id}", request_body=CreateRoomSchema, responses((status = 200, description = "Updated", body=RoomModel)))]
 pub async fn put_room(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -78,10 +78,10 @@ pub async fn put_room(
     .fetch_one(&mut *conn)
     .await?;
 
-    Ok((StatusCode::CREATED, Json(created_room)))
+    Ok((StatusCode::OK, Json(created_room)))
 }
 
-#[utoipa::path(delete, path = "/people/rooms/{id}", responses((status = 200, description = "Deleted")))]
+#[utoipa::path(delete, path = "/people/rooms/{id}", responses((status = 204, description = "Deleted")))] // no body
 pub async fn delete_room(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -95,7 +95,7 @@ pub async fn delete_room(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(get, path = "/people/rooms/{id}", responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/people/rooms/{id}", responses((status = 200, description = "OK", body=RoomModel)))]
 pub async fn get_room(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,

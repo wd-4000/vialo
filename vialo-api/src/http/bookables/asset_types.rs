@@ -1,6 +1,6 @@
 use super::{handlers::BookableFilterOptions, models::BoardPostIdModel};
 use crate::AppState;
-use crate::helpers::LangVariant;
+use crate::helpers::{I18nMap, LangVariant};
 use crate::http::util::{JsonE, User, VialoError};
 use crate::http::util::{grab_authd_conn_user, grab_trans};
 use crate::permissions::{AppRole, check_app_role, check_member_of_group_or_app_role};
@@ -17,7 +17,7 @@ use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BookableAssetTypeTranslated {
     pub id: i32,
     pub name: Option<String>,
@@ -26,7 +26,7 @@ pub struct BookableAssetTypeTranslated {
 
 #[utoipa::path(get, path = "/bookables/types", params(
     BookableFilterOptions
-), responses((status = 200, description = "OK")))]
+), responses((status = 200, description = "OK", body=Vec<BookableAssetTypeTranslated>)))]
 pub async fn list(
     Query(opts): Query<BookableFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -62,7 +62,7 @@ pub struct PostBookableTypeSchema {
     pub group_id: Uuid,
 }
 
-#[utoipa::path(post, path = "/bookables/types", request_body = PostBookableTypeSchema, responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/bookables/types", request_body = PostBookableTypeSchema, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -94,15 +94,16 @@ pub async fn post(
     Ok((StatusCode::CREATED, Json(device_response)))
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct BookableType {
     //pub group_id: Option<i32>,
     pub id: i32,
+    #[schema(value_type = Option<I18nMap>)]
     pub name: Option<JsonValue>,
     pub group_id: Option<Uuid>,
 }
 
-#[utoipa::path(get, path = "/bookables/types/{id}", params(BookableFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/types/{id}", params(BookableFilterOptions), responses((status = 200, description = "OK", body = LangVariant<BookableType, BookableAssetTypeTranslated>)))]
 pub async fn get(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -147,7 +148,7 @@ pub async fn get(
     }
 }
 
-#[utoipa::path(put, path = "/bookables/types/{id}", request_body = PostBookableTypeSchema, responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/bookables/types/{id}", request_body = PostBookableTypeSchema, responses((status = 204, description = "Updated")))] // no body
 pub async fn put(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -186,7 +187,7 @@ pub async fn put(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(delete, path = "/bookables/types/{id}", responses((status = 200, description = "Deleted")))]
+#[utoipa::path(delete, path = "/bookables/types/{id}", responses((status = 204, description = "Deleted")))] // no body
 pub async fn delete(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,

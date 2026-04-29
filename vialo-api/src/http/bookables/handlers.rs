@@ -37,7 +37,7 @@ pub struct BookableFilterOptions {
     pub asset_types: Option<Vec<i32>>,
 }
 
-#[utoipa::path(get, path = "/bookables", params(BookableFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables", params(BookableFilterOptions), responses((status = 200, description = "OK", body=Vec<BookableAssetTranslatedWithStatus>)))]
 pub async fn list_bookables(
     Query(opts): Query<BookableFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -76,7 +76,7 @@ pub async fn list_bookables(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(post, path = "/bookables/{id}/quick-unlock", responses((status = 200, description = "Unlocked")))]
+#[utoipa::path(post, path = "/bookables/{id}/quick-unlock", responses((status = 204, description = "Unlocked")))] // no body
 pub async fn quick_unlock(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -143,7 +143,7 @@ pub struct PostBookableSchema {
     pub asset_type: i32,
 }
 
-#[utoipa::path(post, path = "/bookables", request_body=PostBookableSchema, responses((status = 201, description = "Created")))]
+#[utoipa::path(post, path = "/bookables", request_body=PostBookableSchema, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
 pub async fn post_bookable(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -197,12 +197,11 @@ pub async fn post_bookable(
     .fetch_one(&mut *trans)
     .await?;
 
-    let device_response = record;
     trans.commit().await?;
-    Ok((StatusCode::CREATED, Json(device_response)))
+    Ok((StatusCode::CREATED, Json(record)))
 }
 
-#[utoipa::path(put, path = "/bookables/{id}", request_body=PostBookableSchema, responses((status = 200, description = "Updated")))]
+#[utoipa::path(put, path = "/bookables/{id}", request_body=PostBookableSchema, responses((status = 200, description = "Updated", body=BoardPostIdModel)))]
 pub async fn put_bookable(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
@@ -277,7 +276,7 @@ pub async fn put_bookable(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/bookables/{id}", params(BookableFilterOptions), responses((status = 200, description = "OK")))]
+#[utoipa::path(get, path = "/bookables/{id}", params(BookableFilterOptions), responses((status = 200, description = "OK", body=LangVariant<BookableAssetTranslatedAllLanguages, BookableAssetTranslatedWithStatus>)))]
 pub async fn get_bookable(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
