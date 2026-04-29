@@ -14,7 +14,7 @@ use crate::{
         },
         util::{
             JsonE, User, VialoError, grab_authd_conn_user, grab_trans,
-            models::{IdOrMeOrAllQuery, IdOrMeQuery},
+            models::{AccountEmbed, IdOrMeOrAllQuery, IdOrMeQuery},
         },
     },
     permissions::check_app_role,
@@ -78,7 +78,7 @@ pub async fn list_devices(
     if let Some(IdOrMeOrAllQuery::All) = opts.account_id {
         let devices = conditional_query_as!(DeviceModelWithAccountEmbed,
             r#"SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS "mac?: MacAddressWrapper", cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,
-            jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account
+            jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
             FROM net_devices nd
             JOIN net_cred nc ON nd.cred_id = nc.id
             LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id
@@ -284,7 +284,7 @@ pub async fn get_device_overview(
     return match sqlx::query_as!(
         DeviceWithRefsAndIpAndAccountAndCredentialEmbed,
         r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", row_to_json(nc) as cred, row_to_json(nn) as network,
-        jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account
+        jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
         FROM net_devices nd
         JOIN net_cred nc ON nd.cred_id = nc.id
         JOIN net_networks nn ON nc.network_id = nn.id
@@ -313,7 +313,7 @@ pub async fn get_device_overview(
                 return match sqlx::query_as!(
                     DeviceWithRefsAndIpAndAccountAndCredentialEmbed,
                     r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", row_to_json(nc) as cred, row_to_json(nn) as network,
-                    jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account
+                    jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
                     FROM net_devices nd
                     JOIN net_cred nc ON nc.id = nd.cred_id
                     JOIN net_networks nn ON nc.network_id = nn.id

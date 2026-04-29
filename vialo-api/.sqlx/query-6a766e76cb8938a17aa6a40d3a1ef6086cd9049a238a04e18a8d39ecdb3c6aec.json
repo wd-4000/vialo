@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null as \"account: JsonValue\",\n            lower(ba.during) as begins,\n            upper(ba.during) as \"ends: PgDateTime\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true AND account_id = $1   ORDER BY during LIMIT $2 OFFSET $3",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            upper(ba.during) as \"ends: PgDateTime\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true AND account_id = $1 AND ba.during @> $2::timestamp   ORDER BY during LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -20,8 +20,8 @@
       },
       {
         "ordinal": 3,
-        "name": "account: JsonValue",
-        "type_info": "Text"
+        "name": "account: AccountEmbed",
+        "type_info": "Jsonb"
       },
       {
         "ordinal": 4,
@@ -47,6 +47,7 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Timestamp",
         "Int8",
         "Int8"
       ]
@@ -62,5 +63,5 @@
       false
     ]
   },
-  "hash": "a02df50cb9a6aa514670c9d6abd5bbff0f271518ac67a286d2d2b2dc9ebe1c73"
+  "hash": "6a766e76cb8938a17aa6a40d3a1ef6086cd9049a238a04e18a8d39ecdb3c6aec"
 }

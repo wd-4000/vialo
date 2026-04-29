@@ -1,5 +1,5 @@
-use crate::http::network::mac::MacAddressWrapper;
-use serde::Serialize;
+use crate::http::{network::mac::MacAddressWrapper, util::models::AccountEmbed};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{FromRow, types::ipnetwork::IpNetwork};
 use utoipa::ToSchema;
@@ -71,7 +71,7 @@ pub struct DeviceWithRefsAndIpAndAccountAndCredentialEmbed {
     #[schema(value_type = Option<String>, format = Ipv4)]
     pub ipv4_addr: Option<IpNetwork>,
 
-    pub account: Option<Value>, // TODO Make not optional
+    pub account: AccountEmbed,
 
     pub cred: Option<Value>,
     pub network: Option<Value>,
@@ -101,7 +101,8 @@ pub struct DeviceModelWithAccountEmbed {
     pub hostname: Option<String>,
     pub network_id: Option<i32>,
 
-    pub account: Option<Value>, // TODO Make not optional
+    pub account: AccountEmbed,
+
     pub cred_id: Option<Uuid>,
     pub realm_id: Option<Uuid>,
 }

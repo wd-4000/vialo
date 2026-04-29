@@ -1,4 +1,5 @@
 use crate::helpers::encryption::{self as encryption, Encrypted};
+use crate::http::util::models::AccountEmbed;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -64,8 +65,7 @@ pub struct CredentialModelWithAccountEmbed {
     pub username: Option<String>,
     pub network_id: i32,
     pub last_updated: Option<DateTime<Utc>>,
-
-    pub account: Option<Value>, // TODO Make not optional
+    pub account: AccountEmbed, // TODO Make not optional
 }
 
 #[derive(FromRow, Serialize, Deserialize, ToSchema)]
@@ -77,6 +77,5 @@ pub struct CredentialModelWithPasswordAndAccountEmbed {
     pub password: Option<Encrypted<String>>,
     pub network_id: i32,
     pub last_updated: Option<DateTime<Utc>>,
-
-    pub account: Option<Value>, // TODO Make not optional
+    pub account: AccountEmbed, // TODO Make not optional
 }

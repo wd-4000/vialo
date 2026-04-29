@@ -1,6 +1,6 @@
 use super::models::{BookableAssetStatus, BookableStatus};
 use crate::helpers::PgDateTime;
-use crate::http::util::models::IdOrAllQuery;
+use crate::http::util::models::{AccountEmbed, IdOrAllQuery};
 use crate::http::util::{User, VialoError, grab_authd_conn_user};
 use crate::permissions::{AppRole, check_app_role};
 // use crate::ketoapi::subject::Ref;
@@ -44,7 +44,7 @@ pub struct BookableAppointmentType {
     pub id: Uuid,
     pub asset_id: i32,
     pub transaction_id: Option<Uuid>,
-    pub account: Option<JsonValue>,
+    pub account: Option<AccountEmbed>,
     pub begins: Option<NaiveDateTime>,
     pub ends: Option<PgDateTime>,
     #[schema(format = DateTime)]
@@ -111,8 +111,8 @@ pub async fn list(
         FROM
             bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true {#account} {#from} {#to} ORDER BY during LIMIT {limit} OFFSET {offset}"#,
             #account_info = match(&opts.account_id){
-                  Some(IdOrAllQuery::All) => "jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account,",
-                  _ => r#"null as "account: JsonValue","#
+                  Some(IdOrAllQuery::All) => r#"jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account: AccountEmbed","#,
+                  _ => r#"null AS "account: AccountEmbed","#
             },
             #account = match (&opts.account_id) {
                 Some(IdOrAllQuery::All) => "",
