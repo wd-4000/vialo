@@ -29,6 +29,19 @@ pub struct DeviceWithRefs {
 }
 
 #[derive(Serialize, FromRow, ToSchema)]
+pub struct ListDeviceWithRefs {
+    pub id: Uuid,
+    pub label: Option<String>,
+    pub mac: Option<MacAddressWrapper>,
+    pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
+    pub hostname: Option<String>,
+    pub network_id: Option<i32>,
+    pub cred_id: Option<Uuid>,
+    pub realm_id: Option<Uuid>,
+}
+
+#[derive(Serialize, FromRow, ToSchema)]
 pub struct DeviceWithRefsAndIp {
     pub id: Uuid,
     pub label: Option<String>,
@@ -86,6 +99,7 @@ pub struct DeviceModelWithAccountEmbed {
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
     pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
     pub hostname: Option<String>,
+    pub network_id: Option<i32>,
 
     pub account: Option<Value>, // TODO Make not optional
     pub cred_id: Option<Uuid>,

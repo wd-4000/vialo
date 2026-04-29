@@ -6,7 +6,9 @@ use crate::{
     },
     http::{
         network::{
-            devices::models::DeviceWithRefsAndIpAndAccountAndCredentialEmbed,
+            devices::models::{
+                DeviceWithRefsAndIpAndAccountAndCredentialEmbed, ListDeviceWithRefs,
+            },
             mac::MacAddressWrapper,
             models::{CredentialModelWithPassword, NetAuth, NetworkModel},
         },
@@ -44,7 +46,7 @@ pub struct DeviceQuerySchema {
     pub search: Option<String>,
     pub account_id: Option<IdOrMeOrAllQuery>,
 }
-#[utoipa::path(get, path = "/network/devices", params(DeviceQuerySchema), responses((status = 200, description = "OK", body=ResponseVariant<Vec<DeviceModelWithAccountEmbed>, Vec<DeviceWithRefs>>)))]
+#[utoipa::path(get, path = "/network/devices", params(DeviceQuerySchema), responses((status = 200, description = "OK", body=ResponseVariant<Vec<DeviceModelWithAccountEmbed>, Vec<ListDeviceWithRefs>>)))]
 pub async fn list_devices(
     Query(opts): Query<DeviceQuerySchema>,
     Extension(user): Extension<User>,
@@ -75,7 +77,7 @@ pub async fn list_devices(
 
     if let Some(IdOrMeOrAllQuery::All) = opts.account_id {
         let devices = conditional_query_as!(DeviceModelWithAccountEmbed,
-            r#"SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS "mac?: MacAddressWrapper", cred_id, realm_id, nd.last_updated, nd.last_seen,
+            r#"SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS "mac?: MacAddressWrapper", cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,
             jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account
             FROM net_devices nd
             JOIN net_cred nc ON nd.cred_id = nc.id
@@ -92,8 +94,8 @@ pub async fn list_devices(
     } else {
         let current_account_id = user.id; // certified this macro moment
         let devices = conditional_query_as!(
-            DeviceWithRefs,
-            r#"SELECT net_devices.id, label, hostname,  mac AS "mac: MacAddressWrapper", cred_id, realm_id, net_devices.last_updated,  net_devices.last_seen FROM net_devices
+            ListDeviceWithRefs,
+            r#"SELECT net_devices.id, label, hostname,  mac AS "mac: MacAddressWrapper", cred_id, realm_id, net_devices.last_updated,  net_devices.last_seen, net_cred.network_id FROM net_devices
              JOIN net_cred ON cred_id = net_cred.id {#wh_asset_type} {#wh_search} ORDER by net_devices.id LIMIT {limit} OFFSET {offset}"#,
             #wh_asset_type = match (opts.account_id) {
                 Some(IdOrMeOrAllQuery::Id(account)) => "WHERE account_id = {account}",
@@ -264,10 +266,13 @@ pub async fn post_device(
 
     trans.commit().await?;
 
-    Ok((StatusCode::CREATED, Json(CreatedDeviceResponse {
-        device,
-        credential: final_cred,
-    })))
+    Ok((
+        StatusCode::CREATED,
+        Json(CreatedDeviceResponse {
+            device,
+            credential: final_cred,
+        }),
+    ))
 }
 
 #[utoipa::path(get, path = "/network/devices/{id}/overview", responses((status = 200, description = "OK", body=DeviceWithRefsAndIpAndAccountAndCredentialEmbed)))]
@@ -377,7 +382,9 @@ pub async fn update_device(
     .fetch_one(&data.db)
     .await?;
 
-    Ok(Json(UpdatedDeviceLabelResponse { label: device.label }))
+    Ok(Json(UpdatedDeviceLabelResponse {
+        label: device.label,
+    }))
 }
 
 #[utoipa::path(delete, path = "/network/devices/{id}", responses((status = 204, description = "Deleted")))]

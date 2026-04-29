@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT net_devices.id, label, hostname,  mac AS \"mac: MacAddressWrapper\", cred_id, realm_id, net_devices.last_updated,  net_devices.last_seen FROM net_devices\n             JOIN net_cred ON cred_id = net_cred.id WHERE account_id = $1 AND (label ILIKE '%' || $2 || '%' OR mac::text ILIKE '%' || $2 || '%') ORDER by net_devices.id LIMIT $3 OFFSET $4",
+  "query": "SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS \"mac?: MacAddressWrapper\", cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,\n            jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account\n            FROM net_devices nd\n            JOIN net_cred nc ON nd.cred_id = nc.id\n            LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n            WHERE nd.label ILIKE '%' || $1 || '%' OR nd.mac::text ILIKE '%' || $1 || '%' ORDER by nd.id  LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "ordinal": 3,
-        "name": "mac: MacAddressWrapper",
+        "name": "mac?: MacAddressWrapper",
         "type_info": "Macaddr"
       },
       {
@@ -42,11 +42,20 @@
         "ordinal": 7,
         "name": "last_seen",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "network_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "account",
+        "type_info": "Jsonb"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Text",
         "Int8",
         "Int8"
@@ -60,8 +69,10 @@
       true,
       true,
       true,
-      true
+      true,
+      false,
+      null
     ]
   },
-  "hash": "3da1a5a3061e42caab5a0bb01d508617a9fcf7429eb7ab39aaed55a233a3bde7"
+  "hash": "fbc6bd9645940a0a16468e28ec44e291e1cfd9c7cf4b2720db07be76678ce120"
 }
