@@ -211,3 +211,58 @@ impl sqlx::postgres::PgHasArrayType for AccountEmbed {
         PgTypeInfo::with_name("_JSONB")
     }
 }
+
+#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
+#[sqlx(type_name = "product_type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum ProductType {
+    PrinterColor,
+    PrinterBw,
+    Bookable,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
+pub struct ProductEmbed {
+    pub id: Uuid,
+    #[serde(rename = "type")]
+    pub product_type: ProductType,
+}
+
+impl From<serde_json::Value> for ProductEmbed {
+    fn from(value: serde_json::Value) -> Self {
+        serde_json::from_value(value).expect("Failed to deserialize AccountEmbed from JSON")
+    }
+}
+
+impl From<Option<serde_json::Value>> for ProductEmbed {
+    fn from(value: Option<serde_json::Value>) -> Self {
+        value
+            .map(|v| v.into())
+            .expect("AccountEmbed column was null but expected non-null")
+    }
+}
+
+impl SqlxType<sqlx::Postgres> for ProductEmbed {
+    fn type_info() -> PgTypeInfo {
+        PgTypeInfo::with_name("JSONB")
+    }
+}
+
+impl<'r> Decode<'r, sqlx::Postgres> for ProductEmbed {
+    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+        let json: sqlx::types::Json<Self> = Decode::decode(value)?;
+        Ok(json.0)
+    }
+}
+
+impl<'q> Encode<'q, sqlx::Postgres> for ProductEmbed {
+    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+        Encode::encode(sqlx::types::Json(self), buf)
+    }
+}
+
+impl sqlx::postgres::PgHasArrayType for ProductEmbed {
+    fn array_type_info() -> PgTypeInfo {
+        PgTypeInfo::with_name("_JSONB")
+    }
+}

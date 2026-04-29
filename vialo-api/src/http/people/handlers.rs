@@ -2,7 +2,7 @@ use super::{
     models::{
         AccountModel, AccountModelForOverview, CreatePersonResponse, CurrentRoomOccupantsViewModel,
         GroupStubListModel, GroupStubListModelWithRole, LeaseModelWithEmbeddedSublease,
-        PersonOverviewModel, PersonOverviewNetworkModel, PersonalTransactionModel, ProductType,
+        PersonOverviewModel, PersonOverviewNetworkModel, PersonalTransactionModel,
         TransactionStatus,
     },
     schemas::{CreateUserSchema, UserFilterOptions},
@@ -13,7 +13,10 @@ use crate::printer::{self, models::JobData};
 
 use crate::{
     AppState, helpers,
-    http::util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans, models::AccountEmbed},
+    http::util::{
+        JsonE, User, VialoError, grab_authd_conn_user, grab_trans,
+        models::{AccountEmbed, ProductType},
+    },
 };
 use crate::{
     helpers::{PgDate, encryption},

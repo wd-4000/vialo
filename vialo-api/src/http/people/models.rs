@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     helpers::PgDate,
-    http::util::models::AccountEmbed,
+    http::util::models::{AccountEmbed, ProductEmbed, ProductType},
     permissions::{AppRole, GroupRole},
 };
 
@@ -146,15 +146,6 @@ pub enum TransactionStatus {
     Refunded,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
-#[sqlx(type_name = "product_type", rename_all = "snake_case")]
-#[serde(rename_all = "snake_case")]
-pub enum ProductType {
-    PrinterColor,
-    PrinterBw,
-    Bookable,
-}
-
 #[derive(Serialize, Debug, ToSchema)]
 pub struct PersonalTransactionModel {
     pub id: Option<Uuid>,
@@ -172,7 +163,7 @@ pub struct PersonalTransactionModelWithProductDetails {
     pub id: Option<Uuid>,
     pub to_account: Option<AccountEmbed>,
     pub from_account: Option<AccountEmbed>,
-    pub product: Option<JsonValue>,
+    pub product: Option<ProductEmbed>,
     pub label: Option<String>,
     pub credits: Option<i32>,
     pub status: TransactionStatus,
