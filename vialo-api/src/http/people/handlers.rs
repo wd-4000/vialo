@@ -13,7 +13,7 @@ use crate::printer::{self, models::JobData};
 
 use crate::{
     AppState, helpers,
-    http::util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans},
+    http::util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans, models::AccountEmbed},
 };
 use crate::{
     helpers::{PgDate, encryption},
@@ -338,8 +338,8 @@ pub async fn get_person_overview(
         .fetch_optional(&data.db),
         sqlx::query_as!(PersonalTransactionModel,
             r#"SELECT cl.id,
-            CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name) ELSE NULL END AS from_account,
-            CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name) ELSE NULL END AS to_account,
+            CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
+            CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
              credits, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.product as "product: ProductType"
             FROM credit_ledger cl
             LEFT JOIN accounts_people ac_from ON from_account = ac_from.id

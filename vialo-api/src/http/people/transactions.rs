@@ -6,7 +6,7 @@ use super::{
     schemas::TransactionFilterOptions,
 };
 
-use crate::http::util::models::IdOrMeOrAllQuery;
+use crate::http::util::models::{AccountEmbed, IdOrMeOrAllQuery};
 use crate::{
     AppState,
     http::util::{JsonE, MaybeJsonE, User, VialoError, grab_authd_conn_user, grab_trans},
@@ -33,11 +33,10 @@ pub async fn list(
 ) -> Result<impl IntoResponse, VialoError> {
     let limit = opts.limit.unwrap_or(10);
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
-
     let record = conditional_query_as!(PersonalTransactionModel,
         r#"SELECT cl.id,
-        CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name) ELSE NULL END AS from_account,
-        CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name) ELSE NULL END AS to_account,
+        CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
+        CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
          credits, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.product as "product: ProductType"
         FROM credit_ledger cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
@@ -61,8 +60,8 @@ pub async fn get(
 ) -> Result<impl IntoResponse, VialoError> {
     let record = query_as!(PersonalTransactionModelWithProductDetails,
         r#"SELECT cl.id,
-        CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name) ELSE NULL END AS from_account,
-        CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name) ELSE NULL END AS to_account,
+        CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
+        CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
          cl.credits, cl.label, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", jsonb_build_object('type', cl.product, 'id', ba.id) AS product
         FROM credit_ledger cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
