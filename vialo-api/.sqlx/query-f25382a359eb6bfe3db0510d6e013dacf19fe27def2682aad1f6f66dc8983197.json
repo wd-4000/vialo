@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null as \"account: JsonValue\",\n            lower(ba.during) as begins,\n            upper(ba.during) as \"ends: PgDateTime\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true AND account_id = $1 AND ba.during @> $2::timestamp  AND UPPER(ba.during) <= $3  ORDER BY during LIMIT $4 OFFSET $5",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            upper(ba.during) as \"ends: PgDateTime\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true   AND UPPER(ba.during) <= $1  ORDER BY during LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "ordinal": 3,
-        "name": "account: JsonValue",
+        "name": "account: AccountEmbed",
         "type_info": "Text"
       },
       {
@@ -46,8 +46,6 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Timestamp",
         "Timestamp",
         "Int8",
         "Int8"
@@ -64,5 +62,5 @@
       false
     ]
   },
-  "hash": "6e04e2920fb4270fe21f07a49e4daed060b50edc93f958b0c0eb5bef44652493"
+  "hash": "f25382a359eb6bfe3db0510d6e013dacf19fe27def2682aad1f6f66dc8983197"
 }

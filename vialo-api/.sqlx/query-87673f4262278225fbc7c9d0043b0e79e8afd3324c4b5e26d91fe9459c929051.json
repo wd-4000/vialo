@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account,\n            lower(ba.during) as begins,\n            upper(ba.during) as \"ends: PgDateTime\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true AND account_id = $1 AND ba.during @> $2::timestamp  AND UPPER(ba.during) <= $3  ORDER BY during LIMIT $4 OFFSET $5",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            upper(ba.during) as \"ends: PgDateTime\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true  AND ba.during @> $1::timestamp  AND UPPER(ba.during) <= $2  ORDER BY during LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "ordinal": 3,
-        "name": "account",
+        "name": "account: AccountEmbed",
         "type_info": "Jsonb"
       },
       {
@@ -46,7 +46,6 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Timestamp",
         "Timestamp",
         "Int8",
@@ -64,5 +63,5 @@
       false
     ]
   },
-  "hash": "3565caa6ba1125a7c1115e5073f8867ecdcc550e2484f5893f07575ae6a80b4b"
+  "hash": "87673f4262278225fbc7c9d0043b0e79e8afd3324c4b5e26d91fe9459c929051"
 }

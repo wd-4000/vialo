@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS \"mac?: MacAddressWrapper\", cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,\n            jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account\n            FROM net_devices nd\n            JOIN net_cred nc ON nd.cred_id = nc.id\n            LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n             ORDER by nd.id  LIMIT $1 OFFSET $2",
+  "query": "SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS \"mac?: MacAddressWrapper\", cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,\n            jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account!: AccountEmbed\"\n            FROM net_devices nd\n            JOIN net_cred nc ON nd.cred_id = nc.id\n            LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n             ORDER by nd.id  LIMIT $1 OFFSET $2",
   "describe": {
     "columns": [
       {
@@ -50,7 +50,7 @@
       },
       {
         "ordinal": 9,
-        "name": "account",
+        "name": "account!: AccountEmbed",
         "type_info": "Jsonb"
       }
     ],
@@ -73,5 +73,5 @@
       null
     ]
   },
-  "hash": "a63e9192fd1c3662964b2e16090f4aa5a9683ccf36b1611e38e67ae1a577595b"
+  "hash": "1afb0a0ce915b04c1b27fec79c86124bdaa3c9440b87ad4284f280671a5de222"
 }

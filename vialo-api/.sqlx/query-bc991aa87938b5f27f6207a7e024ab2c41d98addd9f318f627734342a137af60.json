@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account,\n            lower(ba.during) as begins,\n            upper(ba.during) as \"ends: PgDateTime\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true   AND UPPER(ba.during) <= $1  ORDER BY during LIMIT $2 OFFSET $3",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            upper(ba.during) as \"ends: PgDateTime\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true    ORDER BY during LIMIT $1 OFFSET $2",
   "describe": {
     "columns": [
       {
@@ -20,8 +20,8 @@
       },
       {
         "ordinal": 3,
-        "name": "account",
-        "type_info": "Jsonb"
+        "name": "account: AccountEmbed",
+        "type_info": "Text"
       },
       {
         "ordinal": 4,
@@ -46,7 +46,6 @@
     ],
     "parameters": {
       "Left": [
-        "Timestamp",
         "Int8",
         "Int8"
       ]
@@ -62,5 +61,5 @@
       false
     ]
   },
-  "hash": "9f74b9dd422147bbe103b9f5ad2734fd5fddd66c10abd72244bdf9bd4d793833"
+  "hash": "bc991aa87938b5f27f6207a7e024ab2c41d98addd9f318f627734342a137af60"
 }

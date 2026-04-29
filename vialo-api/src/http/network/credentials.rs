@@ -1,7 +1,7 @@
 use crate::{
     AppState,
     helpers::encryption::{self, Encrypted},
-    http::util::{JsonE, User, VialoError, grab_authd_conn_user},
+    http::util::{JsonE, User, VialoError, grab_authd_conn_user, models::AccountEmbed},
     permissions::{AppRole, check_app_role},
 };
 use std::sync::Arc;
@@ -88,7 +88,7 @@ pub async fn get_credential(
     let record = query_as!(
         CredentialModelWithPasswordAndAccountEmbed,
         r#"SELECT nc.id, nc.username, nc.password AS "password: Encrypted<String>", nc.network_id, nc.last_updated,
-         jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS account
+         jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
          FROM net_cred nc
          LEFT JOIN accounts_people ap ON nc.account_id = ap.id
          LEFT JOIN account_groups ag ON nc.account_id = ag.id
