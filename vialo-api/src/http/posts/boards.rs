@@ -3,6 +3,7 @@ use super::models::PostVisibility;
 use super::schemas::PostFilterOptions;
 use crate::helpers::{I18nMap, LangVariant};
 use crate::http::posts::models::BoardPostIdModel;
+use crate::http::util::models::GroupEmbed;
 use crate::http::util::{JsonE, User, VialoError, grab_trans};
 use crate::permissions::{AppRole, check_app_role, check_manager_of_group};
 use crate::{AppState, list_i18n_generic};
@@ -17,7 +18,6 @@ use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
 use sqlx::{query_as, types::JsonValue};
 use sqlx_conditional_queries::conditional_query_as;
-use std::collections::HashMap;
 use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -35,7 +35,7 @@ pub enum BoardPerm {
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreateBoardSchema {
     pub group_id: Uuid,
-    pub label: HashMap<String, String>,
+    pub label: I18nMap,
     pub slug: String,
     pub icon: Option<String>,
 
@@ -48,7 +48,7 @@ pub struct BoardModelTranslatedEmbeddedGroup {
     pub icon: Option<String>,
     pub label: Option<String>,
     pub slug: Option<String>,
-    pub group: Option<JsonValue>,
+    pub group: Option<GroupEmbed>,
     pub default_post_visibility: PostVisibility,
 }
 
@@ -97,7 +97,7 @@ pub async fn list_boards(
                     'label', ag.label
                 )
                 ELSE NULL
-            END AS group,
+            END AS "group: GroupEmbed",
             bd.default_post_visibility AS "default_post_visibility: PostVisibility"
         FROM
             boards bd LEFT JOIN account_groups ag ON bd.group_id = ag.id LIMIT $2 OFFSET $3"#,
@@ -291,7 +291,7 @@ pub async fn add_board(
     let mut trans = grab_trans(&mut conn).await?;
 
     let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut trans, vec![("label", Some(body.label))])
+        super::super::util::insert_i18n_strings(&mut trans, vec![("label", Some(body.label.into()))])
             .await
             .ok()
             .unwrap();
@@ -351,7 +351,7 @@ pub async fn put_board(
     let mut trans = grab_trans(&mut conn).await?;
 
     let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut trans, vec![("label", Some(body.label))])
+        super::super::util::insert_i18n_strings(&mut trans, vec![("label", Some(body.label.into()))])
             .await
             .ok()
             .unwrap();

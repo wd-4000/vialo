@@ -1,4 +1,4 @@
-use crate::helpers::{LangVariant, PgDateTime};
+use crate::helpers::{I18nMap, LangVariant, PgDateTime};
 
 use super::models::{
     BoardPostIdModel, BookableAssetStatus, BookableAssetTranslatedAllLanguages,
@@ -23,7 +23,7 @@ use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as};
 use sqlx_conditional_queries::conditional_query_as;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use std::{i64, time::Duration};
 use tokio::time::sleep;
 use tracing::info;
@@ -135,7 +135,7 @@ pub async fn quick_unlock(
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct PostBookableSchema {
     //pub group_id: Option<i32>,
-    pub name: HashMap<String, String>,
+    pub name: I18nMap,
     pub icon: Option<String>,
     pub slug: Option<String>,
     pub connector: Option<i32>,
@@ -179,7 +179,7 @@ pub async fn post_bookable(
     // });
 
     let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name))])
+        super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name.into()))])
             .await
             .ok()
             .unwrap();
@@ -252,7 +252,7 @@ pub async fn put_bookable(
     let mut trans = grab_trans(&mut conn).await?;
 
     let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name))])
+        super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name.into()))])
             .await
             .ok()
             .unwrap();

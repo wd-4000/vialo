@@ -1,10 +1,11 @@
-use crate::{helpers::PgDate, http::util::models::IdOrMeOrAllQuery};
+use crate::{
+    helpers::PgDate,
+    http::util::models::{AccountPersonEmbed, IdOrMeOrAllQuery},
+};
 use serde::{Deserialize, Serialize};
 use serde_with::{NoneAsEmptyString, serde_as};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
-
-use super::models::LessorModel;
 
 #[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct TransactionFilterOptions {
@@ -42,7 +43,7 @@ pub struct ContractInfo {
     pub room: String,
     pub begins: chrono::NaiveDate,
     pub ends: chrono::NaiveDate,
-    pub lessor: Option<LessorModel>,
+    pub lessor: Option<AccountPersonEmbed>,
 }
 
 #[serde_as]

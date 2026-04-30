@@ -3,6 +3,8 @@ use sqlx::{prelude::FromRow, types::JsonValue};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::http::util::models::AccountPersonEmbed;
+
 /*
 id int PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
 table_name TEXT,
@@ -51,7 +53,8 @@ pub struct HistoryEntryModel {
     pub operation_type: Option<TgOp>,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     pub delete_on: Option<chrono::DateTime<chrono::Utc>>,
-    pub caused_by_account: Option<JsonValue>,
+    pub caused_by_account: Option<AccountPersonEmbed>,
     pub caused_by_subsystem: Option<Subsystem>,
+    #[schema(value_type = Object, additional_properties = true)]
     pub diff: Option<JsonValue>,
 }

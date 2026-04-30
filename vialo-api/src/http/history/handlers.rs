@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::AppState;
 use crate::http::util::VialoError;
+use crate::http::util::models::AccountPersonEmbed;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
 use sqlx_conditional_queries::conditional_query_as;
@@ -58,7 +59,7 @@ pub async fn list_history(
         operation_type as "operation_type: TgOp",
         created_at,
         delete_on,
-        CASE WHEN tl.caused_by_account IS NOT NULL THEN jsonb_build_object('id', tl.caused_by_account, 'full_name', a.full_name) ELSE NULL END AS caused_by_account,
+        CASE WHEN tl.caused_by_account IS NOT NULL THEN jsonb_build_object('id', tl.caused_by_account, 'full_name', a.full_name) ELSE NULL END AS "caused_by_account: AccountPersonEmbed",
         caused_by_subsystem as "caused_by_subsystem: Subsystem",
         resolve_i18n_in_diff(diff, COALESCE(i18n_cols.cols, ARRAY[]::text[])) as diff
         FROM table_log tl

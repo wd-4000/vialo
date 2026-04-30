@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     helpers::PgDate,
-    http::util::models::{AccountEmbed, ProductEmbed, ProductType},
+    http::util::models::{AccountEmbed, AccountPersonEmbed, ProductEmbed, ProductType},
     permissions::{AppRole, GroupRole},
 };
 
@@ -101,12 +101,6 @@ pub struct AccountModelForOverview {
     pub printer_id: Option<i32>,
 }
 
-#[derive(Deserialize, Serialize, Debug, ToSchema)]
-pub struct LessorModel {
-    pub id: Uuid,
-    pub name: Option<String>,
-}
-
 #[derive(Serialize, ToSchema)]
 pub struct LeaseModelWithEmbeddedSublease {
     pub id: Uuid,
@@ -114,7 +108,7 @@ pub struct LeaseModelWithEmbeddedSublease {
     pub room_id: Uuid,
     pub room: String,
     pub begins: NaiveDate,
-    pub lessor: Option<JsonValue>,
+    pub lessor: Option<AccountPersonEmbed>,
     pub ends: NaiveDate,
 }
 
