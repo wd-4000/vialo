@@ -56,7 +56,7 @@ pub async fn list_bookables(
     let record = conditional_query_as!(
             BookableAssetTranslatedWithStatus,
             r#"SELECT
-                id,
+                id as "id!",
                 icon,
                 get_i18n_string(name_i18n, {langs:Vec<String>}) AS name,
                 asset_type,
@@ -309,7 +309,7 @@ pub async fn get_bookable(
         let post = sqlx::query_as!(
             BookableAssetTranslatedWithStatus,
             r#"SELECT
-               bd.id,
+               bd.id as "id!",
                icon,
                get_i18n_string(bd.name_i18n, $1) AS name,
                bd.asset_type,

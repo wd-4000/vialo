@@ -16,7 +16,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 #[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct IdentityModel {
-    pub id: Option<Uuid>,
+    pub id: Uuid,
     pub account_id: Option<Uuid>,
     pub full_name: Option<String>,
     #[schema(format = Email)]

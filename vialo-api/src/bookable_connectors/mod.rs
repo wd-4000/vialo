@@ -35,7 +35,7 @@ pub async fn run(app_state: Arc<AppState>) -> Result<(), anyhow::Error> {
     for connector in connectors {
         let statuses = query_as!(
             BookableAssetStatusWithConnector,
-            r#"SELECT id,
+            r#"SELECT id as "id!",
             status as "status!: BookableStatus",
             lower(during) as begins,
             upper(during) as "ends: PgDateTime",

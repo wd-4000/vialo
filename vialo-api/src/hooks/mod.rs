@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, FromRow)]
 pub struct IdentityModel {
-    pub id: Option<Uuid>,
+    pub id: Uuid,
     pub full_name: Option<String>,
     pub email: Option<String>,
 }

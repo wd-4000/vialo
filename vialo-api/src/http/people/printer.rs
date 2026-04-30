@@ -49,7 +49,7 @@ pub struct JobWithStatus {
 
 #[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct PrinterListModel {
-    pub id: Option<Uuid>,
+    pub id: Uuid,
     pub printer_username: Option<String>,
     pub printer_id: Option<i32>,
 }
@@ -75,7 +75,7 @@ pub async fn list(
     // This might be red in rust-analyzer. Ignore this.
     let record = conditional_query_as!(
         PrinterListModel,
-        r#"SELECT id, printer_username, printer_id
+        r#"SELECT id as "id!", printer_username, printer_id
         FROM subsystem_printer_context WHERE TRUE {#wh_search} {#wh_account} LIMIT {limit} OFFSET {offset}"#,
             #wh_search = match (opts.search){
                 Some(src) => "AND concat(printer_id, printer_username) ILIKE '%' || {src} || '%'",
@@ -121,7 +121,11 @@ pub async fn get(
         Either::Left(j.r#type)
     } else {   Either::Right(j.r#type)}});
 
-    Ok(Json(PersonPrinterResponse { details, error, pending }))
+    Ok(Json(PersonPrinterResponse {
+        details,
+        error,
+        pending,
+    }))
 }
 
 #[derive(Deserialize, Debug, Default, ToSchema)]

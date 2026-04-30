@@ -97,7 +97,7 @@ pub async fn list_group_members(
     let record = conditional_query_as!(
         GroupMemberModel,
         r#"SELECT
-            a.id as "id?",
+            a.id as "id!",
             COALESCE(a.full_name, a.label, i.full_name) AS "full_name?",
             r.label AS "room_name?",
             r.id AS "room_id?",
