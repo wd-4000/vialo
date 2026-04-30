@@ -52,7 +52,7 @@ pub struct BoardPostModelTranslated {
 pub struct BoardPostModelTranslatedWithPinnedOn {
     pub id: i32,
     pub account_id: Option<Uuid>,
-    pub board_id: Option<i32>,
+    pub board_id: i32,
     pub icon: Option<String>,
     pub title: Option<String>,
     pub content: Option<String>,

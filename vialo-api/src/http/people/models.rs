@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::{
     helpers::PgDate,
-    http::util::models::{AccountEmbed, AccountPersonEmbed, ProductEmbed, ProductType},
+    http::util::models::{AccountEmbed, AccountPersonEmbed, ProductEmbed, ProductType, RoomEmbed},
     permissions::{AppRole, GroupRole},
 };
 
@@ -17,8 +17,7 @@ use crate::{
 pub struct GroupMemberModel {
     pub id: Uuid,
     pub full_name: Option<String>,
-    pub room_name: Option<String>,
-    pub room_id: Option<Uuid>,
+    pub room: Option<RoomEmbed>,
     pub role: GroupRole,
 }
 
@@ -27,8 +26,7 @@ pub struct CurrentRoomOccupantsViewModel {
     pub id: Option<Uuid>,
     pub auth_id: Option<Uuid>,
     pub full_name: Option<String>,
-    pub room_name: Option<String>,
-    pub room_id: Option<Uuid>,
+    pub room: Option<RoomEmbed>,
 }
 
 // id | label  | email  | created_at | public
@@ -102,8 +100,7 @@ pub struct AccountModelForOverview {
 pub struct LeaseModelWithEmbeddedSublease {
     pub id: Uuid,
     pub tenant_id: Uuid,
-    pub room_id: Uuid,
-    pub room: String,
+    pub room: Option<RoomEmbed>,
     pub begins: NaiveDate,
     pub lessor: Option<AccountPersonEmbed>,
     pub ends: NaiveDate,

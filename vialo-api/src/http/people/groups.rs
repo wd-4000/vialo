@@ -10,7 +10,8 @@ use crate::{
     http::{
         people::models::GroupGetModel,
         util::{
-            JsonE, User, VialoError, grab_authd_conn_user, grab_trans, models::AccountPersonEmbed,
+            JsonE, User, VialoError, grab_authd_conn_user, grab_trans,
+            models::{AccountPersonEmbed, RoomEmbed},
         },
     },
     permissions::{AppRole, GroupRole, check_app_role, check_manager_of_group_or_app_role},
@@ -98,8 +99,7 @@ pub async fn list_group_members(
         r#"SELECT
             a.id as "id!",
             COALESCE(a.full_name, a.label, i.full_name) AS "full_name?",
-            r.label AS "room_name?",
-            r.id AS "room_id?",
+            jsonb_build_object('label', r.label, 'id', r.id) AS "room: RoomEmbed",
             agm.role as "role: GroupRole"
         FROM
             accounts_people a
