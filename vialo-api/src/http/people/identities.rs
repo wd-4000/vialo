@@ -79,7 +79,7 @@ pub async fn delete(
 
     helpers::people::delete_identity(id, &mut trans)
         .await
-        .map_err(|e| VialoError::Anyhow(e))?;
+        .map_err(VialoError::Anyhow)?;
 
     trans.commit().await?;
 

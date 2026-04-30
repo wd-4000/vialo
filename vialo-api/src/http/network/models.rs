@@ -2,7 +2,6 @@ use crate::helpers::encryption::{self as encryption, Encrypted};
 use crate::http::util::models::AccountEmbed;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sqlx::{FromRow, types::ipnetwork};
 use utoipa::ToSchema;
 use uuid::Uuid;

@@ -1,5 +1,5 @@
 use crate::http::{network::mac::MacAddressWrapper, util::models::AccountEmbed};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 use sqlx::{FromRow, types::ipnetwork::IpNetwork};
 use utoipa::ToSchema;

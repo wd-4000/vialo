@@ -1,10 +1,9 @@
-use serde::{Deserialize, Deserializer, de::Error};
+use serde::{Deserialize, Deserializer};
 use utoipa::ToSchema;
 use utoipa::openapi::{
-    KnownFormat, ObjectBuilder, OneOfBuilder, RefOr, Schema, SchemaFormat,
+    ObjectBuilder, OneOfBuilder, RefOr, Schema,
     schema::{SchemaType, Type},
 };
-use uuid::Uuid;
 
 /** This is, like, an insane wrapper for an Option inside a uhhh Struct. So none = not present, some is either null or a value */
 #[derive(Debug, Default)]

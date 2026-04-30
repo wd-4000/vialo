@@ -218,7 +218,7 @@ pub async fn main(
             if let Some(task) = current_task {
                 let mut run_printer_task = async || -> Result<(), anyhow::Error> {
                     match &task {
-                        JobData::Refresh {} => refresh_counters(&mut printer, &mut *conn).await?,
+                        JobData::Refresh {} => refresh_counters(&mut printer, &mut conn).await?,
                         JobData::UpdateAccountLimit {
                             account_id,
                             color_limit,
@@ -262,7 +262,7 @@ pub async fn main(
                         JobData::FullSync {} => {
                             // Do a refresh, clear all counters and commit all transactions
                             printer.lock().await?;
-                            refresh_counters(&mut printer, &mut *conn).await?;
+                            refresh_counters(&mut printer, &mut conn).await?;
                             // TODO check if it's possible to clear all counters with one request
                             let printer_users =
                             sqlx::query!(r#"SELECT id as "id!", printer_id FROM subsystem_printer_context WHERE id IS NOT NULL"#)

@@ -141,7 +141,7 @@ async fn form_email<'a>(
         .to(context.account.email.parse::<Mailbox>()?)
         .subject(email_title)
         .header(custom_headers::ListUnsubscribe(
-            format!("<{}>", context.account.url_unsubscribe).into(),
+            format!("<{}>", context.account.url_unsubscribe),
         ))
         .header(ListUnsubscribePost("List-Unsubscribe=One-Click".into()))
         .multipart(MultiPart::alternative_plain_html(
@@ -246,5 +246,5 @@ pub async fn main(app_state: Arc<AppState>) -> Result<(), anyhow::Error> {
         }
     }
 
-    return Ok(());
+    Ok(())
 }

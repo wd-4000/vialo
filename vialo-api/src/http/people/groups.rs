@@ -16,7 +16,6 @@ use crate::{
     permissions::{AppRole, GroupRole, check_app_role, check_manager_of_group_or_app_role},
 };
 use serde::{Deserialize, Serialize};
-use sqlx::types::JsonValue;
 
 use axum::{
     Extension, Json,
