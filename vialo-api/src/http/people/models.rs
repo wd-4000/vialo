@@ -18,7 +18,7 @@ use crate::{
 
 #[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct GroupMemberModel {
-    pub id: Option<Uuid>,
+    pub id: Uuid,
     pub full_name: Option<String>,
     pub room_name: Option<String>,
     pub room_id: Option<Uuid>,
@@ -71,7 +71,7 @@ pub struct GroupStubListModelWithRole {
 
 #[derive(Serialize, ToSchema)]
 pub struct AccountModel {
-    pub id: Option<Uuid>,
+    pub id: Uuid,
     pub label: Option<String>,
     pub auth_id: Option<Uuid>,
     #[schema(format = Email)]
@@ -85,7 +85,7 @@ pub struct AccountModel {
 
 #[derive(Serialize, ToSchema)]
 pub struct AccountModelForOverview {
-    pub id: Option<Uuid>,
+    pub id: Uuid,
     pub label: Option<String>,
     pub auth_id: Option<Uuid>,
     #[schema(format = Email)]
@@ -114,7 +114,7 @@ pub struct LeaseModelWithEmbeddedSublease {
 
 #[derive(Serialize)]
 pub struct JumboModelTranslated {
-    pub id: Option<i32>,
+    pub id: i32,
     pub img: Option<String>,
     pub headline: Option<String>,
     pub title: Option<String>,
@@ -124,7 +124,7 @@ pub struct JumboModelTranslated {
 
 #[derive(Serialize, ToSchema)]
 pub struct RoomModel {
-    pub id: Option<Uuid>,
+    pub id: Uuid,
     pub label: String,
     pub capacity: Option<i32>,
     pub floor: Option<i32>,
@@ -142,7 +142,7 @@ pub enum TransactionStatus {
 
 #[derive(Serialize, Debug, ToSchema)]
 pub struct PersonalTransactionModel {
-    pub id: Option<Uuid>,
+    pub id: Uuid,
     pub to_account: Option<AccountEmbed>,
     pub from_account: Option<AccountEmbed>,
     pub product: Option<ProductType>,
@@ -154,7 +154,7 @@ pub struct PersonalTransactionModel {
 
 #[derive(Serialize, Debug, ToSchema)]
 pub struct PersonalTransactionModelWithProductDetails {
-    pub id: Option<Uuid>,
+    pub id: Uuid,
     pub to_account: Option<AccountEmbed>,
     pub from_account: Option<AccountEmbed>,
     pub product: Option<ProductEmbed>,

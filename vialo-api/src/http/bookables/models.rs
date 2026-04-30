@@ -27,7 +27,7 @@ pub struct BookableAssetStatus {
 
 #[derive(Serialize, ToSchema)]
 pub struct BookableAssetTranslatedWithStatus {
-    pub id: Option<i32>,
+    pub id: i32,
     pub icon: Option<String>,
     pub name: Option<String>,
     pub asset_type: Option<i32>,

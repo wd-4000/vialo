@@ -30,7 +30,7 @@ pub struct BoardPostModelRaw {
 
 #[derive(Serialize, ToSchema)]
 pub struct BoardPostModelTranslated {
-    pub id: Option<i32>,
+    pub id: i32,
     pub account_id: Option<Uuid>,
     pub board_id: Option<i32>,
     pub icon: Option<String>,
@@ -50,7 +50,7 @@ pub struct BoardPostModelTranslated {
 
 #[derive(Serialize, ToSchema)]
 pub struct BoardPostModelTranslatedWithPinnedOn {
-    pub id: Option<i32>,
+    pub id: i32,
     pub account_id: Option<Uuid>,
     pub board_id: Option<i32>,
     pub icon: Option<String>,
@@ -66,7 +66,7 @@ pub struct BoardPostModelTranslatedWithPinnedOn {
 
 #[derive(Serialize, ToSchema)]
 pub struct BoardPostModelTranslatedAllLanguages {
-    pub id: Option<i32>,
+    pub id: i32,
     pub account_id: Option<Uuid>,
     pub board_id: Option<i32>,
     pub icon: Option<String>,

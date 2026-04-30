@@ -4,7 +4,7 @@ use serde::Serialize;
 
 #[derive(Serialize, Debug)]
 pub struct BookableAssetStatusWithConnector {
-    pub id: Option<i32>,
+    pub id: i32,
     pub status: BookableStatus,
     pub begins: Option<NaiveDateTime>,
     pub ends: Option<PgDateTime>,

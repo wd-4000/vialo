@@ -109,7 +109,7 @@ pub async fn auth_middleware(
                                     .map(str::to_string)
                             };
                             let transformed_identity = crate::hooks::IdentityModel {
-                                id: Some(auth_id),
+                                id: auth_id,
                                 email: trait_str("email"),
                                 full_name: trait_str("full_name"),
                             };

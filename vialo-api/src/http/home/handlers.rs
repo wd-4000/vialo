@@ -18,7 +18,7 @@ pub async fn list_quicklinks(
 ) -> Result<impl IntoResponse, VialoError> {
     list_i18n_generic!(
         &data.db,
-        "SELECT * FROM get_i18n_quicklinks($1) LIMIT $2 OFFSET $3",
+        r#"SELECT id as "id!", label, link FROM get_i18n_quicklinks($1) LIMIT $2 OFFSET $3"#,
         opts,
         QuickLinkModelTranslated
     );
@@ -31,7 +31,7 @@ pub async fn list_jumbo(
 ) -> Result<impl IntoResponse, VialoError> {
     list_i18n_generic!(
         &data.db,
-        "SELECT * FROM get_i18n_jumbo($1) LIMIT $2 OFFSET $3",
+        r#"SELECT id as "id!", img, headline, title, content, link FROM get_i18n_jumbo($1) LIMIT $2 OFFSET $3"#,
         opts,
         JumboModelTranslated
     );
@@ -63,7 +63,7 @@ pub async fn get_home_aggregated(
 
     let jumbo = query_as!(
         JumboModelTranslated,
-        "SELECT * FROM get_i18n_jumbo($1) LIMIT $2 OFFSET $3",
+        r#"SELECT id as "id!", img, headline, title, content, link FROM get_i18n_jumbo($1) LIMIT $2 OFFSET $3"#,
         &langs,
         limit as i32,
         offset as i32
@@ -72,7 +72,7 @@ pub async fn get_home_aggregated(
 
     let quicklinks = query_as!(
         QuickLinkModelTranslated,
-        "SELECT * FROM get_i18n_quicklinks($1) LIMIT $2 OFFSET $3",
+        r#"SELECT id as "id!", label, link FROM get_i18n_quicklinks($1) LIMIT $2 OFFSET $3"#,
         &langs,
         limit as i32,
         offset as i32
