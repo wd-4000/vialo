@@ -15,7 +15,7 @@ use crate::{
     AppState, helpers,
     http::util::{
         JsonE, User, VialoError, grab_authd_conn_user, grab_trans,
-        models::{AccountEmbed, AccountPersonEmbed, GroupEmbed, ProductType},
+        models::{AccountEmbed, AccountPersonEmbed, GroupEmbed, ProductType, RoomEmbed},
     },
 };
 use crate::{
@@ -79,8 +79,7 @@ pub async fn list_people(
             a.id as "id?",
             i.id as "auth_id?",
             COALESCE(a.full_name, a.label, i.full_name) AS "full_name?",
-            r.label AS "room_name?",
-            r.id AS "room_id?"
+            jsonb_build_object('label', r.label, 'id', r.id) AS "room: RoomEmbed"
         FROM
             accounts_people a
             FULL JOIN identities i ON i.id = a.auth_id
@@ -326,7 +325,8 @@ pub async fn get_person_overview(
             .fetch_all(&data.db),
         sqlx::query_as!(
             LeaseModelWithEmbeddedSublease,
-            r#"SELECT rl.id, rl.room_id, rl.begins, rl.ends, rl.tenant_id, rr.label as room,
+            r#"SELECT rl.id, rl.begins, rl.ends, rl.tenant_id,
+            jsonb_build_object('label', rr.label, 'id', rr.id) AS "room: RoomEmbed",
             CASE
                 WHEN rl.lessor_id IS NOT NULL THEN jsonb_build_object(
                     'id', rl.lessor_id,

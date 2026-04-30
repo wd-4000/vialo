@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT rl.id, rl.begins, rl.ends, rl.tenant_id,\n            jsonb_build_object('label', rr.label, 'id', rr.id) AS \"room: RoomEmbed\",\n            CASE\n                WHEN rl.lessor_id IS NOT NULL THEN jsonb_build_object(\n                    'id', rl.lessor_id,\n                    'full_name', ac.full_name\n                )\n                ELSE NULL\n            END AS \"lessor: AccountPersonEmbed\"\n            FROM res_leases rl JOIN res_rooms rr ON rl.room_id = rr.id LEFT JOIN accounts_people ac ON rl.lessor_id = ac.id WHERE tenant_id = $1 LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "begins",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 2,
+        "name": "ends",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 3,
+        "name": "tenant_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "room: RoomEmbed",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "lessor: AccountPersonEmbed",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "f3d587bb08a015439cea4c0b0fa45caeaeafe344d0806036ef27fdec7d8efc21"
+}
