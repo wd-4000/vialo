@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id,\n            status as \"status!: BookableStatus\",\n            lower(during) as begins,\n            upper(during) as \"ends: PgDateTime\",\n            connector as \"connector!\",\n            connector_output_id as \"connector_output_id!\"\n        FROM bookable_asset_status\n        WHERE connector = $1 AND connector_output_id IS NOT NULL",
+  "query": "SELECT id as \"id!\",\n            status as \"status!: BookableStatus\",\n            lower(during) as begins,\n            upper(during) as \"ends: PgDateTime\",\n            connector as \"connector!\",\n            connector_output_id as \"connector_output_id!\"\n        FROM bookable_asset_status\n        WHERE connector = $1 AND connector_output_id IS NOT NULL",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
+        "name": "id!",
         "type_info": "Int4"
       },
       {
@@ -61,5 +61,5 @@
       true
     ]
   },
-  "hash": "ce96939e2a168c12f51c708f0576488ec0ab19063acd1a3a31ee143e51342d5b"
+  "hash": "68d752f483d4d3dadfab72a35adfebdcc8f029debbe60170814ce76bd25b2a71"
 }

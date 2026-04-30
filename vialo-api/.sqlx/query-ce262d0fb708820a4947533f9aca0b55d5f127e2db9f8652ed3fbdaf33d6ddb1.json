@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, printer_username, printer_id\n        FROM subsystem_printer_context WHERE TRUE  AND id IS NULL LIMIT $1 OFFSET $2",
+  "query": "SELECT id as \"id!\", printer_username, printer_id\n        FROM subsystem_printer_context WHERE TRUE  AND id IS NULL LIMIT $1 OFFSET $2",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
+        "name": "id!",
         "type_info": "Uuid"
       },
       {
@@ -31,5 +31,5 @@
       false
     ]
   },
-  "hash": "0348eedefdb206e16054dbbf57d0b8a59cfb529b7ef88372206b9f216a5068f0"
+  "hash": "ce262d0fb708820a4947533f9aca0b55d5f127e2db9f8652ed3fbdaf33d6ddb1"
 }

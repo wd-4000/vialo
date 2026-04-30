@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * FROM get_i18n_jumbo($1) LIMIT $2 OFFSET $3",
+  "query": "SELECT id as \"id!\", img, headline, title, content, link FROM get_i18n_jumbo($1) LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
+        "name": "id!",
         "type_info": "Int4"
       },
       {
@@ -50,5 +50,5 @@
       null
     ]
   },
-  "hash": "71cff08a2297f1292b34c0dd4b650eafbad5e875d8f18e2721a8fa33fa4dc2fa"
+  "hash": "b5bc2bfaef80f83083387a58e552889ee2c95790f44594dc5768217dca832676"
 }
