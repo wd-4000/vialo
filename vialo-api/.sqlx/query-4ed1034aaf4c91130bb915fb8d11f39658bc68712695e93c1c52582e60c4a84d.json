@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select array_agg(jsonb_build_object('id',agm.group_id, 'label',ag.label)) as groups, agra.role as \"role: AppRole\" from account_group_memberships agm join account_group_app_roles agra on agm.group_id = agra.group_id join account_groups ag on agra.group_id = ag.id where agm.account_id = $1 group by agra.role;",
+  "query": "select array_agg(jsonb_build_object('id',agm.group_id, 'label',ag.label)) as \"groups: Vec<GroupEmbed>\", agra.role as \"role: AppRole\" from account_group_memberships agm join account_group_app_roles agra on agm.group_id = agra.group_id join account_groups ag on agra.group_id = ag.id where agm.account_id = $1 group by agra.role;",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "groups",
+        "name": "groups: Vec<GroupEmbed>",
         "type_info": "JsonbArray"
       },
       {
@@ -40,5 +40,5 @@
       false
     ]
   },
-  "hash": "862606fb4a7a7a9971f7008e4eb5cecd5065fdf0715f90be7740a6e3227cf8d3"
+  "hash": "4ed1034aaf4c91130bb915fb8d11f39658bc68712695e93c1c52582e60c4a84d"
 }

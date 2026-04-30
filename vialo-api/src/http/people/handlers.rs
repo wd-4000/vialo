@@ -15,7 +15,7 @@ use crate::{
     AppState, helpers,
     http::util::{
         JsonE, User, VialoError, grab_authd_conn_user, grab_trans,
-        models::{AccountEmbed, ProductType},
+        models::{AccountEmbed, AccountPersonEmbed, GroupEmbed, ProductType},
     },
 };
 use crate::{
@@ -219,7 +219,7 @@ pub async fn get_person_groups(
 
 #[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct PersonAppRoleReport {
-    pub groups: Option<Vec<JsonValue>>,
+    pub groups: Option<Vec<GroupEmbed>>,
     pub role: Option<AppRole>,
 }
 
@@ -233,7 +233,7 @@ pub async fn get_person_app_roles(
         check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
     }
 
-    let groups = sqlx::query_as!(PersonAppRoleReport, r#"select array_agg(jsonb_build_object('id',agm.group_id, 'label',ag.label)) as groups, agra.role as "role: AppRole" from account_group_memberships agm join account_group_app_roles agra on agm.group_id = agra.group_id join account_groups ag on agra.group_id = ag.id where agm.account_id = $1 group by agra.role;"#, id_path)
+    let groups = sqlx::query_as!(PersonAppRoleReport, r#"select array_agg(jsonb_build_object('id',agm.group_id, 'label',ag.label)) as "groups: Vec<GroupEmbed>", agra.role as "role: AppRole" from account_group_memberships agm join account_group_app_roles agra on agm.group_id = agra.group_id join account_groups ag on agra.group_id = ag.id where agm.account_id = $1 group by agra.role;"#, id_path)
         .fetch_all(&data.db).await?;
     Ok(Json(groups))
 }
@@ -320,22 +320,21 @@ pub async fn get_person_overview(
              ap.credit_balance FROM accounts_people ap WHERE ap.id = $1"#, id).fetch_one(&data.db)
       }
       }
-
     let q = try_join!(
         account_task,
         sqlx::query_as!(GroupStubListModel, "select id, label from account_group_memberships agm join account_groups ag on agm.group_id = ag.id WHERE account_id = $1", id)
             .fetch_all(&data.db),
         sqlx::query_as!(
             LeaseModelWithEmbeddedSublease,
-            "SELECT rl.id, rl.room_id, rl.begins, rl.ends, rl.tenant_id, rr.label as room,
+            r#"SELECT rl.id, rl.room_id, rl.begins, rl.ends, rl.tenant_id, rr.label as room,
             CASE
                 WHEN rl.lessor_id IS NOT NULL THEN jsonb_build_object(
                     'id', rl.lessor_id,
                     'full_name', ac.full_name
                 )
                 ELSE NULL
-            END AS lessor
-            FROM res_leases rl JOIN res_rooms rr ON rl.room_id = rr.id LEFT JOIN accounts_people ac ON rl.lessor_id = ac.id WHERE tenant_id = $1 LIMIT 1",
+            END AS "lessor: AccountPersonEmbed"
+            FROM res_leases rl JOIN res_rooms rr ON rl.room_id = rr.id LEFT JOIN accounts_people ac ON rl.lessor_id = ac.id WHERE tenant_id = $1 LIMIT 1"#,
             id
         )
         .fetch_optional(&data.db),

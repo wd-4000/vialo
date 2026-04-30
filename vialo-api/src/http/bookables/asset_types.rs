@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use sqlx::query;
 use sqlx::types::JsonValue;
 use sqlx_conditional_queries::conditional_query_as;
-use std::collections::HashMap;
 use std::i64;
 use std::sync::Arc;
 use utoipa::ToSchema;
@@ -58,7 +57,7 @@ pub async fn list(
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct PostBookableTypeSchema {
     //pub group_id: Option<i32>,
-    pub name: HashMap<String, String>,
+    pub name: I18nMap,
     pub group_id: Uuid,
 }
 
@@ -75,7 +74,7 @@ pub async fn post(
     let mut trans = grab_trans(&mut conn).await?;
 
     let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name))])
+        super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name.into()))])
             .await
             .ok()
             .unwrap();
@@ -168,7 +167,7 @@ pub async fn put(
     let mut trans = grab_trans(&mut conn).await?;
 
     let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name))])
+        super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name.into()))])
             .await
             .ok()
             .unwrap();

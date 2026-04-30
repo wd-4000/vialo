@@ -9,7 +9,9 @@ use crate::{
     AppState,
     http::{
         people::models::GroupGetModel,
-        util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans},
+        util::{
+            JsonE, User, VialoError, grab_authd_conn_user, grab_trans, models::AccountPersonEmbed,
+        },
     },
     permissions::{AppRole, GroupRole, check_app_role, check_manager_of_group_or_app_role},
 };
@@ -122,7 +124,7 @@ pub struct GroupMemberReport {
     pub icon: Option<String>,
     #[schema(format = Email)]
     pub email: Option<String>,
-    pub accounts: Option<Vec<JsonValue>>,
+    pub accounts: Option<Vec<AccountPersonEmbed>>,
 }
 
 #[utoipa::path(get, path = "/people/groups/members", params(UserFilterOptions), responses((status = 200, description = "OK", body = Vec<GroupMemberReport>)))]
@@ -138,7 +140,7 @@ pub async fn list_all_group_members(
     // This might be red in rust-analyzer. Ignore this.
     let record = conditional_query_as!(
         GroupMemberReport,
-        "SELECT ag.id, ag.label, ag.icon, ag.email, array_agg(jsonb_build_object('id', cro.id, 'full_name', cro.full_name, 'room', (CASE WHEN cro.room_id IS NOT NULL THEN jsonb_build_object('id', cro.room_id, 'label', cro.room_name) ELSE NULL END))) as accounts FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id {#public_only} GROUP BY ag.id LIMIT {limit} OFFSET {offset}",
+        r#"SELECT ag.id, ag.label, ag.icon, ag.email, array_agg(jsonb_build_object('id', cro.id, 'full_name', cro.full_name, 'room', (CASE WHEN cro.room_id IS NOT NULL THEN jsonb_build_object('id', cro.room_id, 'label', cro.room_name) ELSE NULL END))) as "accounts: Vec<AccountPersonEmbed>" FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id {#public_only} GROUP BY ag.id LIMIT {limit} OFFSET {offset}"#,
         #public_only = match (check_app_role(user, crate::permissions::AppRole::AccountManager, &data.db).await.is_ok()){
                 true => "",
                 false => "WHERE ag.public = true"

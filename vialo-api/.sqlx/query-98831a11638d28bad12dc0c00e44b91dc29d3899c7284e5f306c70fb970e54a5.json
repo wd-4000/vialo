@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT ag.id, ag.label, ag.icon, ag.email, array_agg(jsonb_build_object('id', cro.id, 'full_name', cro.full_name, 'room', (CASE WHEN cro.room_id IS NOT NULL THEN jsonb_build_object('id', cro.room_id, 'label', cro.room_name) ELSE NULL END))) as accounts FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id WHERE ag.public = true GROUP BY ag.id LIMIT $1 OFFSET $2",
+  "query": "SELECT ag.id, ag.label, ag.icon, ag.email, array_agg(jsonb_build_object('id', cro.id, 'full_name', cro.full_name, 'room', (CASE WHEN cro.room_id IS NOT NULL THEN jsonb_build_object('id', cro.room_id, 'label', cro.room_name) ELSE NULL END))) as \"accounts: Vec<AccountPersonEmbed>\" FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id  GROUP BY ag.id LIMIT $1 OFFSET $2",
   "describe": {
     "columns": [
       {
@@ -30,7 +30,7 @@
       },
       {
         "ordinal": 4,
-        "name": "accounts",
+        "name": "accounts: Vec<AccountPersonEmbed>",
         "type_info": "JsonbArray"
       }
     ],
@@ -48,5 +48,5 @@
       null
     ]
   },
-  "hash": "da0d0b4d9f42f51e7d1c1f18f4a9df092926b483b8a3e7926afe9161ecfdffb7"
+  "hash": "98831a11638d28bad12dc0c00e44b91dc29d3899c7284e5f306c70fb970e54a5"
 }

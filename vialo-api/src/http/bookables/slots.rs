@@ -3,10 +3,10 @@ use crate::http::util::{JsonE, User, VialoError};
 use crate::http::util::{grab_authd_conn_user, grab_trans};
 // use crate::ketoapi::subject::Ref;
 // use crate::ketoapi::{self, CheckRequest, Subject};
-use crate::{AppState, health, http::history::models::Subsystem};
+use crate::{AppState, health, http::history::models::Subsystem, impl_jsonb_embed};
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime};
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::types::JsonValue;
@@ -25,6 +25,7 @@ pub struct TakenSlotQuery {
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct TakenSlots {
+    #[schema(value_type = HashMap<String, HashMap<String, Vec<i32>>>)]
     pub taken: JsonValue,
 }
 
@@ -48,9 +49,19 @@ pub async fn taken_slots(
     Ok((StatusCode::OK, Json(record.taken)))
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, ToSchema)]
+pub struct Transition {
+    pub schema: i32,
+    pub begins: DateTime<Utc>,
+    pub schedule: Vec<NaiveTime>,
+    pub slot_price: i32,
+}
+
+impl_jsonb_embed!(Transition);
+
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct SchemaPages {
-    pub transitions: Option<Vec<JsonValue>>,
+    pub transitions: Option<Vec<Transition>>,
     pub assets: Option<Vec<i32>>,
 }
 #[derive(Deserialize, Debug, Default, IntoParams)]
@@ -114,7 +125,7 @@ pub async fn slot_schemas(
 
     let page_query = query_as!(
         SchemaPages,
-        "SELECT transitions, ARRAY_AGG(asset_id) as assets FROM (SELECT ARRAY_AGG(jsonb_build_object('schema', bsa.schema_id, 'begins', bsa.begins, 'schedule', bs.schedule, 'slot_price', slot_price) ORDER BY bsa.begins) as transitions, bsa.asset_id FROM bookable_schema_assignments bsa JOIN bookable_schemas bs ON bs.id = bsa.schema_id WHERE bsa.asset_id = ANY($1) AND bsa.begins <= $2::date group by bsa.asset_id) group by transitions;",
+        r#"SELECT transitions as "transitions: Vec<Transition>", ARRAY_AGG(asset_id) as assets FROM (SELECT ARRAY_AGG(jsonb_build_object('schema', bsa.schema_id, 'begins', bsa.begins, 'schedule', bs.schedule, 'slot_price', slot_price) ORDER BY bsa.begins) as transitions, bsa.asset_id FROM bookable_schema_assignments bsa JOIN bookable_schemas bs ON bs.id = bsa.schema_id WHERE bsa.asset_id = ANY($1) AND bsa.begins <= $2::date group by bsa.asset_id) group by transitions;"#,
         &asset_ids,
         opts.to
     )
