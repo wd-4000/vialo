@@ -244,7 +244,7 @@ pub async fn book_slots(
             false,
         )
         .await
-        .map_err(|e| VialoError::Anyhow(e))?;
+        .map_err(VialoError::Anyhow)?;
 
         return Err(VialoError::AppError(
             StatusCode::BAD_REQUEST,

@@ -2,10 +2,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{
     FromRow,
-    types::{
-        JsonValue,
-        ipnetwork::{self},
-    },
+    types::ipnetwork::{self},
 };
 use utoipa::ToSchema;
 use uuid::Uuid;

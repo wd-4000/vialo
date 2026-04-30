@@ -12,7 +12,6 @@ use axum_extra::extract::Query;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::query_as;
-use sqlx::types::JsonValue;
 use sqlx_conditional_queries::conditional_query_as;
 use std::i64;
 use std::sync::Arc;

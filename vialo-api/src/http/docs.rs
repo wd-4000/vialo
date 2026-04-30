@@ -85,7 +85,7 @@ fn clean_tag(tag: &str) -> Vec<String> {
         .map(to_title_case)
         .collect();
     if parts.is_empty() {
-        vec![to_title_case(stripped.split("::").last().unwrap_or(tag)).into()]
+        vec![to_title_case(stripped.split("::").last().unwrap_or(tag))]
     } else {
         parts
     }

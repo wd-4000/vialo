@@ -1,6 +1,5 @@
 use super::models::{HistoryEntryModel, Subsystem, TgOp};
 use super::schemas::HistoryFilterOptions;
-use std::collections::HashMap;
 
 use crate::AppState;
 use crate::http::util::VialoError;

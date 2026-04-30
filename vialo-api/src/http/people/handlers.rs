@@ -36,7 +36,7 @@ use rand::{
 };
 use serde::Serialize;
 use serde_json::json;
-use sqlx::{prelude::FromRow, query, types::JsonValue};
+use sqlx::{prelude::FromRow, query};
 use sqlx_conditional_queries::conditional_query_as;
 use std::{ops::DerefMut, sync::Arc};
 use tokio::try_join;
@@ -553,7 +553,7 @@ pub async fn delete_person(
 
     helpers::people::delete_identity(id, &mut trans)
         .await
-        .map_err(|e| VialoError::Anyhow(e.into()))?;
+        .map_err(|e| VialoError::Anyhow(e))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

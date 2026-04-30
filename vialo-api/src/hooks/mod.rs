@@ -32,7 +32,7 @@ pub async fn update_identity(
     let mut trans = crate::http::util::grab_trans(&mut conn).await?;
     helpers::people::update_identity(body, &mut trans)
         .await
-        .map_err(|e| VialoError::Anyhow(e))?;
+        .map_err(VialoError::Anyhow)?;
     trans.commit().await?;
     Ok(StatusCode::OK)
 }

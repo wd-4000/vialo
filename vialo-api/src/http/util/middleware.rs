@@ -94,7 +94,7 @@ pub async fn auth_middleware(
                                 false,
                             )
                             .await
-                            .map_err(|e| VialoError::Anyhow(e))?;
+                            .map_err(VialoError::Anyhow)?;
 
                             // Do the same thing as the jsonnet transform in the Kratos config
                             // This is a bit messy but frankly shouldn't happen in prod anyway
@@ -116,7 +116,7 @@ pub async fn auth_middleware(
                             let mut trans = grab_trans(&mut conn).await?;
                             helpers::people::update_identity(transformed_identity, &mut trans)
                                 .await
-                                .map_err(|e| VialoError::Anyhow(e))?;
+                                .map_err(VialoError::Anyhow)?;
                             trans.commit().await?;
                         }
                     } else {
