@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                id,\n                icon,\n                get_i18n_string(name_i18n, $1) AS name,\n                asset_type,\n                status as \"status!: BookableStatus\",\n                lower(during) as begins,\n                upper(during)  as \"ends: PgDateTime\"\n            FROM\n                bookable_asset_status\n            WHERE asset_type = ANY($2) ORDER BY id LIMIT $3 OFFSET $4",
+  "query": "SELECT\n               bd.id as \"id!\",\n               icon,\n               get_i18n_string(bd.name_i18n, $1) AS name,\n               bd.asset_type,\n               bd.status as \"status!: BookableStatus\",\n               lower(during) as begins,\n               upper(during) as \"ends: PgDateTime\"\n           FROM\n               bookable_asset_status bd WHERE id = $2;",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
+        "name": "id!",
         "type_info": "Int4"
       },
       {
@@ -60,9 +60,7 @@
     "parameters": {
       "Left": [
         "TextArray",
-        "Int4Array",
-        "Int8",
-        "Int8"
+        "Int4"
       ]
     },
     "nullable": [
@@ -75,5 +73,5 @@
       null
     ]
   },
-  "hash": "2a35abe3dc3df492ceb85a77996afc411d6bcaf56a2f95ff129305ceea3ae51d"
+  "hash": "fedde1bfb4ca3c00b9122c5faaa874f5ff6d773f999ab13419d8908f0c7a6b93"
 }

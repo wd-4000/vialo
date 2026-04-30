@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * FROM get_i18n_quicklinks($1) LIMIT $2 OFFSET $3",
+  "query": "SELECT id as \"id!\", label, link FROM get_i18n_quicklinks($1) LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
+        "name": "id!",
         "type_info": "Int4"
       },
       {
@@ -32,5 +32,5 @@
       null
     ]
   },
-  "hash": "6414ae33466e25e6816d3e2456df0de137356bd796018bdff78370d0596b527b"
+  "hash": "bdcf1371adce13863eef04281bb839d1b305d02e593e312848422d8f045455d0"
 }
