@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, types::JsonValue};
 use utoipa::ToSchema;
@@ -42,6 +44,15 @@ pub struct SchemaModel {
     pub res: JsonValue,
 }
 
+#[derive(Serialize, ToSchema)]
+pub struct DiffUpdateEntry {
+    pub from: Option<JsonValue>,
+    pub to: Option<JsonValue>,
+}
+
+#[derive(ToSchema)]
+pub struct HistoryEntryDiff(HashMap<String, DiffUpdateEntry>);
+
 #[derive(Serialize, FromRow, ToSchema)]
 pub struct HistoryEntryModel {
     pub id: i32,
@@ -51,10 +62,10 @@ pub struct HistoryEntryModel {
     pub record_id: Option<i32>,
     pub record_uuid: Option<Uuid>,
     pub operation_type: Option<TgOp>,
-    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
     pub delete_on: Option<chrono::DateTime<chrono::Utc>>,
     pub caused_by_account: Option<AccountPersonEmbed>,
     pub caused_by_subsystem: Option<Subsystem>,
-    #[schema(value_type = Object, additional_properties = true)]
+    #[schema(value_type = HistoryEntryDiff)]
     pub diff: Option<JsonValue>,
 }

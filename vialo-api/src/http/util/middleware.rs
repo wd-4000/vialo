@@ -108,10 +108,12 @@ pub async fn auth_middleware(
                                     .and_then(|v| v.as_str())
                                     .map(str::to_string)
                             };
-                            let transformed_identity = crate::hooks::IdentityModel {
+                            let transformed_identity = crate::helpers::people::IdentityModel {
                                 id: auth_id,
                                 email: trait_str("email"),
                                 full_name: trait_str("full_name"),
+                                phone: trait_str("phone"),
+                                account_id: None,
                             };
                             let mut trans = grab_trans(&mut conn).await?;
                             helpers::people::update_identity(transformed_identity, &mut trans)

@@ -27,11 +27,17 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     let me_routes = Router::new()
         .route("/me", get(handlers::get_me))
         .route("/me/roles", get(handlers::get_person_roles_me))
-        .route("/me/capabilities", get(handlers::get_person_capabilities_me));
+        .route(
+            "/me/capabilities",
+            get(handlers::get_person_capabilities_me),
+        );
 
     // Routes gated behind CreditManager
     let credit_routes = Router::new()
-        .route("/transactions", get(transactions::list).post(transactions::post))
+        .route(
+            "/transactions",
+            get(transactions::list).post(transactions::post),
+        )
         .route("/transactions/{id}", get(transactions::get))
         .route("/transactions/{id}/undo", post(transactions::undo))
         .route_layer(middleware::from_fn_with_state(
@@ -42,6 +48,7 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     // Routes gated behind AccountManager
     let account_routes = Router::new()
         .route("/", post(handlers::add_person).get(handlers::list_people))
+        .route("/lookup", get(handlers::lookup_people))
         .route("/rooms", post(rooms::add_room).get(rooms::list_rooms))
         .route(
             "/rooms/{id}",

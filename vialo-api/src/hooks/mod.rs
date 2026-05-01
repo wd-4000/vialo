@@ -9,20 +9,12 @@ use axum::{
 };
 use tower_http::trace::TraceLayer;
 
-use crate::helpers;
-use crate::helpers::grab_authd_conn_subsystem;
+use crate::helpers::{self, grab_authd_conn_subsystem, people::IdentityModel};
 use crate::http::util::{JsonE, VialoError};
 use axum::{extract::State, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
-
-#[derive(Serialize, Deserialize, Debug, FromRow)]
-pub struct IdentityModel {
-    pub id: Uuid,
-    pub full_name: Option<String>,
-    pub email: Option<String>,
-}
 
 pub async fn update_identity(
     State(data): State<Arc<AppState>>,
