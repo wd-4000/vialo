@@ -2,8 +2,8 @@ use super::{
     models::{
         AccountModel, AccountModelForOverview, CreatePersonResponse, CurrentRoomOccupantsViewModel,
         GroupStubListModel, GroupStubListModelWithRole, LeaseModelWithEmbeddedSublease,
-        PersonOverviewModel, PersonOverviewNetworkModel, PersonalTransactionModel,
-        TransactionStatus,
+        PeopleLookupModel, PersonOverviewModel, PersonOverviewNetworkModel,
+        PersonalTransactionModel, TransactionStatus,
     },
     schemas::{CreateUserSchema, UserFilterOptions},
 };
@@ -61,7 +61,7 @@ use uuid::Uuid;
 // WHERE (to_account = $1 OR from_account = $1) AND tl.table_name = 'credit_ledger' ORDER BY created_at LIMIT 3", id)
 // .fetch_all(&data.db)
 
-#[utoipa::path(get, path = "/people", responses((status = 200, description = "OK", body=Vec<CurrentRoomOccupantsViewModel>)))]
+#[utoipa::path(get, path = "/people", description = "List identities and people. IDs might be null because this endpoint also lists identities with no attached people", params(UserFilterOptions), responses((status = 200, description = "OK", body=Vec<CurrentRoomOccupantsViewModel>)))]
 pub async fn list_people(
     Query(opts): Query<UserFilterOptions>,
     Extension(user): Extension<User>,
@@ -118,6 +118,46 @@ async fn get_person_roles_impl(
     .await?;
 
     Ok(Json(roles))
+}
+
+#[utoipa::path(get, path = "/people/lookup", description = "List people in a minimal format. Only confirmed, no solitary identities.", params(UserFilterOptions), responses((status = 200, description = "OK", body=Vec<PeopleLookupModel>)))]
+pub async fn lookup_people(
+    Query(opts): Query<UserFilterOptions>,
+    Extension(user): Extension<User>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user, AppRole::AccountManager, &data.db).await?;
+
+    let limit = opts.limit.unwrap_or(10);
+    // let search = opts.search.unwrap_or("".to_string());
+    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    // This might be red in rust-analyzer. Ignore this.
+    let record = conditional_query_as!(
+        PeopleLookupModel,
+        r#"SELECT
+            a.id as "id",
+            COALESCE(a.full_name, a.label) AS "full_name?",
+            jsonb_build_object('label', r.label, 'id', r.id) AS "room: RoomEmbed"
+        FROM
+            accounts_people a
+            LEFT JOIN res_leases l ON a.id = l.tenant_id
+            LEFT JOIN res_rooms r ON l.room_id = r.id {#j_wh_group} {#wh_search} {#wh_resident} ORDER BY r.label DESC LIMIT {limit} OFFSET {offset}"#,
+            #j_wh_group = match(opts.group) {
+                Some(groups) => "JOIN account_group_memberships agm ON a.id = agm.account_id WHERE agm.group_id = ANY({groups:Vec<Uuid>})",
+                None => "WHERE TRUE"
+            },
+            #wh_search = match (opts.search){
+                Some(src) => "AND COALESCE(a.full_name, a.label) ILIKE '%' || {src} || '%' OR r.label ILIKE '%' || {src} || '%'",
+                _ => ""
+            },
+            #wh_resident = match (opts.resident.unwrap_or(false)){
+            true => "AND r.label IS NOT NULL",
+            _ => ""
+            }
+    )
+        .fetch_all(&data.db)
+        .await?;
+    Ok((StatusCode::OK, Json(record)))
 }
 
 #[utoipa::path(get, path = "/people/me/roles", responses((status = 200, description = "OK", body=Vec<AppRole>)))]

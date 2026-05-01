@@ -14,14 +14,14 @@ pub struct ParamOptions {
 pub struct CreateDeviceSchema {
     pub label: String,
     pub mac: MacAddressWrapper,
-    pub cred: Uuid,
+    pub cred_id: Uuid,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UpdateDeviceSchema {
     pub label: Option<String>,
     pub mac: Option<MacAddressWrapper>,
-    pub cred: Option<Uuid>,
+    pub cred_id: Option<Uuid>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 struct Node {

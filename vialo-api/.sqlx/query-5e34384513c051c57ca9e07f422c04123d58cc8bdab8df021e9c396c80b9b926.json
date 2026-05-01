@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            a.id as \"id\",\n            COALESCE(a.full_name, a.label) AS \"full_name?\",\n            jsonb_build_object('label', r.label, 'id', r.id) AS \"room: RoomEmbed\"\n        FROM\n            accounts_people a\n            LEFT JOIN res_leases l ON a.id = l.tenant_id\n            LEFT JOIN res_rooms r ON l.room_id = r.id WHERE TRUE AND COALESCE(a.full_name, a.label) ILIKE '%' || $1 || '%' OR r.label ILIKE '%' || $1 || '%' AND r.label IS NOT NULL ORDER BY r.label DESC LIMIT $2 OFFSET $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "full_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "room: RoomEmbed",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "5e34384513c051c57ca9e07f422c04123d58cc8bdab8df021e9c396c80b9b926"
+}

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT nd.id, nd.label, nd.mac AS \"mac: MacAddressWrapper\", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as \"ipv4_addr?\", row_to_json(nc) as cred, row_to_json(nn) as network,\n        jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account!: AccountEmbed\"\n        FROM net_devices nd\n        JOIN net_cred nc ON nd.cred_id = nc.id\n        JOIN net_networks nn ON nc.network_id = nn.id\n        LEFT JOIN net_ip_assignments nia ON nia.device_id = nd.id\n        LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n        WHERE nc.account_id = $1 AND nd.id = $2",
+  "query": "SELECT nd.id, nd.label, nd.mac AS \"mac: MacAddressWrapper\", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as \"ipv4_addr?\", row_to_json(nc) as \"cred: NetworkCredentialEmbed\", row_to_json(nn) as \"network: NetworkModel\",\n                    jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account!: AccountEmbed\"\n                    FROM net_devices nd\n                    JOIN net_cred nc ON nc.id = nd.cred_id\n                    JOIN net_networks nn ON nc.network_id = nn.id\n                    LEFT JOIN net_ip_assignments nia ON nia.device_id = nd.id\n                    LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n                    WHERE nd.id = $1",
   "describe": {
     "columns": [
       {
@@ -50,12 +50,12 @@
       },
       {
         "ordinal": 9,
-        "name": "cred",
+        "name": "cred: NetworkCredentialEmbed",
         "type_info": "Json"
       },
       {
         "ordinal": 10,
-        "name": "network",
+        "name": "network: NetworkModel",
         "type_info": "Json"
       },
       {
@@ -66,7 +66,6 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Uuid"
       ]
     },
@@ -85,5 +84,5 @@
       null
     ]
   },
-  "hash": "3a7c1de732bdf4f452a3b5ea7221c9e96e916bab5e73c31f1e87a7cbdcca4891"
+  "hash": "df41c196a0768f71e31ee570cdaa696b85d2741ee56eed6cb52f9edea8836bf9"
 }

@@ -1,3 +1,4 @@
+use crate::helpers::people::IdentityModel;
 use crate::{
     AppState, helpers,
     http::util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans},
@@ -14,14 +15,6 @@ use sqlx::prelude::FromRow;
 use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
-#[derive(Serialize, Debug, FromRow, ToSchema)]
-pub struct IdentityModel {
-    pub id: Uuid,
-    pub account_id: Option<Uuid>,
-    pub full_name: Option<String>,
-    #[schema(format = Email)]
-    pub email: Option<String>,
-}
 
 #[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct PersonCandidateModel {
@@ -44,7 +37,7 @@ pub async fn get(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let person = sqlx::query_as!(IdentityModel, r#"SELECT i.id, ap.id as "account_id: Option<Uuid>", i.full_name, i.email FROM identities i LEFT JOIN accounts_people ap ON ap.auth_id = i.id WHERE i.id = $1"#, id)
+    let person = sqlx::query_as!(IdentityModel, r#"SELECT i.id, ap.id as "account_id: Option<Uuid>", i.full_name, i.email, i.phone FROM identities i LEFT JOIN accounts_people ap ON ap.auth_id = i.id WHERE i.id = $1"#, id)
         .fetch_one(&data.db)
         .await?;
 

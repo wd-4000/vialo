@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO identities (id, email, full_name, phone) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET (email, full_name, phone) = ($2, $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4385dc29851ed9d75cf14938778599f2956ae9033a05d3a4bed02fa032998a20"
+}

@@ -1,5 +1,12 @@
-use crate::http::{network::mac::MacAddressWrapper, util::models::AccountEmbed};
-use serde::Serialize;
+use crate::{
+    helpers::encryption::{self, Encrypted},
+    http::{
+        network::{mac::MacAddressWrapper, models::NetworkModel},
+        util::models::AccountEmbed,
+    },
+    impl_jsonb_embed,
+};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{FromRow, types::ipnetwork::IpNetwork};
 use utoipa::ToSchema;
@@ -56,6 +63,28 @@ pub struct DeviceWithRefsAndIp {
     pub ipv4_addr: Option<IpNetwork>,
 }
 
+#[derive(Serialize, Debug, Deserialize, Clone, ToSchema)]
+/*
+*   id uuid PRIMARY KEY default gen_random_uuid(),
+username text,
+password BYTEA,
+account_id uuid NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+network_id int NOT NULL REFERENCES net_networks (id) ON DELETE CASCADE,
+last_updated timestamptz
+*/
+pub struct NetworkCredentialEmbed {
+    pub id: Uuid,
+    pub username: Option<String>,
+    #[schema(value_type = Option<String>)]
+    #[serde(serialize_with = "encryption::serialize_exposed_opt")]
+    pub password: Option<Encrypted<String>>,
+    pub account_id: Uuid,
+    pub network_id: Uuid,
+    pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl_jsonb_embed!(NetworkCredentialEmbed);
+
 #[derive(Serialize, FromRow, ToSchema)]
 pub struct DeviceWithRefsAndIpAndAccountAndCredentialEmbed {
     pub id: Uuid,
@@ -73,8 +102,8 @@ pub struct DeviceWithRefsAndIpAndAccountAndCredentialEmbed {
 
     pub account: AccountEmbed,
 
-    pub cred: Option<Value>,
-    pub network: Option<Value>,
+    pub cred: Option<NetworkCredentialEmbed>,
+    pub network: Option<NetworkModel>,
 }
 
 #[derive(Serialize, FromRow, ToSchema)]

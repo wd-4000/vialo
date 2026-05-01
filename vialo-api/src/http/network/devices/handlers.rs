@@ -8,6 +8,7 @@ use crate::{
         network::{
             devices::models::{
                 DeviceWithRefsAndIpAndAccountAndCredentialEmbed, ListDeviceWithRefs,
+                NetworkCredentialEmbed,
             },
             mac::MacAddressWrapper,
             models::{CredentialModelWithPassword, NetAuth, NetworkModel},
@@ -283,7 +284,7 @@ pub async fn get_device_overview(
 ) -> Result<impl IntoResponse, VialoError> {
     return match sqlx::query_as!(
         DeviceWithRefsAndIpAndAccountAndCredentialEmbed,
-        r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", row_to_json(nc) as cred, row_to_json(nn) as network,
+        r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", row_to_json(nc) as "cred: NetworkCredentialEmbed", row_to_json(nn) as "network: NetworkModel",
         jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
         FROM net_devices nd
         JOIN net_cred nc ON nd.cred_id = nc.id
@@ -312,7 +313,7 @@ pub async fn get_device_overview(
             if is_manager {
                 return match sqlx::query_as!(
                     DeviceWithRefsAndIpAndAccountAndCredentialEmbed,
-                    r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", row_to_json(nc) as cred, row_to_json(nn) as network,
+                    r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", row_to_json(nc) as "cred: NetworkCredentialEmbed", row_to_json(nn) as "network: NetworkModel",
                     jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
                     FROM net_devices nd
                     JOIN net_cred nc ON nc.id = nd.cred_id
@@ -342,7 +343,7 @@ pub async fn get_device_overview(
 pub struct UpdateDeviceSchema {
     pub label: Option<String>,
     pub mac: Option<MacAddressWrapper>,
-    pub cred: Option<Uuid>,
+    pub cred_id: Option<Uuid>,
 }
 #[derive(Serialize, ToSchema)]
 pub struct UpdatedDeviceLabelResponse {
@@ -363,7 +364,7 @@ pub async fn update_device(
             AND (SELECT EXISTS (SELECT 1 FROM net_cred WHERE account_id = $1 AND id = $3 )))
         OR account_role_exists($1, 'network_manager'::app_role)
     ) AS allowed",
-    user.id, id, body.cred
+    user.id, id, body.cred_id
     )
     .fetch_one(&data.db)
     .await
@@ -376,7 +377,7 @@ pub async fn update_device(
         r#"UPDATE net_devices SET label = coalesce($1, label), mac = coalesce($2, mac), cred_id = coalesce($3, cred_id) WHERE id = $4 RETURNING  id, label, mac AS "mac: MacAddressWrapper", cred_id, last_updated, last_seen, hostname, realm_id"#,
         body.label,
         body.mac.map(|a| a.get_value()),
-        body.cred,
+        body.cred_id,
         id
     )
     .fetch_one(&data.db)

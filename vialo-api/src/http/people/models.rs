@@ -29,6 +29,13 @@ pub struct CurrentRoomOccupantsViewModel {
     pub room: Option<RoomEmbed>,
 }
 
+#[derive(Serialize, Debug, FromRow, ToSchema)]
+pub struct PeopleLookupModel {
+    pub id: Uuid,
+    pub full_name: Option<String>,
+    pub room: Option<RoomEmbed>,
+}
+
 // id | label  | email  | created_at | public
 #[derive(Serialize, Debug, FromRow, ToSchema)]
 pub struct GroupListModel {

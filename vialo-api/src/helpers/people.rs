@@ -1,9 +1,19 @@
 use anyhow::Result;
 use reqwest::Url;
+use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, Transaction};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::hooks::IdentityModel;
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct IdentityModel {
+    pub id: Uuid,
+    pub account_id: Option<Uuid>,
+    pub full_name: Option<String>,
+    #[schema(format = Email)]
+    pub email: Option<String>,
+    pub phone: Option<String>,
+}
 
 pub async fn delete_identity(id: Uuid, trans: &mut Transaction<'_, Postgres>) -> Result<()> {
     sqlx::query!(r#"DELETE FROM identities i WHERE i.id = $1"#, id)
@@ -29,8 +39,8 @@ pub async fn update_identity(
 ) -> Result<()> {
     // Insert/Update the identity
     sqlx::query!(
-        "INSERT INTO identities (id, email, full_name) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET (email, full_name) = ($2, $3)",
-        body.id, body.email, body.full_name
+        "INSERT INTO identities (id, email, full_name, phone) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET (email, full_name, phone) = ($2, $3, $4)",
+        body.id, body.email, body.full_name, body.phone
     ).execute(&mut **trans).await?;
 
     // Create initial admin account if needed

@@ -5,7 +5,12 @@ CREATE EXTENSION citext;
 -- Accounts
 --
 -- Table that stores Ory Kratos identity info
-CREATE TABLE identities (id uuid PRIMARY KEY, full_name text, email text);
+CREATE TABLE identities (
+  id uuid PRIMARY KEY,
+  full_name text,
+  email text,
+  phone text
+);
 
 -- General account info
 CREATE TABLE accounts (

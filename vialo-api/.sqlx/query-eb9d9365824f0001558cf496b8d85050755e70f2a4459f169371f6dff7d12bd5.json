@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT i.id, ap.id as \"account_id: Option<Uuid>\", i.full_name, i.email FROM identities i LEFT JOIN accounts_people ap ON ap.auth_id = i.id WHERE i.id = $1",
+  "query": "SELECT i.id, ap.id as \"account_id: Option<Uuid>\", i.full_name, i.email, i.phone FROM identities i LEFT JOIN accounts_people ap ON ap.auth_id = i.id WHERE i.id = $1",
   "describe": {
     "columns": [
       {
@@ -22,6 +22,11 @@
         "ordinal": 3,
         "name": "email",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "phone",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -33,8 +38,9 @@
       false,
       false,
       true,
+      true,
       true
     ]
   },
-  "hash": "fdd3c1dd11eb67a0a86689d322998d070ee9eff29f366b71458fbb152b360ae0"
+  "hash": "eb9d9365824f0001558cf496b8d85050755e70f2a4459f169371f6dff7d12bd5"
 }

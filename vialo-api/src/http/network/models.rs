@@ -1,5 +1,6 @@
 use crate::helpers::encryption::{self as encryption, Encrypted};
 use crate::http::util::models::AccountEmbed;
+use crate::impl_jsonb_embed;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, types::ipnetwork};
@@ -28,6 +29,7 @@ pub struct NetworkModel {
     pub active: bool,
     pub wired: bool,
 }
+impl_jsonb_embed!(NetworkModel);
 
 #[derive(FromRow, Serialize, ToSchema)]
 pub struct RealmModel {
