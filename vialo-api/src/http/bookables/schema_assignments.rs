@@ -22,9 +22,9 @@ pub struct BookableSchemaAssignment {
     pub schema_id: i32,
 }
 
-#[utoipa::path(get, path = "/bookables/{asset_id}/schema_assignments", params(ListOptions), responses((status = 200, description = "OK", body=Vec<BookableSchemaAssignment>)))]
+#[utoipa::path(get, path = "/bookables/{id}/schema_assignments", params(ListOptions), responses((status = 200, description = "OK", body=Vec<BookableSchemaAssignment>)))]
 pub async fn list(
-    Path(asset_id): Path<i32>,
+    Path(id): Path<i32>,
     Query(opts): Query<ListOptions>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
@@ -40,7 +40,7 @@ pub async fn list(
             schema_id
         FROM
             bookable_schema_assignments
-        WHERE asset_id = {asset_id}
+        WHERE asset_id = {id}
             LIMIT {limit} OFFSET {offset}"#
     )
     .fetch_all(&data.db)
@@ -49,9 +49,9 @@ pub async fn list(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(post, path = "/bookables/{asset_id}/schema_assignments", request_body = BookableSchemaAssignment, responses((status = 204, description = "Created")))] //no body
+#[utoipa::path(post, path = "/bookables/{id}/schema_assignments", request_body = BookableSchemaAssignment, responses((status = 204, description = "Created")))] //no body
 pub async fn post(
-    Path(asset_id): Path<i32>,
+    Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
     JsonE(body): JsonE<BookableSchemaAssignment>,
@@ -61,7 +61,7 @@ pub async fn post(
         r#"SELECT bat.group_id FROM bookable_assets ba
          JOIN bookable_asset_types bat ON ba.asset_type = bat.id
          WHERE ba.id = $1"#,
-        asset_id
+        id
     )
     .fetch_optional(&data.db)
     .await?
@@ -77,7 +77,7 @@ pub async fn post(
         "INSERT INTO bookable_schema_assignments (begins, schema_id, asset_id) VALUES ($1, $2, $3)",
         body.begins,
         body.schema_id,
-        asset_id
+        id
     )
     .execute(&mut *conn)
     .await?;
@@ -85,9 +85,9 @@ pub async fn post(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(delete, path = "/bookables/{asset_id}/schema_assignments/{begins}", responses((status = 204, description = "Deleted")))] //no body
+#[utoipa::path(delete, path = "/bookables/{id}/schema_assignments/{begins}", responses((status = 204, description = "Deleted")))] //no body
 pub async fn delete(
-    Path((asset_id, begins)): Path<(i32, DateTime<Utc>)>,
+    Path((id, begins)): Path<(i32, DateTime<Utc>)>,
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
@@ -96,7 +96,7 @@ pub async fn delete(
         r#"SELECT bat.group_id FROM bookable_assets ba
          JOIN bookable_asset_types bat ON ba.asset_type = bat.id
          WHERE ba.id = $1"#,
-        asset_id
+        id
     )
     .fetch_optional(&data.db)
     .await?
@@ -111,7 +111,7 @@ pub async fn delete(
     sqlx::query!(
         "DELETE FROM bookable_schema_assignments WHERE begins = $1 AND asset_id = $2",
         begins,
-        asset_id
+        id
     )
     .execute(&mut *conn)
     .await?;

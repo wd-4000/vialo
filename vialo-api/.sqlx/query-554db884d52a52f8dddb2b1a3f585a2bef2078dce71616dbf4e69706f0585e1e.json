@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            upper(ba.during) as \"ends: PgDateTime\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true AND account_id = $1 AND ba.during @> $2::timestamp   ORDER BY during LIMIT $3 OFFSET $4",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamp) as \"ends!: PgDateTime\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true  AND ba.during @> $1::timestamp   ORDER BY during LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -30,7 +30,7 @@
       },
       {
         "ordinal": 5,
-        "name": "ends: PgDateTime",
+        "name": "ends!: PgDateTime",
         "type_info": "Timestamp"
       },
       {
@@ -46,7 +46,6 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Timestamp",
         "Int8",
         "Int8"
@@ -63,5 +62,5 @@
       false
     ]
   },
-  "hash": "e1ac0e27d859759a068d324859efbd3a8d77f563c92222c1af8864e28cf86a4e"
+  "hash": "554db884d52a52f8dddb2b1a3f585a2bef2078dce71616dbf4e69706f0585e1e"
 }

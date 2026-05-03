@@ -39,19 +39,35 @@ pub async fn list(
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
     // Execute the query and handle the result
-    let record = conditional_query_as!(
-        BookableAssetTypeTranslated,
-        r#"SELECT
-            id,
-            get_i18n_string(bd.name_i18n, {langs:Vec<String>}) AS name,
-            bd.group_id
-        FROM
-            bookable_asset_types bd  LIMIT {limit} OFFSET {offset}"#
-    )
-    .fetch_all(&data.db)
-    .await?;
+    if let Some(search) = opts.search {
+        let record = conditional_query_as!(
+            BookableAssetTypeTranslated,
+            r#"SELECT id, name, group_id FROM (SELECT
+                id,
+                get_i18n_string(bd.name_i18n, {langs:Vec<String>}) AS name,
+                bd.group_id
+            FROM
+                bookable_asset_types bd) WHERE name ILIKE '%' || {search} || '%' LIMIT {limit} OFFSET {offset}"#
+        )
+        .fetch_all(&data.db)
+        .await?;
 
-    Ok((StatusCode::OK, Json(record)))
+        Ok((StatusCode::OK, Json(record)))
+    } else {
+        let record = conditional_query_as!(
+            BookableAssetTypeTranslated,
+            r#"SELECT
+                id,
+                get_i18n_string(bd.name_i18n, {langs:Vec<String>}) AS name,
+                bd.group_id
+            FROM
+                bookable_asset_types bd LIMIT {limit} OFFSET {offset}"#
+        )
+        .fetch_all(&data.db)
+        .await?;
+
+        Ok((StatusCode::OK, Json(record)))
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            upper(ba.during) as \"ends: PgDateTime\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true  AND ba.during @> $1::timestamp  AND UPPER(ba.during) <= $2  ORDER BY during LIMIT $3 OFFSET $4",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamp) as \"ends!: PgDateTime\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true  AND ba.during @> $1::timestamp   ORDER BY during LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -30,7 +30,7 @@
       },
       {
         "ordinal": 5,
-        "name": "ends: PgDateTime",
+        "name": "ends!: PgDateTime",
         "type_info": "Timestamp"
       },
       {
@@ -47,7 +47,6 @@
     "parameters": {
       "Left": [
         "Timestamp",
-        "Timestamp",
         "Int8",
         "Int8"
       ]
@@ -63,5 +62,5 @@
       false
     ]
   },
-  "hash": "87673f4262278225fbc7c9d0043b0e79e8afd3324c4b5e26d91fe9459c929051"
+  "hash": "3fe76f6c4af29ec1f93c8cc468138545411d9c75bbac9dfad76e5b8f90051e12"
 }

@@ -34,6 +34,7 @@ pub struct BookableFilterOptions {
     pub lang: Option<Vec<String>>,
     pub page: Option<i64>,
     pub limit: Option<i64>,
+    pub search: Option<String>,
     pub asset_types: Option<Vec<i32>>,
 }
 
@@ -61,8 +62,8 @@ pub async fn list_bookables(
                 get_i18n_string(name_i18n, {langs:Vec<String>}) AS name,
                 asset_type,
                 status as "status!: BookableStatus",
-                lower(during) as begins,
-                upper(during)  as "ends: PgDateTime"
+                begins,
+                ends as "ends: PgDateTime"
             FROM
                 bookable_asset_status
             {#asset_type} ORDER BY id LIMIT {limit} OFFSET {offset}"#,
@@ -112,8 +113,8 @@ pub async fn quick_unlock(
                    bd.id as "id!",
                    bd.asset_type as "asset_type!",
                    bd.status as "status!: BookableStatus",
-                   lower(during) as begins,
-                   upper(during) as "ends: PgDateTime"
+                   begins,
+                   ends as "ends: PgDateTime"
                FROM
                 bookable_asset_status bd WHERE id = $1;"#,
                 id
@@ -314,8 +315,8 @@ pub async fn get_bookable(
                get_i18n_string(bd.name_i18n, $1) AS name,
                bd.asset_type,
                bd.status as "status!: BookableStatus",
-               lower(during) as begins,
-               upper(during) as "ends: PgDateTime"
+               begins,
+               ends as "ends: PgDateTime"
            FROM
                bookable_asset_status bd WHERE id = $2;"#,
             &langs,

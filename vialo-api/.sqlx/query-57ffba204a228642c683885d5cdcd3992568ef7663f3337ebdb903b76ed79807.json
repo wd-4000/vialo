@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "update bookable_appointments set activated = NOW() FROM bookable_appointments bap JOIN bookable_assets ba ON bap.asset_id = ba.id WHERE bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as \"id!\", ba.asset_type as \"asset_type!\", 'active'::bookable_status_type as \"status!: BookableStatus\",\n        upper(bap.during) as begins,\n        lower(bap.during) as \"ends: PgDateTime\";",
+  "query": "\n                SELECT\n                   bd.id as \"id!\",\n                   bd.asset_type as \"asset_type!\",\n                   bd.status as \"status!: BookableStatus\",\n                   begins,\n                   ends as \"ends: PgDateTime\"\n               FROM\n                bookable_asset_status bd WHERE id = $1;",
   "describe": {
     "columns": [
       {
@@ -44,17 +44,16 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid"
+        "Int4"
       ]
     },
     "nullable": [
-      false,
       true,
-      null,
-      null,
-      null
+      true,
+      true,
+      true,
+      true
     ]
   },
-  "hash": "daa51f5d695bb100edb0a82fd786010c5f438862bba2293ce849e2d7472c856e"
+  "hash": "57ffba204a228642c683885d5cdcd3992568ef7663f3337ebdb903b76ed79807"
 }

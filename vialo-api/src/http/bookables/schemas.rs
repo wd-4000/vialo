@@ -1,7 +1,7 @@
 use super::models::BoardPostIdModel;
 use crate::AppState;
 use crate::http::util::grab_authd_conn_user;
-use crate::http::util::{JsonE, ListOptions, User, VialoError};
+use crate::http::util::{JsonE, SearchableListOptions, User, VialoError};
 use crate::permissions::{AppRole, check_member_of_group_or_app_role};
 use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
@@ -22,9 +22,9 @@ pub struct BookableSchema {
     pub slot_price: Option<i32>,
 }
 
-#[utoipa::path(get, path = "/bookables/schemas", params(ListOptions), responses((status = 200, description = "OK", body=Vec<BookableSchema>)))]
+#[utoipa::path(get, path = "/bookables/schemas", params(SearchableListOptions), responses((status = 200, description = "OK", body=Vec<BookableSchema>)))]
 pub async fn list(
-    Query(opts): Query<ListOptions>,
+    Query(opts): Query<SearchableListOptions>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
     let limit = opts.limit.unwrap_or(10);
@@ -41,7 +41,13 @@ pub async fn list(
             asset_type,
             slot_price
         FROM
-            bookable_schemas LIMIT {limit} OFFSET {offset}"#
+            bookable_schemas
+        {#search}
+        LIMIT {limit} OFFSET {offset}"#,
+            #search = match &opts.search {
+                Some(s) => "WHERE label  ILIKE '%' || {s} || '%'",
+                None => "",
+            }
     )
     .fetch_all(&data.db)
     .await?;

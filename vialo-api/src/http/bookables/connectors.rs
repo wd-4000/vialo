@@ -76,12 +76,7 @@ pub async fn list(
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
     let limit = opts.limit.unwrap_or(10);
-
-    let _langs = opts
-        .lang
-        .unwrap_or(vec![String::from("en"), String::from("de")]);
-
-    let _offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
     // Execute the query and handle the result
     let record = conditional_query_as!(
@@ -92,7 +87,11 @@ pub async fn list(
             device_name,
             serial_number,
             mac::text
-        FROM bookable_connectors;"#
+        FROM bookable_connectors {#search} LIMIT {limit} OFFSET {offset}"#,
+        #search = match &opts.search {
+            Some(s) => "WHERE device_name  ILIKE '%' || {s} || '%'",
+            None => "",
+        }
     )
     .fetch_all(&data.db)
     .await?;

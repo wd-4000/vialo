@@ -45,7 +45,7 @@ pub struct BookableAppointmentType {
     pub transaction_id: Option<Uuid>,
     pub account: Option<AccountEmbed>,
     pub begins: Option<NaiveDateTime>,
-    pub ends: Option<PgDateTime>,
+    pub ends: PgDateTime,
     #[schema(format = DateTime)]
     pub activated: Option<chrono::DateTime<chrono::Utc>>,
     pub maintenance: Option<bool>,
@@ -60,8 +60,8 @@ pub async fn activate(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     let bookable_record = query_as!(BookableAssetStatus, r#"update bookable_appointments set activated = NOW() FROM bookable_appointments bap JOIN bookable_assets ba ON bap.asset_id = ba.id WHERE bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as "id!", ba.asset_type as "asset_type!", 'active'::bookable_status_type as "status!: BookableStatus",
-        upper(bap.during) as begins,
-        lower(bap.during) as "ends: PgDateTime";"#, id, user.id).fetch_one(&mut *conn).await?;
+        lower(bap.during) as begins,
+        coalesce(upper(bap.during), '+infinity'::timestamp) as "ends!: PgDateTime";"#, id, user.id).fetch_one(&mut *conn).await?;
 
     let evil_data = data.clone();
     tokio::spawn(async move {
@@ -104,7 +104,7 @@ pub async fn list(
             ba.transaction_id,
             {#account_info}
             lower(ba.during) as begins,
-            upper(ba.during) as "ends: PgDateTime",
+            coalesce(upper(ba.during), '+infinity'::timestamp) as "ends!: PgDateTime",
             ba.activated,
             ba.maintenance
         FROM

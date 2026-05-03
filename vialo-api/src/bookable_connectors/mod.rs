@@ -37,8 +37,8 @@ pub async fn run(app_state: Arc<AppState>) -> Result<(), anyhow::Error> {
             BookableAssetStatusWithConnector,
             r#"SELECT id as "id!",
             status as "status!: BookableStatus",
-            lower(during) as begins,
-            upper(during) as "ends: PgDateTime",
+            begins,
+            ends as "ends: PgDateTime",
             connector as "connector!",
             connector_output_id as "connector_output_id!"
         FROM bookable_asset_status

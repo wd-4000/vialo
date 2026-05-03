@@ -147,7 +147,7 @@ pub struct PersonalTransactionModel {
     pub to_account: Option<AccountEmbed>,
     pub from_account: Option<AccountEmbed>,
     pub product: Option<ProductType>,
-    pub credits: Option<i32>,
+    pub credits: i32,
     pub status: TransactionStatus,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
@@ -160,7 +160,7 @@ pub struct PersonalTransactionModelWithProductDetails {
     pub from_account: Option<AccountEmbed>,
     pub product: Option<ProductEmbed>,
     pub label: Option<String>,
-    pub credits: Option<i32>,
+    pub credits: i32,
     pub status: TransactionStatus,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
@@ -183,7 +183,7 @@ pub struct PersonOverviewNetworkModel {
 pub struct PersonOverviewModel {
     #[serde(flatten)]
     pub account: AccountModelForOverview,
-    pub groups: Vec<GroupStubListModel>,
+    pub groups: Vec<GroupStubListModelWithRole>,
     pub contract: Option<LeaseModelWithEmbeddedSublease>,
     pub transactions: Vec<PersonalTransactionModel>,
     pub network: PersonOverviewNetworkModel,
