@@ -89,7 +89,13 @@ SELECT
     y.status,
     'available'::bookable_status_type
   ) as status,
-  COALESCE(x.during, y.during) as during
+  CASE
+    WHEN COALESCE(x.during, y.during) IS NOT NULL THEN COALESCE(
+      upper(COALESCE(x.during, y.during)),
+      'infinity'::timestamp
+    )
+  END as ends,
+  lower(COALESCE(x.during, y.during)) as begins
 FROM
   bookable_assets ba
   LEFT JOIN LATERAL (

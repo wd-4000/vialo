@@ -17,7 +17,7 @@ use axum::{
 };
 use sqlx::query_as;
 
-#[utoipa::path(get, path = "/network/networks", responses((status = 200, description = "OK", body=Vec<NetworkModel>)))]
+#[utoipa::path(get, path = "/network/networks", params(NetworkFilterOptions), responses((status = 200, description = "OK", body=Vec<NetworkModel>)))]
 pub async fn list_networks(
     Query(opts): Query<NetworkFilterOptions>,
     State(data): State<Arc<AppState>>,

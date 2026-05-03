@@ -46,6 +46,14 @@ pub struct ContractInfo {
     pub lessor: Option<AccountPersonEmbed>,
 }
 
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ContractInfoSchema {
+    pub room: String,
+    pub begins: chrono::NaiveDate,
+    pub ends: chrono::NaiveDate,
+    pub lessor_id: Option<Uuid>,
+}
+
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreateUserSchema {
@@ -54,7 +62,7 @@ pub struct CreateUserSchema {
     #[schema(format = Email)]
     pub email: Option<String>,
     pub auth_id: Option<Uuid>,
-    pub contract: Option<ContractInfo>,
+    pub contract: Option<ContractInfoSchema>,
     pub label: Option<String>,
     pub membership_end: PgDate,
     pub auto_setup_network: Option<bool>,

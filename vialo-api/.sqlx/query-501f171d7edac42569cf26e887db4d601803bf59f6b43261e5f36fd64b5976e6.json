@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            id,\n            label,\n            schedule::text[] as \"schedule!\",\n            asset_type,\n            slot_price\n        FROM\n            bookable_schemas LIMIT $1 OFFSET $2",
+  "query": "SELECT\n            id,\n            label,\n            schedule::text[] as \"schedule!\",\n            asset_type,\n            slot_price\n        FROM\n            bookable_schemas\n        \n        LIMIT $1 OFFSET $2",
   "describe": {
     "columns": [
       {
@@ -43,5 +43,5 @@
       false
     ]
   },
-  "hash": "7a59215c8536954b766c77d0b6f4b4db8c4ae68c7e726b83bceb4cb1326e072c"
+  "hash": "501f171d7edac42569cf26e887db4d601803bf59f6b43261e5f36fd64b5976e6"
 }

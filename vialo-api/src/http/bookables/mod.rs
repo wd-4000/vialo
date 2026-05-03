@@ -54,11 +54,11 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(handlers::get_bookable).put(handlers::put_bookable),
         )
         .route(
-            "/{asset_id}/schema_assignments",
+            "/{id}/schema_assignments",
             get(schema_assignments::list).post(schema_assignments::post),
         )
         .route(
-            "/{asset_id}/schema_assignments/{begins}",
+            "/{id}/schema_assignments/{begins}",
             delete(schema_assignments::delete),
         )
         .route(

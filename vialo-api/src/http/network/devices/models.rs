@@ -63,7 +63,7 @@ pub struct DeviceWithRefsAndIp {
     pub ipv4_addr: Option<IpNetwork>,
 }
 
-#[derive(Serialize, Debug, Deserialize, Clone, ToSchema)]
+#[derive(Serialize, Debug, Deserialize, ToSchema)]
 /*
 *   id uuid PRIMARY KEY default gen_random_uuid(),
 username text,
@@ -81,6 +81,7 @@ pub struct NetworkCredentialEmbed {
     pub account_id: Uuid,
     pub network_id: Uuid,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
+    pub network: Option<NetworkModel>,
 }
 
 impl_jsonb_embed!(NetworkCredentialEmbed);
@@ -103,7 +104,6 @@ pub struct DeviceWithRefsAndIpAndAccountAndCredentialEmbed {
     pub account: AccountEmbed,
 
     pub cred: Option<NetworkCredentialEmbed>,
-    pub network: Option<NetworkModel>,
 }
 
 #[derive(Serialize, FromRow, ToSchema)]

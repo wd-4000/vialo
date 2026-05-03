@@ -361,7 +361,7 @@ pub async fn get_person_overview(
       }
     let q = try_join!(
         account_task,
-        sqlx::query_as!(GroupStubListModel, "select id, label from account_group_memberships agm join account_groups ag on agm.group_id = ag.id WHERE account_id = $1", id)
+         sqlx::query_as!(GroupStubListModelWithRole, "select id, label, role::text from account_group_memberships agm join account_groups ag on agm.group_id = ag.id WHERE account_id = $1", id)
             .fetch_all(&data.db),
         sqlx::query_as!(
             LeaseModelWithEmbeddedSublease,
@@ -447,7 +447,7 @@ pub async fn add_person(
         sqlx::query!(
                     "INSERT INTO res_leases (tenant_id, lessor_id, room_id, begins, ends) VALUES ($1, $2, $3, $4, $5)",
                     created_user.id,
-                    contract.lessor.as_ref().map(|lessor| lessor.id),
+                    contract.lessor_id,
                     find_room.unwrap().id,
                     contract.begins,
                     contract.ends
@@ -553,7 +553,7 @@ pub async fn put_person(
         sqlx::query!(
                     "INSERT INTO res_leases (tenant_id, lessor_id, room_id, begins, ends) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (tenant_id) DO UPDATE SET (lessor_id, room_id, begins, ends) = ($2, $3, $4, $5)",
                     updated_user.id,
-                    contract.lessor.as_ref().map(|lessor| lessor.id),
+                    contract.lessor_id,
                     find_room.unwrap().id,
                     contract.begins,
                     contract.ends

@@ -25,6 +25,13 @@ pub struct ListOptions {
     pub limit: Option<i64>,
 }
 
+#[derive(Deserialize, Debug, Default, IntoParams)]
+pub struct SearchableListOptions {
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+    pub search: Option<String>,
+}
+
 #[derive(Debug)]
 pub enum VialoError {
     Anyhow(anyhow::Error),

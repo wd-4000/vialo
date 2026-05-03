@@ -15,7 +15,7 @@ pub enum NetAuth {
     Password,
 }
 
-#[derive(FromRow, Serialize, Deserialize, ToSchema)]
+#[derive(FromRow, Serialize, Deserialize, Debug, ToSchema)]
 pub struct NetworkModel {
     pub id: i32,
     pub label: String,

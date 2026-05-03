@@ -284,7 +284,7 @@ pub async fn get_device_overview(
 ) -> Result<impl IntoResponse, VialoError> {
     return match sqlx::query_as!(
         DeviceWithRefsAndIpAndAccountAndCredentialEmbed,
-        r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", row_to_json(nc) as "cred: NetworkCredentialEmbed", row_to_json(nn) as "network: NetworkModel",
+        r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", (row_to_json(nc)::jsonb || jsonb_build_object('network', row_to_json(nn))) as "cred: NetworkCredentialEmbed",
         jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
         FROM net_devices nd
         JOIN net_cred nc ON nd.cred_id = nc.id
@@ -313,7 +313,7 @@ pub async fn get_device_overview(
             if is_manager {
                 return match sqlx::query_as!(
                     DeviceWithRefsAndIpAndAccountAndCredentialEmbed,
-                    r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", row_to_json(nc) as "cred: NetworkCredentialEmbed", row_to_json(nn) as "network: NetworkModel",
+                    r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", (row_to_json(nc)::jsonb || jsonb_build_object('network', row_to_json(nn))) as "cred: NetworkCredentialEmbed",
                     jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
                     FROM net_devices nd
                     JOIN net_cred nc ON nc.id = nd.cred_id
