@@ -18,7 +18,7 @@ pub struct BookableSchema {
     pub id: i32,
     pub label: Option<String>,
     pub schedule: Vec<String>,
-    pub asset_type: Option<i32>,
+    pub asset_type: i32,
     pub slot_price: Option<i32>,
 }
 
@@ -132,7 +132,7 @@ pub async fn delete(
 pub struct BookableSchemaPostOrPut {
     pub label: Option<String>,
     pub schedule: Vec<String>,
-    pub asset_type: Option<i32>,
+    pub asset_type: i32,
     pub slot_price: Option<i32>,
 }
 
@@ -143,28 +143,17 @@ pub async fn post(
     JsonE(body): JsonE<BookableSchemaPostOrPut>,
 ) -> Result<impl IntoResponse, VialoError> {
     // Member of the target asset type's group or BookableManager may create schemas.
-    if let Some(asset_type_id) = body.asset_type {
-        let group_id = sqlx::query_scalar!(
-            "SELECT group_id FROM bookable_asset_types WHERE id = $1",
-            asset_type_id
-        )
-        .fetch_optional(&data.db)
-        .await?
-        .flatten()
-        .ok_or(VialoError::NotFound())?;
+    let group_id = sqlx::query_scalar!(
+        "SELECT group_id FROM bookable_asset_types WHERE id = $1",
+        body.asset_type
+    )
+    .fetch_optional(&data.db)
+    .await?
+    .flatten()
+    .ok_or(VialoError::NotFound())?;
 
-        check_member_of_group_or_app_role(
-            user.clone(),
-            group_id,
-            AppRole::BookableManager,
-            &data.db,
-        )
+    check_member_of_group_or_app_role(user.clone(), group_id, AppRole::BookableManager, &data.db)
         .await?;
-    } else {
-        // No asset_type means no group to check against; require BookableManager.
-        crate::permissions::check_app_role(user.clone(), AppRole::BookableManager, &data.db)
-            .await?;
-    }
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
@@ -207,24 +196,22 @@ pub async fn put(
     )
     .await?;
 
-    if let Some(new_asset_type_id) = body.asset_type {
-        let new_group_id = sqlx::query_scalar!(
-            "SELECT group_id FROM bookable_asset_types WHERE id = $1",
-            new_asset_type_id
-        )
-        .fetch_optional(&data.db)
-        .await?
-        .flatten()
-        .ok_or(VialoError::NotFound())?;
+    let new_group_id = sqlx::query_scalar!(
+        "SELECT group_id FROM bookable_asset_types WHERE id = $1",
+        body.asset_type
+    )
+    .fetch_optional(&data.db)
+    .await?
+    .flatten()
+    .ok_or(VialoError::NotFound())?;
 
-        check_member_of_group_or_app_role(
-            user.clone(),
-            new_group_id,
-            AppRole::BookableManager,
-            &data.db,
-        )
-        .await?;
-    }
+    check_member_of_group_or_app_role(
+        user.clone(),
+        new_group_id,
+        AppRole::BookableManager,
+        &data.db,
+    )
+    .await?;
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 

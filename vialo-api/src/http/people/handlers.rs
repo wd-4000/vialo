@@ -79,7 +79,7 @@ pub async fn list_people(
             a.id as "id?",
             i.id as "auth_id?",
             COALESCE(a.full_name, a.label, i.full_name) AS "full_name?",
-            jsonb_build_object('label', r.label, 'id', r.id) AS "room: RoomEmbed"
+            CASE WHEN r.id IS NOT NULL THEN jsonb_build_object('label', r.label, 'id', r.id) END AS "room: RoomEmbed"
         FROM
             accounts_people a
             FULL JOIN identities i ON i.id = a.auth_id

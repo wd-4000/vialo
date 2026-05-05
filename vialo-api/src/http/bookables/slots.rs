@@ -10,8 +10,9 @@ use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::types::JsonValue;
-use sqlx::{query, query_as};
+use sqlx::{query, query_as, query_scalar};
 use sqlx_conditional_queries::conditional_query_as;
+use std::collections::HashMap;
 use std::i64;
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
@@ -23,22 +24,19 @@ pub struct TakenSlotQuery {
     pub asset_id: Vec<i32>,
 }
 
-#[derive(Deserialize, Serialize, ToSchema)]
-pub struct TakenSlots {
-    #[schema(value_type = HashMap<String, HashMap<String, Vec<i32>>>)]
-    pub taken: JsonValue,
-}
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct TakenSlots(HashMap<String, HashMap<String, Vec<i32>>>);
+impl_jsonb_embed!(TakenSlots);
 
 #[utoipa::path(get, path = "/bookables/slots/taken", params(TakenSlotQuery), responses((status = 200, description = "OK", body=TakenSlots)))]
 pub async fn taken_slots(
     Query(opts): Query<TakenSlotQuery>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let record = query_as!(
-        TakenSlots,
-        "select jsonb_object_agg(d.date, d.assets) as taken from (
+    let record: TakenSlots = query_scalar!(
+        r#"select coalesce(jsonb_object_agg(d.date, d.assets), '{}'::jsonb) as "taken!: TakenSlots" from (
             SELECT * from get_taken_slots($1, $2, $3)
-        ) d",
+        ) d"#,
         &opts.asset_id,
         opts.from,
         opts.to
@@ -46,12 +44,12 @@ pub async fn taken_slots(
     .fetch_one(&data.db)
     .await?;
 
-    Ok((StatusCode::OK, Json(record.taken)))
+    Ok((StatusCode::OK, Json(record)))
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, ToSchema)]
 pub struct Transition {
-    pub schema: i32,
+    pub schema_id: i32,
     pub begins: DateTime<Utc>,
     pub schedule: Vec<NaiveTime>,
     pub slot_price: i32,
@@ -61,8 +59,8 @@ impl_jsonb_embed!(Transition);
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct SchemaPages {
-    pub transitions: Option<Vec<Transition>>,
-    pub assets: Option<Vec<i32>>,
+    pub transitions: Vec<Transition>,
+    pub assets: Vec<i32>,
 }
 #[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct SlotSchemaQuery {
@@ -105,7 +103,7 @@ pub async fn slot_schemas(
            bd.id as "id!",
            icon,
            get_i18n_string(bd.name_i18n, {langs: Vec<String>}) AS name,
-           bd.asset_type,
+           bd.asset_type as "asset_type!",
            status as "status!: BookableStatus"
        FROM
            bookable_asset_status bd WHERE TRUE {#asset_type} {#asset_id}"#,
@@ -125,7 +123,7 @@ pub async fn slot_schemas(
 
     let page_query = query_as!(
         SchemaPages,
-        r#"SELECT transitions as "transitions: Vec<Transition>", ARRAY_AGG(asset_id) as assets FROM (SELECT ARRAY_AGG(jsonb_build_object('schema', bsa.schema_id, 'begins', bsa.begins, 'schedule', bs.schedule, 'slot_price', slot_price) ORDER BY bsa.begins) as transitions, bsa.asset_id FROM bookable_schema_assignments bsa JOIN bookable_schemas bs ON bs.id = bsa.schema_id WHERE bsa.asset_id = ANY($1) AND bsa.begins <= $2::date group by bsa.asset_id) group by transitions;"#,
+        r#"SELECT coalesce(transitions, ARRAY[]::jsonb[]) as "transitions!: Vec<Transition>", coalesce(ARRAY_AGG(asset_id), ARRAY[]::integer[]) as "assets!" FROM (SELECT ARRAY_AGG(jsonb_build_object('schema_id', bsa.schema_id, 'begins', bsa.begins, 'schedule', bs.schedule, 'slot_price', slot_price) ORDER BY bsa.begins) as transitions, bsa.asset_id FROM bookable_schema_assignments bsa JOIN bookable_schemas bs ON bs.id = bsa.schema_id WHERE bsa.asset_id = ANY($1) AND bsa.begins <= $2::date group by bsa.asset_id) group by transitions;"#,
         &asset_ids,
         opts.to
     )

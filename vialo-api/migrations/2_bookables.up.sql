@@ -27,7 +27,7 @@ CREATE TABLE bookable_assets (
   name_i18n int REFERENCES i18n_index,
   slug citext UNIQUE,
   icon citext,
-  asset_type int REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
+  asset_type int NOT NULL REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
   quick_unlock tsrange,
   connector int REFERENCES bookable_connectors,
   connector_output_id int
@@ -37,7 +37,7 @@ CREATE TABLE bookable_schemas (
   id int PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   label text,
   schedule time[] NOT NULL,
-  asset_type int REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
+  asset_type int NOT NULL REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
   slot_price int NOT NULL
 );
 
