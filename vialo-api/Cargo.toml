@@ -36,10 +36,10 @@ sqlx = { version = "0.8.6", features = [
     "ipnetwork",
 ] }
 sqlx-conditional-queries = { version = "0.3.2", features = ["postgres"] }
-tokio = { version = "1.52.0", features = ["full"] }
+tokio = { version = "1.52.2", features = ["full"] }
 tower-http = { version = "0.6.8", features = ["cors", "trace"] }
-uuid = { version = "1.23.0", features = ["serde", "v4"] }
-reqwest = { version = "0.13.2", features = ["json", "socks", "cookies", "native-tls"], default-features = false}
+uuid = { version = "1.23.1", features = ["serde", "v4"] }
+reqwest = { version = "0.13.3", features = ["json", "socks", "cookies", "native-tls"], default-features = false}
 urlencoding = "2.1.3"
 xml_dom = "0.2.8"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
@@ -59,9 +59,9 @@ pulldown-cmark = "0.13.3"
 ammonia = "4.1.2"
 cfg-if = "1.0.4"
 itertools = "0.14.0"
-serde_with = "3.18.0"
+serde_with = "3.19.0"
 ory-kratos-client = "26.2.0"
-utoipa = { version = "5.4.0", features = ["axum_extras", "uuid", "chrono", "macros"] }
+utoipa = { version = "5.5.0", features = ["axum_extras", "uuid", "chrono", "macros"] }
 utoipauto = "0.2.0"
 chacha20poly1305 = { version = "0.10.1", features = ["std"] }
 hex = "0.4"
