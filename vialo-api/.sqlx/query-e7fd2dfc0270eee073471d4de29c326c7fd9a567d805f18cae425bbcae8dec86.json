@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            a.id as \"id?\",\n            i.id as \"auth_id?\",\n            COALESCE(a.full_name, a.label, i.full_name) AS \"full_name?\",\n            CASE WHEN r.id IS NOT NULL THEN jsonb_build_object('label', r.label, 'id', r.id) END AS \"room: RoomEmbed\"\n        FROM\n            accounts_people a\n            FULL JOIN identities i ON i.id = a.auth_id\n            LEFT JOIN res_leases l ON a.id = l.tenant_id\n            LEFT JOIN res_rooms r ON l.room_id = r.id WHERE TRUE  AND r.label IS NOT NULL ORDER BY (a.id IS NULL) DESC, (i.id IS NULL) DESC, r.label DESC LIMIT $1 OFFSET $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "auth_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "full_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "room: RoomEmbed",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "e7fd2dfc0270eee073471d4de29c326c7fd9a567d805f18cae425bbcae8dec86"
+}

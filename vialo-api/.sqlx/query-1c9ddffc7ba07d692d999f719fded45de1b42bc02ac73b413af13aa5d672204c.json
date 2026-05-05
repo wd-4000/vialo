@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n           bd.id as \"id!\",\n           icon,\n           get_i18n_string(bd.name_i18n, $1) AS name,\n           bd.asset_type,\n           status as \"status!: BookableStatus\"\n       FROM\n           bookable_asset_status bd WHERE TRUE AND asset_type = ANY($2) AND id = ANY($3)",
+  "query": "SELECT\n               bd.id as \"id!\",\n               icon,\n               get_i18n_string(bd.name_i18n, $1) AS name,\n               bd.asset_type as \"asset_type!\",\n               bd.status as \"status!: BookableStatus\",\n               begins,\n               ends as \"ends: PgDateTime\"\n           FROM\n               bookable_asset_status bd WHERE id = $2;",
   "describe": {
     "columns": [
       {
@@ -25,7 +25,7 @@
       },
       {
         "ordinal": 3,
-        "name": "asset_type",
+        "name": "asset_type!",
         "type_info": "Int4"
       },
       {
@@ -45,13 +45,22 @@
             }
           }
         }
+      },
+      {
+        "ordinal": 5,
+        "name": "begins",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "ends: PgDateTime",
+        "type_info": "Timestamp"
       }
     ],
     "parameters": {
       "Left": [
         "TextArray",
-        "Int4Array",
-        "Int4Array"
+        "Int4"
       ]
     },
     "nullable": [
@@ -59,8 +68,10 @@
       true,
       null,
       true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "e1dd1671de11990a67e86c919148732947933de7f7d52fee82e7e0c807883f7e"
+  "hash": "1c9ddffc7ba07d692d999f719fded45de1b42bc02ac73b413af13aa5d672204c"
 }

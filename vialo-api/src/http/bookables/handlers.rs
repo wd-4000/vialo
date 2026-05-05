@@ -60,7 +60,7 @@ pub async fn list_bookables(
                 id as "id!",
                 icon,
                 get_i18n_string(name_i18n, {langs:Vec<String>}) AS name,
-                asset_type,
+                asset_type as "asset_type!",
                 status as "status!: BookableStatus",
                 begins,
                 ends as "ends: PgDateTime"
@@ -313,7 +313,7 @@ pub async fn get_bookable(
                bd.id as "id!",
                icon,
                get_i18n_string(bd.name_i18n, $1) AS name,
-               bd.asset_type,
+               bd.asset_type as "asset_type!",
                bd.status as "status!: BookableStatus",
                begins,
                ends as "ends: PgDateTime"

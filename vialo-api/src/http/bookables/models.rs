@@ -30,7 +30,7 @@ pub struct BookableAssetTranslatedWithStatus {
     pub id: i32,
     pub icon: Option<String>,
     pub name: Option<String>,
-    pub asset_type: Option<i32>,
+    pub asset_type: i32,
     pub status: BookableStatus,
     #[schema(format = DateTime)]
     pub begins: Option<NaiveDateTime>,
@@ -42,7 +42,7 @@ pub struct BookableAssetTranslated {
     pub id: i32,
     pub icon: Option<String>,
     pub name: Option<String>,
-    pub asset_type: Option<i32>,
+    pub asset_type: i32,
     pub status: BookableStatus,
 }
 
@@ -52,7 +52,7 @@ pub struct BookableAssetTranslatedAllLanguages {
     pub icon: Option<String>,
     #[schema(value_type = Option<I18nMap>)]
     pub name: Option<JsonValue>,
-    pub asset_type: Option<i32>,
+    pub asset_type: i32,
     pub slug: Option<String>,
     pub connector: Option<i32>,
     pub connector_output_id: Option<i32>,
