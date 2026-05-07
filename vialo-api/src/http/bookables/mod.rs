@@ -21,11 +21,8 @@ use crate::AppState;
 
 pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
-        .route(
-            "/",
-            post(handlers::post_bookable).get(handlers::list_bookables),
-        )
-        .route("/types", post(asset_types::post).get(asset_types::list))
+        .route("/", post(handlers::post_bookable))
+        .route("/types", post(asset_types::post))
         .route(
             "/types/{id}",
             put(asset_types::put)
@@ -49,23 +46,19 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/slots/taken", get(slots::taken_slots))
         .route("/slots/schemas", get(slots::slot_schemas))
         .route("/slots/book", post(slots::book_slots))
-        .route(
-            "/{id}",
-            get(handlers::get_bookable).put(handlers::put_bookable),
-        )
-        .route(
-            "/{id}/schema_assignments",
-            get(schema_assignments::list).post(schema_assignments::post),
-        )
+        .route("/{id}", put(handlers::put_bookable))
+        .route("/{id}/schema_assignments", post(schema_assignments::post))
         .route(
             "/{id}/schema_assignments/{begins}",
             delete(schema_assignments::delete),
         )
-        .route(
-            "/{id}/quick-unlock",
-            post(handlers::quick_unlock.layer(middleware::from_fn_with_state(
-                app_state.clone(),
-                super::util::middleware::auth_middleware,
-            ))),
-        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            super::util::middleware::auth_required,
+        ))
+        .route("/", get(handlers::list_bookables))
+        .route("/types", get(asset_types::list))
+        .route("/{id}", get(handlers::get_bookable))
+        .route("/{id}/schema_assignments", get(schema_assignments::list))
+        .route("/{id}/quick-unlock", post(handlers::quick_unlock))
 }
