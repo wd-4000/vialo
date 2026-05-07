@@ -6,7 +6,10 @@ use crate::permissions::{AppRole, check_member_of_group_or_app_role};
 use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
+use chrono::TimeDelta;
 use serde::{Deserialize, Serialize};
+use serde_with::{DurationSeconds, serde_as};
+use sqlx::postgres::types::PgInterval;
 use sqlx::query;
 use sqlx_conditional_queries::conditional_query_as;
 use std::i64;
@@ -20,6 +23,7 @@ pub struct BookableSchema {
     pub schedule: Vec<String>,
     pub asset_type: i32,
     pub slot_price: Option<i32>,
+    pub activation_grace_period: Option<i64>,
 }
 
 #[utoipa::path(get, path = "/bookables/schemas", params(SearchableListOptions), responses((status = 200, description = "OK", body=Vec<BookableSchema>)))]
@@ -39,7 +43,8 @@ pub async fn list(
             label,
             schedule::text[] as "schedule!",
             asset_type,
-            slot_price
+            slot_price,
+            EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period
         FROM
             bookable_schemas
         {#search}
@@ -68,7 +73,8 @@ pub async fn get(
             label,
             schedule::text[] as "schedule!",
             asset_type,
-            slot_price
+            slot_price,
+            EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period
         FROM
             bookable_schemas
         WHERE
@@ -128,12 +134,16 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct BookableSchemaPostOrPut {
     pub label: Option<String>,
     pub schedule: Vec<String>,
     pub asset_type: i32,
     pub slot_price: Option<i32>,
+    #[serde_as(as = "Option<DurationSeconds<i64>>")]
+    #[schema(value_type = Option<i64>)]
+    pub activation_grace_period: Option<TimeDelta>,
 }
 
 #[utoipa::path(post, path = "/bookables/schemas", request_body = BookableSchemaPostOrPut, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
@@ -159,8 +169,9 @@ pub async fn post(
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
-        "INSERT INTO bookable_schemas (label, schedule, asset_type, slot_price) VALUES ($1, $2::time[], $3, $4) RETURNING id",
-        body.label, body.schedule as Vec<String>, body.asset_type, body.slot_price
+        "INSERT INTO bookable_schemas (label, schedule, asset_type, slot_price, activation_grace_period) VALUES ($1, $2::time[], $3, $4, $5) RETURNING id",
+        body.label, body.schedule as Vec<String>, body.asset_type, body.slot_price, body.activation_grace_period.map(PgInterval::try_from)
+          .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?
     )
     .fetch_one(&mut *conn)
     .await?;
@@ -217,14 +228,16 @@ pub async fn put(
 
     let record = sqlx::query_as!(
         BookableSchema,
-        r#"UPDATE bookable_schemas SET (label, schedule, asset_type, slot_price) = ($1, $2::time[], $3, $4) WHERE id = $5
+        r#"UPDATE bookable_schemas SET (label, schedule, asset_type, slot_price, activation_grace_period) = ($1, $2::time[], $3, $4, $5) WHERE id = $6
         RETURNING
         id,
         label,
         schedule::text[] as "schedule!",
         asset_type,
-        slot_price"#,
-        body.label, body.schedule as Vec<String>, body.asset_type, body.slot_price, id
+        slot_price,
+        EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period"#,
+        body.label, body.schedule as Vec<String>, body.asset_type, body.slot_price, body.activation_grace_period.map(PgInterval::try_from)
+          .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?, id
     )
     .fetch_one(&mut *conn)
     .await?;
