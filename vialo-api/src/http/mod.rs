@@ -75,7 +75,6 @@ pub async fn create_router(app_state: Arc<AppState>) -> Router {
 
     Router::new()
         .nest("/people", people::create_router(app_state.clone()))
-        .nest("/bookables", bookables::create_router(app_state.clone()))
         .nest("/network", network::create_router(app_state.clone()))
         .nest("/history", history::create_router(app_state.clone()))
         .nest("/health", health::create_router(app_state.clone()))
@@ -83,6 +82,7 @@ pub async fn create_router(app_state: Arc<AppState>) -> Router {
             app_state.clone(),
             util::middleware::auth_required,
         ))
+        .nest("/bookables", bookables::create_router(app_state.clone()))
         .nest("/posts", posts::create_router(app_state.clone()))
         .nest("/home", home::create_router(app_state.clone()))
         .route_layer(middleware::from_fn_with_state(
