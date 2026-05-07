@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            id,\n            label,\n            schedule::text[] as \"schedule!\",\n            asset_type,\n            slot_price\n        FROM\n            bookable_schemas\n        \n        LIMIT $1 OFFSET $2",
+  "query": "SELECT\n            id,\n            label,\n            schedule::text[] as \"schedule!\",\n            asset_type,\n            slot_price,\n            EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period\n        FROM\n            bookable_schemas\n        \n        LIMIT $1 OFFSET $2",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,11 @@
         "ordinal": 4,
         "name": "slot_price",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "activation_grace_period",
+        "type_info": "Int8"
       }
     ],
     "parameters": {
@@ -40,8 +45,9 @@
       true,
       null,
       false,
-      false
+      false,
+      null
     ]
   },
-  "hash": "501f171d7edac42569cf26e887db4d601803bf59f6b43261e5f36fd64b5976e6"
+  "hash": "a0c8d05f89727ee1990b9d62f9efb42f0680332a5a485ec87de3b9de8eab85ff"
 }

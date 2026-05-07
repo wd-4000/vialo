@@ -59,7 +59,7 @@ pulldown-cmark = "0.13.3"
 ammonia = "4.1.2"
 cfg-if = "1.0.4"
 itertools = "0.14.0"
-serde_with = "3.19.0"
+serde_with = { version = "3.19.0", features = ["chrono"] }
 ory-kratos-client = "26.2.0"
 utoipa = { version = "5.5.0", features = ["axum_extras", "uuid", "chrono", "macros"] }
 utoipauto = "0.2.0"

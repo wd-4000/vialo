@@ -38,7 +38,8 @@ CREATE TABLE bookable_schemas (
   label text,
   schedule time[] NOT NULL,
   asset_type int NOT NULL REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
-  slot_price int NOT NULL
+  slot_price int NOT NULL,
+  activation_grace_period interval
 );
 
 CREATE TABLE bookable_schema_assignments (
