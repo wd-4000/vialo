@@ -1,4 +1,4 @@
-pub mod bookable_connectors;
+pub mod bookables;
 pub mod config;
 pub mod dump;
 pub mod events;

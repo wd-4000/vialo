@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamp) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true AND account_id = $1  AND UPPER(ba.during) <= $2  ORDER BY during LIMIT $3 OFFSET $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "asset_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "transaction_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "account: AccountEmbed",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "begins",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 5,
+        "name": "ends!: PgDateTime",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "cancelled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "cancellation_reason: CancellationReason",
+        "type_info": {
+          "Custom": {
+            "name": "bookable_appointment_cancellation_reason",
+            "kind": {
+              "Enum": [
+                "expired",
+                "user",
+                "admin"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "activated",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "maintenance",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamp",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null,
+      null,
+      null,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "373a60a019cc1a9b139fc873ee9a44a1870f55b9b1947586cee176baa7f44d5a"
+}

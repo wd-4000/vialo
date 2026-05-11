@@ -36,7 +36,7 @@ pub async fn list(
         r#"SELECT cl.id,
         CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
         CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
-         credits, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.product as "product: ProductType"
+         credits, cl.created_at, cl.status as "status: TransactionStatus", cl.refund_of, cl.product as "product: ProductType"
         FROM credit_ledger cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
         LEFT JOIN accounts_people ac_to ON to_account = ac_to.id
@@ -61,7 +61,7 @@ pub async fn get(
         r#"SELECT cl.id,
         CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
         CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
-         cl.credits, cl.label, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", jsonb_build_object('type', cl.product, 'id', ba.id) AS "product: ProductEmbed"
+         cl.credits, cl.label, cl.created_at, cl.status as "status: TransactionStatus", cl.refund_of, jsonb_build_object('type', cl.product, 'id', ba.id) AS "product: ProductEmbed"
         FROM credit_ledger cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
         LEFT JOIN accounts_people ac_to ON to_account = ac_to.id
@@ -123,7 +123,7 @@ pub async fn undo(
 
     // Check for an associated product. If there is one, figure out what to do
     if let Some(product_id) = sqlx::query_scalar!(
-        "select id from bookable_appointments where transaction_id = $1 LIMIT 1",
+        "SELECT id FROM bookable_appointments WHERE transaction_id = $1 LIMIT 1",
         id
     )
     .fetch_optional(&mut *trans)
@@ -132,7 +132,7 @@ pub async fn undo(
         match body.and_then(|b| b.cancel_associated_product) {
             Some(true) => {
                 sqlx::query!(
-                    "DELETE FROM bookable_appointments WHERE id = $1",
+                    "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = 'admin' WHERE id = $1",
                     product_id
                 )
                 .execute(&mut *trans)
@@ -148,11 +148,12 @@ pub async fn undo(
         }
     }
 
-    sqlx::query_scalar!(
-        "UPDATE credit_ledger SET status = 'refunded', last_updated = NOW() WHERE id = $1 RETURNING id",
+    sqlx::query!(
+        "INSERT INTO credit_ledger (to_account, credits, refund_of)
+         SELECT from_account, credits, id FROM credit_ledger WHERE id = $1",
         id
     )
-    .fetch_one(&mut *trans)
+    .execute(&mut *trans)
     .await?;
 
     trans.commit().await?;

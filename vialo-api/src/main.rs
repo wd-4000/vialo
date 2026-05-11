@@ -258,13 +258,12 @@ async fn main() {
     let mut bookable_connectors_shutdown = shutdown_rx.clone();
     let bookable_connectors_subsystem_task =
         bookable_connectors_subsystem_set.run_until(async move {
-            #[cfg(feature = "bookable_connectors")]
             loop {
                 if *bookable_connectors_shutdown.borrow() {
                     break;
                 }
 
-                let result = vialo_api::bookable_connectors::main(
+                let result = vialo_api::bookables::main(
                     bookable_connectors_subsystem_asp.clone(),
                     bookable_connectors_shutdown.clone(),
                 )

@@ -353,7 +353,7 @@ CREATE TABLE credit_ledger (
   product product_type,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   label text,
-  last_updated TIMESTAMPTZ,
+  refund_of uuid REFERENCES credit_ledger (id),
   CHECK (credits > 0),
   CHECK (
     NOT (
@@ -372,28 +372,35 @@ CREATE INDEX credit_ledger_to_idx ON credit_ledger (to_account);
 -- Update credits column in accounts table on transaction.
 CREATE OR REPLACE FUNCTION materialize_transaction () RETURNS TRIGGER AS $$
 BEGIN
-    IF TG_OP = 'INSERT' AND NEW.status <> 'refunded' THEN
-            UPDATE accounts_people SET credit_balance = credit_balance - NEW.credits WHERE id = NEW.from_account;
-            UPDATE accounts_people SET credit_balance = credit_balance + NEW.credits WHERE id = NEW.to_account;
-    ELSIF TG_OP = 'UPDATE' THEN
-        -- Make sure no funny business is going on with the update operation.
-        IF (NEW.from_account IS DISTINCT FROM OLD.from_account
-            OR NEW.to_account IS DISTINCT FROM OLD.to_account
-            OR NEW.credits IS DISTINCT FROM OLD.credits
-            OR NEW.created_at IS DISTINCT FROM OLD.created_at) THEN
-            RAISE EXCEPTION 'Updates to columns other than "status" and "last_updated" are not allowed';
-        END IF;
+    UPDATE accounts_people SET credit_balance = credit_balance - NEW.credits WHERE id = NEW.from_account;
+    UPDATE accounts_people SET credit_balance = credit_balance + NEW.credits WHERE id = NEW.to_account;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-        -- Reverse the effects of the old transaction if it was not refunded already.
-        IF OLD.status <> 'refunded' THEN
-            UPDATE accounts_people SET credit_balance = credit_balance + OLD.credits WHERE id = OLD.from_account;
-            UPDATE accounts_people SET credit_balance = credit_balance - OLD.credits WHERE id = OLD.to_account;
-        END IF;
+CREATE OR REPLACE FUNCTION prevent_credit_ledger_update () RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.from_account IS DISTINCT FROM OLD.from_account
+        OR NEW.to_account IS DISTINCT FROM OLD.to_account
+        OR NEW.credits IS DISTINCT FROM OLD.credits
+        OR NEW.product IS DISTINCT FROM OLD.product
+        OR NEW.created_at IS DISTINCT FROM OLD.created_at
+        OR NEW.label IS DISTINCT FROM OLD.label
+        OR NEW.refund_of IS DISTINCT FROM OLD.refund_of
+    THEN
+        RAISE EXCEPTION 'Only the "status" column may be changed in the credit ledger';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-        -- Apply the new transaction effects if it isn't refunded now.
-        IF NEW.status <> 'refunded' THEN
-            UPDATE accounts_people SET credit_balance = credit_balance - NEW.credits WHERE id = NEW.from_account;
-            UPDATE accounts_people SET credit_balance = credit_balance + NEW.credits WHERE id = NEW.to_account;
+CREATE OR REPLACE FUNCTION set_refund_status () RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.refund_of IS NOT NULL THEN
+        UPDATE credit_ledger SET status = 'refunded'
+        WHERE id = NEW.refund_of AND status <> 'refunded';
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Transaction already refunded or not found';
         END IF;
     END IF;
 
@@ -401,12 +408,18 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create the trigger
+-- Create the triggers
 CREATE TRIGGER tg_materialize_transaction
-AFTER INSERT
-OR
-UPDATE ON credit_ledger FOR EACH ROW
+AFTER INSERT ON credit_ledger FOR EACH ROW
 EXECUTE FUNCTION materialize_transaction ();
+
+CREATE TRIGGER tg_prevent_credit_ledger_update BEFORE
+UPDATE ON credit_ledger FOR EACH ROW
+EXECUTE FUNCTION prevent_credit_ledger_update ();
+
+CREATE TRIGGER tg_set_refund_status
+AFTER INSERT ON credit_ledger FOR EACH ROW
+EXECUTE FUNCTION set_refund_status ();
 
 -- Prevent modifications to the audit log
 -- CREATE OR REPLACE FUNCTION prevent_updates()
