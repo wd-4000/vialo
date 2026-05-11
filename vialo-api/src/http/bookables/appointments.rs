@@ -6,10 +6,11 @@ use crate::permissions::{AppRole, check_app_role};
 // use crate::ketoapi::subject::Ref;
 // use crate::ketoapi::{self, CheckRequest, Subject};
 use crate::AppState;
+use crate::bookables::CancellationReason;
 use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::query_as;
 use sqlx_conditional_queries::conditional_query_as;
@@ -46,6 +47,8 @@ pub struct BookableAppointmentType {
     pub account: Option<AccountEmbed>,
     pub begins: Option<NaiveDateTime>,
     pub ends: PgDateTime,
+    pub cancelled_at: Option<DateTime<Utc>>,
+    pub cancellation_reason: Option<CancellationReason>,
     #[schema(format = DateTime)]
     pub activated: Option<chrono::DateTime<chrono::Utc>>,
     pub maintenance: Option<bool>,
@@ -105,6 +108,8 @@ pub async fn list(
             {#account_info}
             lower(ba.during) as begins,
             coalesce(upper(ba.during), '+infinity'::timestamp) as "ends!: PgDateTime",
+            ba.cancelled_at,
+            ba.cancellation_reason as "cancellation_reason: CancellationReason",
             ba.activated,
             ba.maintenance
         FROM

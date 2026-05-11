@@ -149,8 +149,8 @@ pub struct PersonalTransactionModel {
     pub product: Option<ProductType>,
     pub credits: i32,
     pub status: TransactionStatus,
+    pub refund_of: Option<Uuid>,
     pub created_at: chrono::DateTime<chrono::Utc>,
-    pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
@@ -162,8 +162,8 @@ pub struct PersonalTransactionModelWithProductDetails {
     pub label: Option<String>,
     pub credits: i32,
     pub status: TransactionStatus,
+    pub refund_of: Option<Uuid>,
     pub created_at: chrono::DateTime<chrono::Utc>,
-    pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]

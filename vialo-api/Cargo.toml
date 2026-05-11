@@ -10,9 +10,8 @@ systemd-units = { enable = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
-default = ["printer", "bookable_connectors", "ppsk"]
+default = ["printer", "ppsk"]
 printer = []
-bookable_connectors = []
 migrate = []
 email = []
 ppsk = []

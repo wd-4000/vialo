@@ -49,6 +49,8 @@ CREATE TABLE bookable_schema_assignments (
   PRIMARY KEY (begins, asset_id)
 );
 
+CREATE TYPE bookable_appointment_cancellation_reason AS ENUM('expired', 'user', 'admin');
+
 CREATE TABLE bookable_appointments (
   id uuid PRIMARY KEY default gen_random_uuid(),
   asset_id int NOT NULL REFERENCES bookable_assets (id),
@@ -56,6 +58,8 @@ CREATE TABLE bookable_appointments (
   account_id uuid NOT NULL REFERENCES accounts (id), -- No cascade here, we want to make sure appointments are refunded appropriately.
   during tsrange NOT NULL,
   activated timestamptz,
+  cancelled_at timestamptz,
+  cancellation_reason bookable_appointment_cancellation_reason,
   maintenance boolean not null default false,
   CONSTRAINT no_overlapping_appointments_per_asset EXCLUDE USING GIST (
     asset_id
@@ -65,6 +69,8 @@ CREATE TABLE bookable_appointments (
     WITH
       &&
   )
+  WHERE
+    (cancelled_at IS NULL)
 );
 
 CREATE INDEX bookable_appointments_during_idx ON bookable_appointments (during);
@@ -110,14 +116,27 @@ FROM
       apa.asset_id,
       CASE
         WHEN apa.maintenance THEN 'maintenance'::bookable_status_type
-        WHEN apa.activated IS NOT NULL THEN 'active'::bookable_status_type
+        WHEN apa.activated IS NOT NULL
+        OR bs.activation_grace_period IS NULL THEN 'active'::bookable_status_type
         ELSE 'waiting'::bookable_status_type
       END AS status
     FROM
       bookable_appointments apa
+      JOIN bookable_schema_assignments bsa ON bsa.asset_id = apa.asset_id
+      AND bsa.begins = (
+        SELECT
+          MAX(begins)
+        FROM
+          bookable_schema_assignments
+        WHERE
+          asset_id = apa.asset_id
+          AND begins <= now()
+      )
+      JOIN bookable_schemas bs ON bs.id = bsa.schema_id
     WHERE
       apa.asset_id = ba.id
       AND apa.during @> now()::timestamp
+      AND apa.cancelled_at IS NULL
     LIMIT
       1
   ) y ON y.asset_id = ba.id;

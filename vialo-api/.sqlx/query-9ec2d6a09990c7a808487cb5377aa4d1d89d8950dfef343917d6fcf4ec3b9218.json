@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO credit_ledger (to_account, credits, refund_of)\n         SELECT from_account, credits, id FROM credit_ledger WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9ec2d6a09990c7a808487cb5377aa4d1d89d8950dfef343917d6fcf4ec3b9218"
+}

@@ -4,7 +4,7 @@ use crate::http::bookables::connectors::BookableConnectorWithPassword;
 use crate::http::bookables::models::{BookableAssetStatus, BookableStatus};
 use crate::{AppState, helpers::grab_authd_conn_subsystem};
 use netio::models::OutputPost;
-use sqlx::{query, query_as};
+use sqlx::{query, query_as, query_scalar};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, watch};
@@ -14,7 +14,7 @@ use tracing::info;
 mod models;
 
 mod netio;
-use models::BookableAssetStatusWithConnector;
+pub use models::*;
 
 pub async fn run(app_state: Arc<AppState>) -> Result<(), anyhow::Error> {
     let connectors = query_as!(
@@ -103,26 +103,71 @@ pub async fn run(app_state: Arc<AppState>) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+async fn next_wakeup(app_state: &AppState) -> tokio::time::Instant {
+    let fallback = tokio::time::Instant::now() + Duration::from_secs(3600); // wake up every hour just in case
+
+    let result = query_scalar!(
+        r#"SELECT MIN(
+            CASE
+                WHEN lower(ba.during) > now()::timestamp THEN lower(ba.during)
+                ELSE lower(ba.during) + cs.activation_grace_period
+            END
+        )::timestamptz
+        FROM bookable_appointments ba
+        LEFT JOIN LATERAL (
+            SELECT bs.activation_grace_period
+            FROM bookable_schema_assignments bsa
+            JOIN bookable_schemas bs ON bs.id = bsa.schema_id
+            WHERE bsa.asset_id = ba.asset_id AND bsa.begins <= now()
+            ORDER BY bsa.begins DESC
+            LIMIT 1
+        ) cs ON true
+        WHERE ba.cancelled_at IS NULL
+        AND ba.activated IS NULL
+        AND (
+            lower(ba.during) > now()::timestamp
+            OR (
+                cs.activation_grace_period IS NOT NULL
+                AND lower(ba.during) + cs.activation_grace_period > now()::timestamp
+            )
+        )"#
+    )
+    .fetch_one(&app_state.db)
+    .await
+    .ok()
+    .flatten();
+
+    let Some(ts) = result else {
+        return fallback;
+    };
+
+    let duration_until = (ts - chrono::Utc::now()).to_std().unwrap_or(Duration::ZERO);
+    tokio::time::Instant::now() + duration_until
+}
+
 pub async fn main(
     app_state: Arc<AppState>,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), anyhow::Error> {
-    let mut interval = time::interval(Duration::from_secs(60 * 5));
     let (mpsc_tx, mut mpsc_rx) = mpsc::channel::<Arc<EventEnvelope<i32, BookableAssetStatus>>>(10);
     app_state.event_channel.subscribe_wildcard(mpsc_tx).await;
+
+    let mut wakeup = next_wakeup(&app_state).await;
+
     loop {
         if *shutdown.borrow() {
             break;
         }
 
         tokio::select! {
-            _ = interval.tick() => {
+            _ = time::sleep_until(wakeup) => {
                 // interval sync sort of just in case really
                 info!("Bookable Connectors syncing...");
                 run(app_state.clone())
                     .await
                     .inspect_err(|e| tracing::error!("{:?}", e))
                     .ok();
+                wakeup = next_wakeup(&app_state).await;
             }
             event = mpsc_rx.recv() => {
                 // oooh yeah there is an update hell yes !!!
@@ -135,6 +180,7 @@ pub async fn main(
                     .await
                     .inspect_err(|e| tracing::error!("{:?}", e))
                     .ok();
+                wakeup = next_wakeup(&app_state).await;
             }
             changed = shutdown.changed() => {
                 if changed.is_ok() && *shutdown.borrow() {
