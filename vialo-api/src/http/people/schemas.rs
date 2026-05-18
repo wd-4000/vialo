@@ -11,6 +11,7 @@ use uuid::Uuid;
 pub struct TransactionFilterOptions {
     pub page: Option<i64>,
     pub limit: Option<i64>,
+    #[serde(default)]
     pub account_id: IdOrMeOrAllQuery,
 }
 

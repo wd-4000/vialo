@@ -15,7 +15,7 @@ use crate::{
         },
         util::{
             JsonE, User, VialoError, grab_authd_conn_user, grab_trans,
-            models::{AccountEmbed, IdOrMeOrAllQuery, IdOrMeQuery},
+            models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery, IdOrMeQuery},
         },
     },
     permissions::check_app_role,
@@ -27,7 +27,7 @@ use rand::{
 use utoipa::{IntoParams, ToSchema};
 
 use super::models::{DeviceModelWithAccountEmbed, DeviceWithRefs};
-
+use crate::permissions::AppRole;
 use axum::{
     Extension, Json,
     extract::{Path, Query, State},
@@ -45,7 +45,8 @@ pub struct DeviceQuerySchema {
     pub page: Option<i64>,
     pub limit: Option<i64>,
     pub search: Option<String>,
-    pub account_id: Option<IdOrMeOrAllQuery>,
+    #[serde(default)]
+    pub account_id: IdOrMeOrAllQuery,
 }
 #[utoipa::path(get, path = "/network/devices", params(DeviceQuerySchema), responses((status = 200, description = "OK", body=ResponseVariant<Vec<DeviceModelWithAccountEmbed>, Vec<ListDeviceWithRefs>>)))]
 pub async fn list_devices(
@@ -56,63 +57,46 @@ pub async fn list_devices(
     let limit = opts.limit.unwrap_or(10);
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
-    // Permission check in case we receive an account ID different from the one of the current user
-    let requesting_other_account = match &opts.account_id {
-        Some(IdOrMeOrAllQuery::Id(id)) => id != &user.id,
-        Some(IdOrMeOrAllQuery::All) => true,
-        _ => false,
-    };
+    // Permission check in case we receive an account ID different from the current account
+    let resolved_account_id = opts.account_id.resolve(user.id);
+    if resolved_account_id != IdOrAllQuery::Id(user.id) {
+        check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
+    }
 
-    if requesting_other_account
-        && !sqlx::query_scalar!(
-            r#"SELECT account_role_exists($1, 'network_manager'::app_role) AS "allowed: bool""#,
-            user.id
+    return match resolved_account_id {
+        IdOrAllQuery::Id(account_id) => {
+            let devices = conditional_query_as!(
+                ListDeviceWithRefs,
+                r#"SELECT net_devices.id, label, hostname,  mac AS "mac: MacAddressWrapper", cred_id, realm_id, net_devices.last_updated,  net_devices.last_seen, net_cred.network_id FROM net_devices
+                 JOIN net_cred ON cred_id = net_cred.id WHERE account_id = {account_id} {#wh_search} ORDER by net_devices.id LIMIT {limit} OFFSET {offset}"#,
+                #wh_search = match (opts.search){
+                    Some(src) => "AND (label ILIKE '%' || {src} || '%' OR mac::text ILIKE '%' || {src} || '%')",
+                    _ => ""
+                }
         )
-        .fetch_one(&data.db)
-        .await
-        .map_err(|e| VialoError::Anyhow(e.into()))?
-        .unwrap_or(false)
-    {
-        return Err(VialoError::Forbidden());
-    }
+        .fetch_all(&data.db)
+        .await?;
 
-    if let Some(IdOrMeOrAllQuery::All) = opts.account_id {
-        let devices = conditional_query_as!(DeviceModelWithAccountEmbed,
-            r#"SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS "mac?: MacAddressWrapper", cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,
-            jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
-            FROM net_devices nd
-            JOIN net_cred nc ON nd.cred_id = nc.id
-            LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id
-            {#wh_search} ORDER by nd.id  LIMIT {limit} OFFSET {offset}"#,
-            #wh_search = match (opts.search){
-                Some(src) => "WHERE nd.label ILIKE '%' || {src} || '%' OR nd.mac::text ILIKE '%' || {src} || '%'",
-                _ => ""
-            }
-          ).fetch_all(&data.db)
-            .await?;
+            Ok(Json(ResponseVariant::B(devices)))
+        }
+        IdOrAllQuery::All => {
+            let devices = conditional_query_as!(DeviceModelWithAccountEmbed,
+                r#"SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS "mac?: MacAddressWrapper", cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,
+                jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
+                FROM net_devices nd
+                JOIN net_cred nc ON nd.cred_id = nc.id
+                LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id
+                {#wh_search} ORDER by nd.id  LIMIT {limit} OFFSET {offset}"#,
+                #wh_search = match (opts.search){
+                    Some(src) => "WHERE nd.label ILIKE '%' || {src} || '%' OR nd.mac::text ILIKE '%' || {src} || '%'",
+                    _ => ""
+                }
+              ).fetch_all(&data.db)
+                .await?;
 
-        Ok(Json(ResponseVariant::A(devices)))
-    } else {
-        let current_account_id = user.id; // certified this macro moment
-        let devices = conditional_query_as!(
-            ListDeviceWithRefs,
-            r#"SELECT net_devices.id, label, hostname,  mac AS "mac: MacAddressWrapper", cred_id, realm_id, net_devices.last_updated,  net_devices.last_seen, net_cred.network_id FROM net_devices
-             JOIN net_cred ON cred_id = net_cred.id {#wh_asset_type} {#wh_search} ORDER by net_devices.id LIMIT {limit} OFFSET {offset}"#,
-            #wh_asset_type = match (opts.account_id) {
-                Some(IdOrMeOrAllQuery::Id(account)) => "WHERE account_id = {account}",
-                None | Some(IdOrMeOrAllQuery::Me) => "WHERE account_id = {current_account_id}",
-                _ => "WHERE FALSE" // never supposed to match
-            },
-            #wh_search = match (opts.search){
-                Some(src) => "AND (label ILIKE '%' || {src} || '%' OR mac::text ILIKE '%' || {src} || '%')",
-                _ => ""
-            }
-    )
-    .fetch_all(&data.db)
-    .await?;
-
-        Ok(Json(ResponseVariant::B(devices)))
-    }
+            Ok(Json(ResponseVariant::A(devices)))
+        }
+    };
 }
 
 #[derive(Deserialize, Debug, ToSchema)]
@@ -190,12 +174,7 @@ pub async fn post_device(
             let account_id = match account_or_me {
                 IdOrMeQuery::Id(id) => {
                     if id != user.id {
-                        check_app_role(
-                            user.clone(),
-                            crate::permissions::AppRole::NetworkManager,
-                            &data.db,
-                        )
-                        .await?;
+                        check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
                     }
                     id
                 }
@@ -212,12 +191,7 @@ pub async fn post_device(
 
             // Check if the network is active. If not, require NetworkManager role.
             if !network.active {
-                check_app_role(
-                    user.clone(),
-                    crate::permissions::AppRole::NetworkManager,
-                    &data.db,
-                )
-                .await?;
+                check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
             }
 
             // Check if we already have a credential we can use

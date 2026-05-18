@@ -111,9 +111,19 @@ impl<'de> Deserialize<'de> for IdOrAllQuery {
 #[derive(Debug, PartialEq, Default)]
 pub enum IdOrMeOrAllQuery {
     Id(Uuid),
-    Me,
     #[default]
+    Me,
     All,
+}
+impl IdOrMeOrAllQuery {
+    /// Converts "me" into the actual Uuid, or returns the specific ID/All.
+    pub fn resolve(&self, current_user_id: Uuid) -> IdOrAllQuery {
+        match self {
+            Self::Id(id) => IdOrAllQuery::Id(*id),
+            Self::Me => IdOrAllQuery::Id(current_user_id),
+            Self::All => IdOrAllQuery::All,
+        }
+    }
 }
 
 impl utoipa::PartialSchema for IdOrMeOrAllQuery {
@@ -158,9 +168,10 @@ impl<'de> Deserialize<'de> for IdOrMeOrAllQuery {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub enum IdOrMeQuery {
     Id(Uuid),
+    #[default]
     Me,
 }
 

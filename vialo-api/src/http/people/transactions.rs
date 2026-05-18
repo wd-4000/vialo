@@ -5,10 +5,16 @@ use super::{
     schemas::TransactionFilterOptions,
 };
 
-use crate::http::util::models::{AccountEmbed, IdOrMeOrAllQuery, ProductEmbed, ProductType};
 use crate::{
     AppState,
-    http::util::{JsonE, MaybeJsonE, User, VialoError, grab_authd_conn_user, grab_trans},
+    http::{
+        people::handlers::get_person_roles_me,
+        util::{
+            JsonE, MaybeJsonE, User, VialoError, grab_authd_conn_user, grab_trans,
+            models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery, ProductEmbed, ProductType},
+        },
+    },
+    permissions::{AppRole, check_app_role},
 };
 use axum::{
     Extension, Json,
@@ -27,25 +33,30 @@ use uuid::Uuid;
 #[utoipa::path(get, path = "/people/transactions", params(TransactionFilterOptions), responses((status = 200, description = "OK", body=Vec<PersonalTransactionModel>)))]
 pub async fn list(
     Query(opts): Query<TransactionFilterOptions>,
-    Extension(User { id: user_id }): Extension<User>,
+    Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    // Permission check in case we receive an account ID different from the current account
+    let resolved_account_id = opts.account_id.resolve(user.id);
+    if resolved_account_id != IdOrAllQuery::Id(user.id) {
+        check_app_role(user.clone(), AppRole::CreditManager, &data.db).await?;
+    }
+
     let limit = opts.limit.unwrap_or(10);
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
     let record = conditional_query_as!(PersonalTransactionModel,
         r#"SELECT cl.id,
         CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
         CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
-         credits, cl.created_at, cl.status as "status: TransactionStatus", cl.refund_of, cl.product as "product: ProductType"
+         credits, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, cl.product as "product: ProductType"
         FROM credit_ledger cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
         LEFT JOIN accounts_people ac_to ON to_account = ac_to.id
        {#account_where}
         ORDER BY created_at DESC
-        LIMIT {limit} OFFSET {offset}"#, #account_where = match (opts.account_id) {
-            IdOrMeOrAllQuery::Id(acid) => "WHERE to_account = {acid} OR from_account = {acid}",
-            IdOrMeOrAllQuery::Me => "WHERE to_account = {user_id} OR from_account = {user_id}",
-            IdOrMeOrAllQuery::All => ""
+        LIMIT {limit} OFFSET {offset}"#, #account_where = match (resolved_account_id) {
+            IdOrAllQuery::Id(acid) => "WHERE to_account = {acid} OR from_account = {acid}",
+            IdOrAllQuery::All => ""
         })
         .fetch_all(&data.db)
     .await?;
@@ -56,17 +67,26 @@ pub async fn list(
 pub async fn get(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
+    Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let record = query_as!(PersonalTransactionModelWithProductDetails,
+    let is_credit_manager = check_app_role(user.clone(), AppRole::CreditManager, &data.db)
+        .await
+        .is_ok();
+    let user_id = user.id;
+    let record = conditional_query_as!(PersonalTransactionModelWithProductDetails,
         r#"SELECT cl.id,
         CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
         CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
-         cl.credits, cl.label, cl.created_at, cl.status as "status: TransactionStatus", cl.refund_of, jsonb_build_object('type', cl.product, 'id', ba.id) AS "product: ProductEmbed"
+         cl.credits, cl.label, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, jsonb_build_object('type', cl.product, 'id', ba.id) AS "product: ProductEmbed"
         FROM credit_ledger cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
         LEFT JOIN accounts_people ac_to ON to_account = ac_to.id
         LEFT JOIN bookable_appointments ba ON ba.transaction_id = cl.id
-        WHERE cl.id = $1"#,id)
+        WHERE cl.id = {id} {#WH_MANAGER}"#,
+        #WH_MANAGER = match(is_credit_manager) {
+            false => "AND (cl.from_account = {user_id} OR cl.to_account = {user_id})",
+            _ => "",
+        })
         .fetch_one(&data.db)
     .await?;
     Ok((StatusCode::OK, Json(record)))
