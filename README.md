@@ -5,6 +5,7 @@ vialo is a platform for student dorms.
 > [!CAUTION]
 > Under heavy development. Not ready for production.
 
+API Docs: [https://wd-4000.github.io/vialo/](https://wd-4000.github.io/vialo/)
 ## Why
 
 vialo is built around a few core ideas. Residents should be able to manage their own devices, bookings, and network credentials without involving the network team for routine tasks. Everything significant is logged, which matters when shared resources and credits are involved. Operational settings — network topology, booking schedules, pricing, groups — are configurable at runtime rather than hardcoded. The broader goal is one coherent platform instead of the mess of Directus, PHP, cronjobs, a C app, a Go app, and manual processes that preceded it, all with a good-looking UI.
@@ -105,8 +106,3 @@ vialo/
 ├── vialo-api/            # Rust backend
 └── postgres/             # Custom PostgreSQL image for account provisioning
 ```
-
-# API
-## Hooks
-- `/hooks/update_identity`: Update an identity or create one (creating an unconfirmed user)
-  Body: Identity ID, Full Name, Email
