@@ -32,18 +32,17 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(handlers::get_person_capabilities_me),
         );
 
-    // Routes gated behind CreditManager
     let credit_routes = Router::new()
-        .route(
-            "/transactions",
-            get(transactions::list).post(transactions::post),
-        )
-        .route("/transactions/{id}", get(transactions::get))
+        // Credit manager only
+        .route("/transactions", post(transactions::post))
         .route("/transactions/{id}/undo", post(transactions::undo))
         .route_layer(middleware::from_fn_with_state(
             app_state.clone(),
             |state, ext, req, next| require_app_role(AppRole::CreditManager, state, ext, req, next),
-        ));
+        ))
+        // Also accessible to normal users
+        .route("/transactions", get(transactions::list))
+        .route("/transactions/{id}", get(transactions::get));
 
     // Routes gated behind AccountManager
     let account_routes = Router::new()

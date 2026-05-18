@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT net_devices.id, label, hostname,  mac AS \"mac: MacAddressWrapper\", cred_id, realm_id, net_devices.last_updated,  net_devices.last_seen, net_cred.network_id FROM net_devices\n             JOIN net_cred ON cred_id = net_cred.id WHERE FALSE AND (label ILIKE '%' || $1 || '%' OR mac::text ILIKE '%' || $1 || '%') ORDER by net_devices.id LIMIT $2 OFFSET $3",
+  "query": "SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS \"mac?: MacAddressWrapper\", cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,\n                jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account!: AccountEmbed\"\n                FROM net_devices nd\n                JOIN net_cred nc ON nd.cred_id = nc.id\n                LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n                 ORDER by nd.id  LIMIT $1 OFFSET $2",
   "describe": {
     "columns": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "ordinal": 3,
-        "name": "mac: MacAddressWrapper",
+        "name": "mac?: MacAddressWrapper",
         "type_info": "Macaddr"
       },
       {
@@ -47,11 +47,15 @@
         "ordinal": 8,
         "name": "network_id",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "account!: AccountEmbed",
+        "type_info": "Jsonb"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
         "Int8",
         "Int8"
       ]
@@ -65,8 +69,9 @@
       true,
       true,
       true,
-      false
+      false,
+      null
     ]
   },
-  "hash": "588ba2d39428cad8b1fdba6343b6b59895ff07cf28943eca47c244922b487efc"
+  "hash": "b3b506e75d253ac4f7d3eadab1222c6fbb5f9315b81cf4a95b78cbb1c0c67603"
 }

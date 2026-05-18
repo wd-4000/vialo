@@ -352,6 +352,7 @@ CREATE TABLE credit_ledger (
   status transaction_status NOT NULL DEFAULT 'done',
   product product_type,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  last_updated TIMESTAMPTZ,
   label text,
   refund_of uuid REFERENCES credit_ledger (id),
   CHECK (credits > 0),
@@ -390,6 +391,7 @@ BEGIN
     THEN
         RAISE EXCEPTION 'Only the "status" column may be changed in the credit ledger';
     END IF;
+    NEW.last_updated = NOW();
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

@@ -63,8 +63,7 @@ BEGIN
            product,
            credits,
            status,
-           created_at,
-           last_updated
+           created_at
        )
        VALUES (
            r_account_id,
@@ -72,7 +71,6 @@ BEGIN
            r_product,
            p_sum,
            'pending',
-           p_event_date,
            p_event_date
        ) RETURNING id INTO p_ledger_id;
 END;

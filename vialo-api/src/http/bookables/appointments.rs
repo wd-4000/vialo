@@ -1,6 +1,6 @@
 use super::models::{BookableAssetStatus, BookableStatus};
 use crate::helpers::PgDateTime;
-use crate::http::util::models::{AccountEmbed, IdOrAllQuery};
+use crate::http::util::models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery};
 use crate::http::util::{User, VialoError, grab_authd_conn_user};
 use crate::permissions::{AppRole, check_app_role};
 // use crate::ketoapi::subject::Ref;
@@ -34,7 +34,8 @@ pub struct BookableAppointmentFilterOptions {
     pub page: Option<i64>,
     pub limit: Option<i64>,
     pub from: Option<NaiveDateTime>,
-    pub account_id: Option<IdOrAllQuery>,
+    #[serde(default)]
+    pub account_id: IdOrMeOrAllQuery,
     pub to: Option<NaiveDateTime>,
     pub search: Option<String>,
 }
@@ -92,12 +93,13 @@ pub async fn list(
         .unwrap_or(vec![String::from("en"), String::from("de")]);
 
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
-    // Listing all accounts' appointments requires BookableManager.
-    if let Some(IdOrAllQuery::All) = &opts.account_id {
+
+    // Permission check in case we receive an account ID different from the current account
+    let resolved_account_id = opts.account_id.resolve(user.id);
+    if resolved_account_id != IdOrAllQuery::Id(user.id) {
         check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
     }
 
-    let current_account_id = user.id;
     // Execute the query and handle the result
     let record = conditional_query_as!(
         BookableAppointmentType,
@@ -114,14 +116,13 @@ pub async fn list(
             ba.maintenance
         FROM
             bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true {#account} {#from} {#to} ORDER BY during LIMIT {limit} OFFSET {offset}"#,
-            #account_info = match(&opts.account_id){
-                  Some(IdOrAllQuery::All) => r#"jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account: AccountEmbed","#,
+            #account_info = match(&resolved_account_id){
+                  IdOrAllQuery::All => r#"jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account: AccountEmbed","#,
                   _ => r#"null AS "account: AccountEmbed","#
             },
-            #account = match (&opts.account_id) {
-                Some(IdOrAllQuery::All) => "",
-                Some(IdOrAllQuery::Id(account)) => "AND account_id = {account}",
-                None => "AND account_id = {current_account_id}",
+            #account = match (&resolved_account_id) {
+                IdOrAllQuery::All => "",
+                IdOrAllQuery::Id(account) => "AND account_id = {account}",
             },
             #from = match (opts.from) {
                 Some(from) => "AND ba.during @> {from}::timestamp ",
