@@ -1,0 +1,79 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ba.id,\n    ba.asset_id,\n    ba.account_id,\n    ba.transaction_id,\n    cl.from_account,\n    cl.credits,\n    ba.cancelled_at,\n    ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n    ba.activated\n    FROM bookable_appointments ba\n    JOIN (\n        SELECT DISTINCT ON (bsa.asset_id)\n            bsa.asset_id,\n            bs.activation_grace_period\n        FROM bookable_schema_assignments bsa\n        JOIN bookable_schemas bs ON bs.id = bsa.schema_id\n        WHERE bsa.begins <= now()\n        ORDER BY bsa.asset_id, bsa.begins DESC\n    ) cs ON cs.asset_id = ba.asset_id\n    JOIN credit_ledger cl ON ba.transaction_id = cl.id\n    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND lower(ba.during) + cs.activation_grace_period <= NOW()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "asset_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "transaction_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "from_account",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "credits",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "cancelled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "cancellation_reason: CancellationReason",
+        "type_info": {
+          "Custom": {
+            "name": "bookable_appointment_cancellation_reason",
+            "kind": {
+              "Enum": [
+                "expired",
+                "user",
+                "admin"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "activated",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "2693bfa0d76466287b257e4d6df65e4d86808d68cad22c6ec3d90361691d9a12"
+}
