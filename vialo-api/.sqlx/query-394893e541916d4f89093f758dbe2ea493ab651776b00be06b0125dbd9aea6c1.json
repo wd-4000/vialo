@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "update bookable_appointments set activated = NOW() FROM bookable_appointments bap JOIN bookable_assets ba ON bap.asset_id = ba.id WHERE bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as \"id!\", ba.asset_type as \"asset_type!\", 'active'::bookable_status_type as \"status!: BookableStatus\",\n        lower(bap.during) as begins,\n        coalesce(upper(bap.during), '+infinity'::timestamp) as \"ends!: PgDateTime\";",
+  "query": "update bookable_assets set quick_unlock = tsrange(LOCALTIMESTAMP, LOCALTIMESTAMP + '1 minute', '[]') WHERE id = $1 AND (NOT (quick_unlock @> now()::timestamp) OR quick_unlock IS NULL) RETURNING $1 as \"id!\", asset_type_id as \"asset_type_id!\", 'quick_unlock'::bookable_status_type as \"status!: BookableStatus\",\n    LOCALTIMESTAMP as begins,\n   (LOCALTIMESTAMP + '1 minute') as \"ends: PgDateTime\";",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "asset_type!",
+        "name": "asset_type_id!",
         "type_info": "Int4"
       },
       {
@@ -38,23 +38,22 @@
       },
       {
         "ordinal": 4,
-        "name": "ends!: PgDateTime",
+        "name": "ends: PgDateTime",
         "type_info": "Timestamp"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid"
+        "Int4"
       ]
     },
     "nullable": [
-      false,
+      null,
       false,
       null,
       null,
       null
     ]
   },
-  "hash": "495cd1d75ee4e0f0054635e13ccabda6100f21a1832acfe8ec22da790af01e5a"
+  "hash": "394893e541916d4f89093f758dbe2ea493ab651776b00be06b0125dbd9aea6c1"
 }

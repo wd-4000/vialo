@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO bookable_schemas (label, schedule, asset_type, slot_price, activation_grace_period) VALUES ($1, $2::time[], $3, $4, $5) RETURNING id",
+  "query": "INSERT INTO bookable_schemas (label, schedule, asset_type_id, slot_price, activation_grace_period) VALUES ($1, $2::time[], $3, $4, $5) RETURNING id",
   "describe": {
     "columns": [
       {
@@ -22,5 +22,5 @@
       false
     ]
   },
-  "hash": "61fb10afdeb50aa9ba167d3066a1a4ab5b1029de13135fe377db0bde1970a2fb"
+  "hash": "4b14cee451b84b995980d23349b10bbaf522d2a02fef9620bc9dbcdb4637a8c3"
 }

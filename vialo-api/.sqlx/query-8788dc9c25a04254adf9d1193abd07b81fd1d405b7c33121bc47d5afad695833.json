@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "update bookable_assets set quick_unlock = tsrange(LOCALTIMESTAMP, LOCALTIMESTAMP + '1 minute', '[]') WHERE id = $1 AND (NOT (quick_unlock @> now()::timestamp) OR quick_unlock IS NULL) RETURNING $1 as \"id!\", asset_type as \"asset_type!\", 'quick_unlock'::bookable_status_type as \"status!: BookableStatus\",\n    LOCALTIMESTAMP as begins,\n   (LOCALTIMESTAMP + '1 minute') as \"ends: PgDateTime\";",
+  "query": "\n                SELECT\n                   bd.id as \"id!\",\n                   bd.asset_type_id as \"asset_type_id!\",\n                   bd.status as \"status!: BookableStatus\",\n                   begins,\n                   ends as \"ends: PgDateTime\"\n               FROM\n                bookable_asset_status bd WHERE id = $1;",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "asset_type!",
+        "name": "asset_type_id!",
         "type_info": "Int4"
       },
       {
@@ -48,12 +48,12 @@
       ]
     },
     "nullable": [
-      null,
-      false,
-      null,
-      null,
-      null
+      true,
+      true,
+      true,
+      true,
+      true
     ]
   },
-  "hash": "d6223e193a4c433aa4687f9ee86bbb4f89acd06ee27e629e9e2ba10dfd0ee909"
+  "hash": "8788dc9c25a04254adf9d1193abd07b81fd1d405b7c33121bc47d5afad695833"
 }

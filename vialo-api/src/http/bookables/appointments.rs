@@ -1,7 +1,7 @@
 use super::models::{BookableAssetStatus, BookableStatus};
 use crate::helpers::PgDateTime;
 use crate::http::util::models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery};
-use crate::http::util::{User, VialoError, grab_authd_conn_user};
+use crate::http::util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans};
 use crate::permissions::{AppRole, check_app_role};
 // use crate::ketoapi::subject::Ref;
 // use crate::ketoapi::{self, CheckRequest, Subject};
@@ -12,7 +12,7 @@ use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResp
 use axum_extra::extract::Query;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::query_as;
+use sqlx::{query, query_as};
 use sqlx_conditional_queries::conditional_query_as;
 use std::i64;
 use std::sync::Arc;
@@ -61,9 +61,11 @@ pub async fn activate(
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    // Implicit permission check in the query
+
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
-    let bookable_record = query_as!(BookableAssetStatus, r#"update bookable_appointments set activated = NOW() FROM bookable_appointments bap JOIN bookable_assets ba ON bap.asset_id = ba.id WHERE bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as "id!", ba.asset_type as "asset_type!", 'active'::bookable_status_type as "status!: BookableStatus",
+    let bookable_record = query_as!(BookableAssetStatus, r#"update bookable_appointments set activated = NOW() FROM bookable_appointments bap JOIN bookable_assets ba ON bap.asset_id = ba.id WHERE bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as "id!", ba.asset_type_id as "asset_type_id!", 'active'::bookable_status_type as "status!: BookableStatus",
         lower(bap.during) as begins,
         coalesce(upper(bap.during), '+infinity'::timestamp) as "ends!: PgDateTime";"#, id, user.id).fetch_one(&mut *conn).await?;
 
@@ -71,9 +73,153 @@ pub async fn activate(
     tokio::spawn(async move {
         evil_data
             .event_channel
-            .broadcast(bookable_record.asset_type, bookable_record)
+            .broadcast(bookable_record.asset_type_id, bookable_record)
             .await;
     });
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn yes() -> bool {
+    true
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema, Default)]
+pub struct CancelAppointmentBody {
+    pub cancellation_reason: Option<CancellationReason>,
+    #[serde(default = "yes")]
+    pub process_refund: bool,
+    pub expected_credits: Option<i32>,
+}
+
+/// Cancel appointment
+#[utoipa::path(delete, path = "/bookables/appointments/{id}", responses((status = 204, description = "Canceled")))] // no body
+pub async fn delete_appointment(
+    Path(id): Path<Uuid>,
+    Extension(user): Extension<User>,
+    State(data): State<Arc<AppState>>,
+    JsonE(body): JsonE<CancelAppointmentBody>,
+) -> Result<impl IntoResponse, VialoError> {
+    let appointment = query!(
+        r#"SELECT
+          ba.id,
+          ba.asset_id,
+          ba.transaction_id,
+          ba.account_id,
+          lower(ba.during) AS begins,
+          coalesce(upper(ba.during), '+infinity'::timestamp) AS "ends!: PgDateTime",
+          ba.cancelled_at,
+          ba.activated,
+          coalesce(cl.credits, 0) as credits,
+          cl.from_account,
+          ba.maintenance,
+          b.asset_type_id,
+          COALESCE(p.refund_percent, 0) AS current_refund_percent
+        FROM bookable_appointments ba
+        -- Bookable asset (to get type)
+        JOIN bookable_assets b ON b.id = ba.asset_id
+        -- Transaction (to calculate refund amount)
+        LEFT JOIN credit_ledger cl ON cl.id = ba.transaction_id
+        -- Schema currently in effect
+        JOIN LATERAL (
+          SELECT DISTINCT ON (asset_id) schema_id, begins
+          FROM bookable_schema_assignments
+          WHERE asset_id = ba.asset_id
+            AND begins <= lower(ba.during)
+          ORDER BY asset_id, begins DESC
+        ) bsa ON true
+        -- Appropriate cancellation policy
+        LEFT JOIN LATERAL (
+          SELECT refund_percent
+          FROM bookable_schema_cancellation_policy
+          WHERE schema_id = bsa.schema_id
+            AND min_notice <= (lower(ba.during) - now())
+          ORDER BY min_notice DESC
+          LIMIT 1
+        ) p ON true
+        WHERE ba.id = $1;"#,
+        id
+    )
+    .fetch_one(&data.db)
+    .await?;
+
+    let mut real_cancellation_reason = CancellationReason::User;
+    // Check whether current user is deleting the appointment
+    if (appointment.account_id != user.id) {
+        // If not, check permission on asset type OR bookable_manager role
+        let allowed = sqlx::query_scalar!(
+            r#"SELECT (
+                (SELECT COUNT(*) > 0 FROM account_group_memberships agm
+                 JOIN bookable_asset_type_group_perms batgp ON agm.group_id = batgp.group_id
+                 WHERE agm.account_id = $1 AND batgp.asset_type_id = $2 AND batgp.perm >= 'admin'::bookable_perm)
+                OR
+                account_role_exists($1, 'bookable_manager')
+            ) AS "allowed: bool""#,
+            user.id,
+            appointment.asset_type_id
+        )
+        .fetch_one(&data.db)
+        .await
+        .map_err(|e| VialoError::Anyhow(e.into()))?
+        .unwrap_or(false);
+
+        if allowed {
+            real_cancellation_reason = CancellationReason::Admin;
+        } else {
+            return Err(VialoError::Forbidden());
+        }
+    }
+
+    if (appointment.activated.is_some()) {
+        return Err(VialoError::AppError(
+            StatusCode::FORBIDDEN,
+            "already_activated".to_string(),
+        ));
+    }
+
+    if (appointment.cancelled_at.is_some()) {
+        return Err(VialoError::AppError(
+            StatusCode::FORBIDDEN,
+            "already_cancelled".to_string(),
+        ));
+    }
+
+    if real_cancellation_reason != body.cancellation_reason.unwrap_or(CancellationReason::User) {
+        return Err(VialoError::AppError(
+            StatusCode::BAD_REQUEST,
+            "invalid_cancellation_reason".to_string(),
+        ));
+    };
+
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+    let mut trans = grab_trans(&mut conn).await?;
+
+    sqlx::query!(
+        "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = $2 WHERE id = $1",
+        appointment.id,
+        real_cancellation_reason as CancellationReason
+    )
+    .execute(&mut *trans).await?;
+
+    query!(
+        "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
+        appointment.from_account,
+        appointment.transaction_id,
+        appointment.credits.unwrap_or(0) * appointment.current_refund_percent.unwrap_or(0) / 100
+    )
+    .execute(&mut *trans)
+    .await?;
+
+    trans.commit().await?;
+
+    // Broadcast that there might be a change
+    // let evil_data = data.clone();
+    // tokio::spawn(async move {
+    //     evil_data
+    //         .event_channel
+    //         .broadcast(appointment.asset_type_id, appointment.asset_id)
+    //         .await;
+    // });
 
     Ok(StatusCode::NO_CONTENT)
 }

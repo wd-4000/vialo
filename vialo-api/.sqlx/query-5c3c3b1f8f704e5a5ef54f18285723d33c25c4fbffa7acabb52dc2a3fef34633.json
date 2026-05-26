@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                bp.id,\n                icon,\n                slug,\n                connector,\n                connector_output_id,\n                bp.asset_type,\n                get_i18n_all_string_translations(bp.name_i18n) AS name\n            FROM\n                bookable_assets bp WHERE id = $1",
+  "query": "SELECT\n                bp.id,\n                icon,\n                slug,\n                connector,\n                connector_output_id,\n                bp.asset_type_id,\n                get_i18n_all_string_translations(bp.name_i18n) AS name\n            FROM\n                bookable_assets bp WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -40,7 +40,7 @@
       },
       {
         "ordinal": 5,
-        "name": "asset_type",
+        "name": "asset_type_id",
         "type_info": "Int4"
       },
       {
@@ -64,5 +64,5 @@
       null
     ]
   },
-  "hash": "690b2fbddcaca85eb89b05b57754c2bf6be3c7564c9b77d6e70745a239dcd0b6"
+  "hash": "5c3c3b1f8f704e5a5ef54f18285723d33c25c4fbffa7acabb52dc2a3fef34633"
 }

@@ -67,7 +67,7 @@ pub struct SlotSchemaQuery {
     pub from: NaiveDate,
     pub to: NaiveDate,
     pub asset_id: Option<Vec<i32>>,
-    pub asset_type: Option<Vec<i32>>,
+    pub asset_type_id: Option<Vec<i32>>,
     pub lang: Option<Vec<String>>,
 }
 
@@ -86,10 +86,10 @@ pub async fn slot_schemas(
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
 
-    let asset_types = if opts.asset_type.clone().unwrap_or(vec![]).is_empty() {
+    let asset_types = if opts.asset_type_id.clone().unwrap_or(vec![]).is_empty() {
         None
     } else {
-        opts.asset_type.clone()
+        opts.asset_type_id.clone()
     };
 
     let asset_ids = if opts.asset_id.clone().unwrap_or(vec![]).is_empty() {
@@ -103,12 +103,12 @@ pub async fn slot_schemas(
            bd.id as "id!",
            icon,
            get_i18n_string(bd.name_i18n, {langs: Vec<String>}) AS name,
-           bd.asset_type as "asset_type!",
+           bd.asset_type_id as "asset_type_id!",
            status as "status!: BookableStatus"
        FROM
            bookable_asset_status bd WHERE TRUE {#asset_type} {#asset_id}"#,
            #asset_type = match(asset_types){
-                 Some(a) => "AND asset_type = ANY({a:Vec<i32>})",
+                 Some(a) => "AND asset_type_id = ANY({a:Vec<i32>})",
                  None => ""
            },
            #asset_id = match(asset_ids.clone()){

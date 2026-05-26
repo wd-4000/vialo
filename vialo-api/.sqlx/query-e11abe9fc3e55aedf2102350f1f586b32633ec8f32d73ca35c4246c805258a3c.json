@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            id,\n            label,\n            schedule::text[] as \"schedule!\",\n            asset_type,\n            slot_price,\n            EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period\n        FROM\n            bookable_schemas\n        WHERE\n            id = $1",
+  "query": "UPDATE bookable_schemas SET (label, schedule, asset_type_id, slot_price, activation_grace_period) = ($1, $2::time[], $3, $4, $5) WHERE id = $6\n        RETURNING\n        id,\n        label,\n        schedule::text[] as \"schedule!\",\n        asset_type_id,\n        slot_price,\n        EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period",
   "describe": {
     "columns": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "ordinal": 3,
-        "name": "asset_type",
+        "name": "asset_type_id",
         "type_info": "Int4"
       },
       {
@@ -36,6 +36,11 @@
     ],
     "parameters": {
       "Left": [
+        "Text",
+        "TimeArray",
+        "Int4",
+        "Int4",
+        "Interval",
         "Int4"
       ]
     },
@@ -48,5 +53,5 @@
       null
     ]
   },
-  "hash": "99db0c259e569558049b4f0182279867b42365828f29dd27589d3fb16249ec04"
+  "hash": "e11abe9fc3e55aedf2102350f1f586b32633ec8f32d73ca35c4246c805258a3c"
 }

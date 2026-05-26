@@ -42,6 +42,10 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/schemas/{id}",
             get(schemas::get).put(schemas::put).delete(schemas::delete),
         )
+        .route(
+            "/appointments/{id}",
+            delete(appointments::delete_appointment),
+        )
         .route("/appointments/{id}/activate", post(appointments::activate))
         .route("/slots/taken", get(slots::taken_slots))
         .route("/slots/schemas", get(slots::slot_schemas))
