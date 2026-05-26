@@ -6,7 +6,13 @@
       {
         "ordinal": 0,
         "name": "id!",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bookable_asset_status",
+            "name": "id"
+          }
+        }
       },
       {
         "ordinal": 1,
@@ -16,17 +22,30 @@
             "name": "citext",
             "kind": "Simple"
           }
+        },
+        "origin": {
+          "Table": {
+            "table": "bookable_asset_status",
+            "name": "icon"
+          }
         }
       },
       {
         "ordinal": 2,
         "name": "name",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": "Expression"
       },
       {
         "ordinal": 3,
         "name": "asset_type_id!",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bookable_asset_status",
+            "name": "asset_type_id"
+          }
+        }
       },
       {
         "ordinal": 4,
@@ -43,6 +62,12 @@
                 "maintenance"
               ]
             }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "bookable_asset_status",
+            "name": "status"
           }
         }
       }

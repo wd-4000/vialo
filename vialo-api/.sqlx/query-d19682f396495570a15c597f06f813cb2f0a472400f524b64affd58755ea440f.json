@@ -6,17 +6,35 @@
       {
         "ordinal": 0,
         "name": "id",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "id"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "label",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "label"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "auth_id",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "auth_id"
+          }
+        }
       },
       {
         "ordinal": 3,
@@ -26,42 +44,90 @@
             "name": "citext",
             "kind": "Simple"
           }
+        },
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "email"
+          }
         }
       },
       {
         "ordinal": 4,
         "name": "membership_start",
-        "type_info": "Date"
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "membership_start"
+          }
+        }
       },
       {
         "ordinal": 5,
         "name": "membership_end: PgDate",
-        "type_info": "Date"
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "membership_end"
+          }
+        }
       },
       {
         "ordinal": 6,
         "name": "full_name",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "full_name"
+          }
+        }
       },
       {
         "ordinal": 7,
         "name": "manually_suspended",
-        "type_info": "Bool"
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "manually_suspended"
+          }
+        }
       },
       {
         "ordinal": 8,
         "name": "credit_balance",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "credit_balance"
+          }
+        }
       },
       {
         "ordinal": 9,
         "name": "printer_username",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subsystem_printer_context",
+            "name": "printer_username"
+          }
+        }
       },
       {
         "ordinal": 10,
         "name": "printer_id?",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "subsystem_printer_context",
+            "name": "printer_id"
+          }
+        }
       }
     ],
     "parameters": {
@@ -80,7 +146,7 @@
       false,
       false,
       true,
-      false
+      true
     ]
   },
   "hash": "d19682f396495570a15c597f06f813cb2f0a472400f524b64affd58755ea440f"

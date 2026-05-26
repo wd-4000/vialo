@@ -6,27 +6,57 @@
       {
         "ordinal": 0,
         "name": "id",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "table_log",
+            "name": "id"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "table_name",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "table_log",
+            "name": "table_name"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "record_id",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "table_log",
+            "name": "record_id"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "record_uuid",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "table_log",
+            "name": "record_uuid"
+          }
+        }
       },
       {
         "ordinal": 4,
         "name": "object_name",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "full_name"
+          }
+        }
       },
       {
         "ordinal": 5,
@@ -42,22 +72,41 @@
               ]
             }
           }
+        },
+        "origin": {
+          "Table": {
+            "table": "table_log",
+            "name": "operation_type"
+          }
         }
       },
       {
         "ordinal": 6,
         "name": "created_at",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "table_log",
+            "name": "created_at"
+          }
+        }
       },
       {
         "ordinal": 7,
         "name": "delete_on",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "table_log",
+            "name": "delete_on"
+          }
+        }
       },
       {
         "ordinal": 8,
         "name": "caused_by_account: AccountPersonEmbed",
-        "type_info": "Jsonb"
+        "type_info": "Jsonb",
+        "origin": "Expression"
       },
       {
         "ordinal": 9,
@@ -76,12 +125,19 @@
               ]
             }
           }
+        },
+        "origin": {
+          "Table": {
+            "table": "table_log",
+            "name": "caused_by_subsystem"
+          }
         }
       },
       {
         "ordinal": 10,
         "name": "diff",
-        "type_info": "Jsonb"
+        "type_info": "Jsonb",
+        "origin": "Expression"
       }
     ],
     "parameters": {

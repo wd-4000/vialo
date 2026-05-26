@@ -6,32 +6,48 @@
       {
         "ordinal": 0,
         "name": "schema_id",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bookable_schema_assignments",
+            "name": "schema_id"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "index",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": "Expression"
       },
       {
         "ordinal": 2,
         "name": "begins",
-        "type_info": "Timestamp"
+        "type_info": "Timestamp",
+        "origin": "Expression"
       },
       {
         "ordinal": 3,
         "name": "ends",
-        "type_info": "Timestamp"
+        "type_info": "Timestamp",
+        "origin": "Expression"
       },
       {
         "ordinal": 4,
         "name": "price",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bookable_schemas",
+            "name": "slot_price"
+          }
+        }
       },
       {
         "ordinal": 5,
         "name": "asset_id",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": "Expression"
       }
     ],
     "parameters": {

@@ -6,12 +6,24 @@
       {
         "ordinal": 0,
         "name": "id",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "id"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "label",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "label"
+          }
+        }
       },
       {
         "ordinal": 2,
@@ -21,17 +33,35 @@
             "name": "citext",
             "kind": "Simple"
           }
+        },
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "email"
+          }
         }
       },
       {
         "ordinal": 3,
         "name": "icon",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "icon"
+          }
+        }
       },
       {
         "ordinal": 4,
         "name": "public",
-        "type_info": "Bool"
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "public"
+          }
+        }
       },
       {
         "ordinal": 5,
@@ -59,7 +89,8 @@
               }
             }
           }
-        }
+        },
+        "origin": "Expression"
       }
     ],
     "parameters": {

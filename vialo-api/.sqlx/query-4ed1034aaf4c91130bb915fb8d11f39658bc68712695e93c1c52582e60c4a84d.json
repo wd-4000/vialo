@@ -6,7 +6,8 @@
       {
         "ordinal": 0,
         "name": "groups: Vec<GroupEmbed>",
-        "type_info": "JsonbArray"
+        "type_info": "JsonbArray",
+        "origin": "Expression"
       },
       {
         "ordinal": 1,
@@ -26,6 +27,12 @@
                 "health_viewer"
               ]
             }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "account_group_app_roles",
+            "name": "role"
           }
         }
       }
