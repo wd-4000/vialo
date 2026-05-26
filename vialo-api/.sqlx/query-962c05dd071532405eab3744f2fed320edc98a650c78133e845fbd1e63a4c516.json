@@ -6,7 +6,8 @@
       {
         "ordinal": 0,
         "name": "i18n_strings!",
-        "type_info": "Int4Array"
+        "type_info": "Int4Array",
+        "origin": "Expression"
       }
     ],
     "parameters": {

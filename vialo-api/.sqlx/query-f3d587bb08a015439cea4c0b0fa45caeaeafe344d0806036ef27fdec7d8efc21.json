@@ -6,32 +6,58 @@
       {
         "ordinal": 0,
         "name": "id",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "res_leases",
+            "name": "id"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "begins",
-        "type_info": "Date"
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "res_leases",
+            "name": "begins"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "ends",
-        "type_info": "Date"
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "res_leases",
+            "name": "ends"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "tenant_id",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "res_leases",
+            "name": "tenant_id"
+          }
+        }
       },
       {
         "ordinal": 4,
         "name": "room: RoomEmbed",
-        "type_info": "Jsonb"
+        "type_info": "Jsonb",
+        "origin": "Expression"
       },
       {
         "ordinal": 5,
         "name": "lessor: AccountPersonEmbed",
-        "type_info": "Jsonb"
+        "type_info": "Jsonb",
+        "origin": "Expression"
       }
     ],
     "parameters": {

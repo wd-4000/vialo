@@ -6,12 +6,24 @@
       {
         "ordinal": 0,
         "name": "begins",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "bookable_schema_assignments",
+            "name": "begins"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "schema_id",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bookable_schema_assignments",
+            "name": "schema_id"
+          }
+        }
       }
     ],
     "parameters": {

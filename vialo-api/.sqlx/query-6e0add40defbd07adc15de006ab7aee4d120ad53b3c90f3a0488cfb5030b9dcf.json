@@ -6,17 +6,35 @@
       {
         "ordinal": 0,
         "name": "id",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "health_events",
+            "name": "id"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "created_at",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "health_events",
+            "name": "created_at"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "last_updated",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "health_events",
+            "name": "last_updated"
+          }
+        }
       },
       {
         "ordinal": 3,
@@ -35,32 +53,68 @@
               ]
             }
           }
+        },
+        "origin": {
+          "Table": {
+            "table": "health_events",
+            "name": "subsystem"
+          }
         }
       },
       {
         "ordinal": 4,
         "name": "label",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "health_events",
+            "name": "label"
+          }
+        }
       },
       {
         "ordinal": 5,
         "name": "data",
-        "type_info": "Jsonb"
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "health_events",
+            "name": "data"
+          }
+        }
       },
       {
         "ordinal": 6,
         "name": "badness",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "health_events",
+            "name": "badness"
+          }
+        }
       },
       {
         "ordinal": 7,
         "name": "read",
-        "type_info": "Bool"
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "health_events",
+            "name": "read"
+          }
+        }
       },
       {
         "ordinal": 8,
         "name": "resolved",
-        "type_info": "Bool"
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "health_events",
+            "name": "resolved"
+          }
+        }
       }
     ],
     "parameters": {
