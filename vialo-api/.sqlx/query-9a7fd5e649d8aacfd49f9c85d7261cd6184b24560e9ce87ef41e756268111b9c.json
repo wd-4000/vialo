@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT\n                   bd.id as \"id!\",\n                   bd.asset_type as \"asset_type!\",\n                   bd.status as \"status!: BookableStatus\",\n                   begins,\n                   ends as \"ends: PgDateTime\"\n               FROM\n                bookable_asset_status bd WHERE id = $1;",
+  "query": "update bookable_appointments set activated = NOW() FROM bookable_appointments bap JOIN bookable_assets ba ON bap.asset_id = ba.id WHERE bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as \"id!\", ba.asset_type_id as \"asset_type_id!\", 'active'::bookable_status_type as \"status!: BookableStatus\",\n        lower(bap.during) as begins,\n        coalesce(upper(bap.during), '+infinity'::timestamp) as \"ends!: PgDateTime\";",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "asset_type!",
+        "name": "asset_type_id!",
         "type_info": "Int4"
       },
       {
@@ -38,22 +38,23 @@
       },
       {
         "ordinal": 4,
-        "name": "ends: PgDateTime",
+        "name": "ends!: PgDateTime",
         "type_info": "Timestamp"
       }
     ],
     "parameters": {
       "Left": [
-        "Int4"
+        "Uuid",
+        "Uuid"
       ]
     },
     "nullable": [
-      true,
-      true,
-      true,
-      true,
-      true
+      false,
+      false,
+      null,
+      null,
+      null
     ]
   },
-  "hash": "57ffba204a228642c683885d5cdcd3992568ef7663f3337ebdb903b76ed79807"
+  "hash": "9a7fd5e649d8aacfd49f9c85d7261cd6184b24560e9ce87ef41e756268111b9c"
 }

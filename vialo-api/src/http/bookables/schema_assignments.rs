@@ -59,7 +59,7 @@ pub async fn post(
     // BookableManager or manager of the asset's type's group may assign schemas.
     let group_id = sqlx::query_scalar!(
         r#"SELECT bat.group_id FROM bookable_assets ba
-         JOIN bookable_asset_types bat ON ba.asset_type = bat.id
+         JOIN bookable_asset_types bat ON ba.asset_type_id = bat.id
          WHERE ba.id = $1"#,
         id
     )
@@ -94,7 +94,7 @@ pub async fn delete(
     // BookableManager or manager of the asset's type's group may remove schema assignments.
     let group_id = sqlx::query_scalar!(
         r#"SELECT bat.group_id FROM bookable_assets ba
-         JOIN bookable_asset_types bat ON ba.asset_type = bat.id
+         JOIN bookable_asset_types bat ON ba.asset_type_id = bat.id
          WHERE ba.id = $1"#,
         id
     )

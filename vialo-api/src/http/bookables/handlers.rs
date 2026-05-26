@@ -60,7 +60,7 @@ pub async fn list_bookables(
                 id as "id!",
                 icon,
                 get_i18n_string(name_i18n, {langs:Vec<String>}) AS name,
-                asset_type as "asset_type!",
+                asset_type_id as "asset_type_id!",
                 status as "status!: BookableStatus",
                 begins,
                 ends as "ends: PgDateTime"
@@ -68,7 +68,7 @@ pub async fn list_bookables(
                 bookable_asset_status
             {#asset_type} ORDER BY id LIMIT {limit} OFFSET {offset}"#,
             #asset_type = match (opts.asset_types) {
-                Some(at) => "WHERE asset_type = ANY({at:Vec<i32>})",
+                Some(at) => "WHERE asset_type_id = ANY({at:Vec<i32>})",
                 None => "",
             },
     )
@@ -90,7 +90,7 @@ pub async fn quick_unlock(
     };
 
     info!("auth");
-    let record = query_as!(BookableAssetStatus, r#"update bookable_assets set quick_unlock = tsrange(LOCALTIMESTAMP, LOCALTIMESTAMP + '1 minute', '[]') WHERE id = $1 AND (NOT (quick_unlock @> now()::timestamp) OR quick_unlock IS NULL) RETURNING $1 as "id!", asset_type as "asset_type!", 'quick_unlock'::bookable_status_type as "status!: BookableStatus",
+    let record = query_as!(BookableAssetStatus, r#"update bookable_assets set quick_unlock = tsrange(LOCALTIMESTAMP, LOCALTIMESTAMP + '1 minute', '[]') WHERE id = $1 AND (NOT (quick_unlock @> now()::timestamp) OR quick_unlock IS NULL) RETURNING $1 as "id!", asset_type_id as "asset_type_id!", 'quick_unlock'::bookable_status_type as "status!: BookableStatus",
     LOCALTIMESTAMP as begins,
    (LOCALTIMESTAMP + '1 minute') as "ends: PgDateTime";"#, id).fetch_one(&mut *conn).await?;
     info!("qry");
@@ -99,7 +99,7 @@ pub async fn quick_unlock(
     tokio::spawn(async move {
         evil_data
             .event_channel
-            .broadcast(record.asset_type, record.clone())
+            .broadcast(record.asset_type_id, record.clone())
             .await;
         if let (Some(begins), Some(PgDateTime::DateTime(ends))) = (record.begins, record.ends) {
             sleep(Duration::from_secs(
@@ -111,7 +111,7 @@ pub async fn quick_unlock(
                 r#"
                 SELECT
                    bd.id as "id!",
-                   bd.asset_type as "asset_type!",
+                   bd.asset_type_id as "asset_type_id!",
                    bd.status as "status!: BookableStatus",
                    begins,
                    ends as "ends: PgDateTime"
@@ -124,7 +124,7 @@ pub async fn quick_unlock(
             {
                 evil_data
                     .event_channel
-                    .broadcast(record.asset_type, record_2)
+                    .broadcast(record.asset_type_id, record_2)
                     .await;
             }
         }
@@ -141,7 +141,7 @@ pub struct PostBookableSchema {
     pub slug: Option<String>,
     pub connector: Option<i32>,
     pub connector_output_id: Option<i32>,
-    pub asset_type: i32,
+    pub asset_type_id: i32,
 }
 
 #[utoipa::path(post, path = "/bookables", request_body=PostBookableSchema, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
@@ -153,7 +153,7 @@ pub async fn post_bookable(
     // Member of the asset type's group or BookableManager may create assets.
     let group_id = sqlx::query_scalar!(
         "SELECT group_id FROM bookable_asset_types WHERE id = $1",
-        body.asset_type
+        body.asset_type_id
     )
     .fetch_optional(&data.db)
     .await?
@@ -187,10 +187,10 @@ pub async fn post_bookable(
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
-        "INSERT INTO bookable_assets (name_i18n, icon, asset_type, slug, connector, connector_output_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+        "INSERT INTO bookable_assets (name_i18n, icon, asset_type_id, slug, connector, connector_output_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
         processed_i18n_fields.get("name"),
         body.icon,
-        body.asset_type,
+        body.asset_type_id,
         body.slug,
         body.connector,
         body.connector_output_id,
@@ -213,7 +213,7 @@ pub async fn put_bookable(
     // If reassigning to a new asset_type, must also be a member of that group.
     let existing_group_id = sqlx::query_scalar!(
         r#"SELECT bat.group_id FROM bookable_assets ba
-         JOIN bookable_asset_types bat ON ba.asset_type = bat.id
+         JOIN bookable_asset_types bat ON ba.asset_type_id = bat.id
          WHERE ba.id = $1"#,
         id
     )
@@ -232,7 +232,7 @@ pub async fn put_bookable(
 
     let new_group_id = sqlx::query_scalar!(
         "SELECT group_id FROM bookable_asset_types WHERE id = $1",
-        body.asset_type
+        body.asset_type_id
     )
     .fetch_optional(&data.db)
     .await?
@@ -260,10 +260,10 @@ pub async fn put_bookable(
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
-        "UPDATE bookable_assets SET (name_i18n, icon, asset_type, slug, connector, connector_output_id) = ($1, $2, $3,$4,$5, $6) WHERE id = $7 RETURNING id",
+        "UPDATE bookable_assets SET (name_i18n, icon, asset_type_id, slug, connector, connector_output_id) = ($1, $2, $3,$4,$5, $6) WHERE id = $7 RETURNING id",
         processed_i18n_fields.get("name"),
         body.icon,
-        body.asset_type,
+        body.asset_type_id,
         body.slug,
         body.connector,
         body.connector_output_id,
@@ -296,7 +296,7 @@ pub async fn get_bookable(
                 slug,
                 connector,
                 connector_output_id,
-                bp.asset_type,
+                bp.asset_type_id,
                 get_i18n_all_string_translations(bp.name_i18n) AS name
             FROM
                 bookable_assets bp WHERE id = $1",
@@ -313,7 +313,7 @@ pub async fn get_bookable(
                bd.id as "id!",
                icon,
                get_i18n_string(bd.name_i18n, $1) AS name,
-               bd.asset_type as "asset_type!",
+               bd.asset_type_id as "asset_type_id!",
                bd.status as "status!: BookableStatus",
                begins,
                ends as "ends: PgDateTime"

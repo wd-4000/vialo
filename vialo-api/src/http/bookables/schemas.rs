@@ -21,7 +21,7 @@ pub struct BookableSchema {
     pub id: i32,
     pub label: Option<String>,
     pub schedule: Vec<String>,
-    pub asset_type: i32,
+    pub asset_type_id: i32,
     pub slot_price: Option<i32>,
     pub activation_grace_period: Option<i64>,
 }
@@ -42,7 +42,7 @@ pub async fn list(
             id,
             label,
             schedule::text[] as "schedule!",
-            asset_type,
+            asset_type_id,
             slot_price,
             EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period
         FROM
@@ -72,7 +72,7 @@ pub async fn get(
             id,
             label,
             schedule::text[] as "schedule!",
-            asset_type,
+            asset_type_id,
             slot_price,
             EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period
         FROM
@@ -94,7 +94,7 @@ pub async fn delete(
 ) -> Result<impl IntoResponse, VialoError> {
     let group_id = sqlx::query_scalar!(
         r#"SELECT bat.group_id FROM bookable_schemas bs
-         JOIN bookable_asset_types bat ON bs.asset_type = bat.id
+         JOIN bookable_asset_types bat ON bs.asset_type_id = bat.id
          WHERE bs.id = $1"#,
         id
     )
@@ -139,7 +139,7 @@ pub async fn delete(
 pub struct BookableSchemaPostOrPut {
     pub label: Option<String>,
     pub schedule: Vec<String>,
-    pub asset_type: i32,
+    pub asset_type_id: i32,
     pub slot_price: Option<i32>,
     #[serde_as(as = "Option<DurationSeconds<i64>>")]
     #[schema(value_type = Option<i64>)]
@@ -155,7 +155,7 @@ pub async fn post(
     // Member of the target asset type's group or BookableManager may create schemas.
     let group_id = sqlx::query_scalar!(
         "SELECT group_id FROM bookable_asset_types WHERE id = $1",
-        body.asset_type
+        body.asset_type_id
     )
     .fetch_optional(&data.db)
     .await?
@@ -169,8 +169,8 @@ pub async fn post(
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
-        "INSERT INTO bookable_schemas (label, schedule, asset_type, slot_price, activation_grace_period) VALUES ($1, $2::time[], $3, $4, $5) RETURNING id",
-        body.label, body.schedule as Vec<String>, body.asset_type, body.slot_price, body.activation_grace_period.map(PgInterval::try_from)
+        "INSERT INTO bookable_schemas (label, schedule, asset_type_id, slot_price, activation_grace_period) VALUES ($1, $2::time[], $3, $4, $5) RETURNING id",
+        body.label, body.schedule as Vec<String>, body.asset_type_id, body.slot_price, body.activation_grace_period.map(PgInterval::try_from)
           .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?
     )
     .fetch_one(&mut *conn)
@@ -190,7 +190,7 @@ pub async fn put(
     // If reassigning to a new asset_type, must also be a member of that group.
     let existing_group_id = sqlx::query_scalar!(
         r#"SELECT bat.group_id FROM bookable_schemas bs
-         JOIN bookable_asset_types bat ON bs.asset_type = bat.id
+         JOIN bookable_asset_types bat ON bs.asset_type_id = bat.id
          WHERE bs.id = $1"#,
         id
     )
@@ -209,7 +209,7 @@ pub async fn put(
 
     let new_group_id = sqlx::query_scalar!(
         "SELECT group_id FROM bookable_asset_types WHERE id = $1",
-        body.asset_type
+        body.asset_type_id
     )
     .fetch_optional(&data.db)
     .await?
@@ -228,15 +228,15 @@ pub async fn put(
 
     let record = sqlx::query_as!(
         BookableSchema,
-        r#"UPDATE bookable_schemas SET (label, schedule, asset_type, slot_price, activation_grace_period) = ($1, $2::time[], $3, $4, $5) WHERE id = $6
+        r#"UPDATE bookable_schemas SET (label, schedule, asset_type_id, slot_price, activation_grace_period) = ($1, $2::time[], $3, $4, $5) WHERE id = $6
         RETURNING
         id,
         label,
         schedule::text[] as "schedule!",
-        asset_type,
+        asset_type_id,
         slot_price,
         EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period"#,
-        body.label, body.schedule as Vec<String>, body.asset_type, body.slot_price, body.activation_grace_period.map(PgInterval::try_from)
+        body.label, body.schedule as Vec<String>, body.asset_type_id, body.slot_price, body.activation_grace_period.map(PgInterval::try_from)
           .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?, id
     )
     .fetch_one(&mut *conn)

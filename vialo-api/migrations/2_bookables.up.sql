@@ -27,7 +27,7 @@ CREATE TABLE bookable_assets (
   name_i18n int REFERENCES i18n_index,
   slug citext UNIQUE,
   icon citext,
-  asset_type int NOT NULL REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
+  asset_type_id int NOT NULL REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
   quick_unlock tsrange,
   connector int REFERENCES bookable_connectors,
   connector_output_id int
@@ -37,9 +37,16 @@ CREATE TABLE bookable_schemas (
   id int PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   label text,
   schedule time[] NOT NULL,
-  asset_type int NOT NULL REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
+  asset_type_id int NOT NULL REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
   slot_price int NOT NULL,
   activation_grace_period interval
+);
+
+CREATE TABLE bookable_schema_cancellation_policy (
+  schema_id int NOT NULL REFERENCES bookable_schemas (id) ON DELETE CASCADE,
+  min_notice interval NOT NULL, -- up to min_notice before cancellation,
+  refund_percent smallint NOT NULL CHECK (refund_percent BETWEEN 0 AND 100), -- the account will be refunded refund_percent % of the original price
+  PRIMARY KEY (schema_id, min_notice)
 );
 
 CREATE TABLE bookable_schema_assignments (
@@ -47,6 +54,15 @@ CREATE TABLE bookable_schema_assignments (
   asset_id int NOT NULL REFERENCES bookable_assets (id) ON DELETE CASCADE,
   schema_id int NOT NULL REFERENCES bookable_schemas (id) ON DELETE CASCADE,
   PRIMARY KEY (begins, asset_id)
+);
+
+CREATE TYPE bookable_perm AS ENUM('view', 'book', 'admin');
+
+CREATE TABLE bookable_asset_type_group_perms (
+  group_id uuid REFERENCES account_groups (id) ON DELETE CASCADE,
+  asset_type_id int NOT NULL REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
+  perm bookable_perm NOT NULL,
+  PRIMARY KEY (group_id, asset_type_id)
 );
 
 CREATE TYPE bookable_appointment_cancellation_reason AS ENUM('expired', 'user', 'admin');
@@ -88,7 +104,7 @@ SELECT
   ba.id,
   ba.icon,
   ba.name_i18n,
-  ba.asset_type,
+  ba.asset_type_id,
   ba.connector,
   ba.connector_output_id,
   COALESCE(
