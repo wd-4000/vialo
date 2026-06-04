@@ -13,7 +13,7 @@ use tower_http::cors::CorsLayer;
 use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vialo_api::{
-    AppState, KratosConfigs,
+    AppState, EventChannels, KratosConfigs,
     config::{AuthConfig, Config},
     events::EventChannel,
     helpers::{encryption, find_upward, grab_authd_conn_subsystem},
@@ -149,7 +149,9 @@ async fn main() {
 
     let asp = Arc::new(AppState {
         db: pool.clone(),
-        event_channel: EventChannel::new("bookables".into()),
+        event_channels: EventChannels {
+            bookables: EventChannel::new("bookables".into()),
+        },
         config,
         kratos_config,
     });

@@ -14,7 +14,7 @@ use axum::{
 use axum_extra::TypedHeader;
 use serde::Deserialize;
 use std::net::SocketAddr;
-use std::{ops::ControlFlow, sync::Arc};
+use std::{collections::HashSet, sync::Arc};
 use tokio::sync::mpsc::{self};
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::debug;
@@ -27,6 +27,7 @@ use crate::AppState;
 use futures::{sink::SinkExt, stream::StreamExt};
 #[derive(Deserialize, Debug)]
 struct EventSubscriptionSchema {
+    pub channel: String,
     pub id: u16,
 }
 pub fn main(app_state: Arc<AppState>) -> Router {
@@ -116,14 +117,25 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, state: Arc<AppSta
 
     // This task receives messages from the client and subscribes it to events based on the message contents
     let mut recv_task = tokio::spawn(async move {
+        let mut subscribed: HashSet<(String, i32)> = HashSet::new();
         while let Some(Ok(msg)) = receiver.next().await {
             if let Message::Text(msg_text) = msg
                 && let Ok(sub) = serde_json::from_str::<EventSubscriptionSchema>(msg_text.as_str())
             {
-                state
-                    .event_channel
-                    .subscribe_string(sub.id.into(), mpsc_tx.clone())
-                    .await;
+                let id: i32 = sub.id.into();
+                let key = (sub.channel.clone(), id);
+                if subscribed.insert(key) {
+                    match sub.channel.as_str() {
+                        "bookables" => {
+                            state
+                                .event_channels
+                                .bookables
+                                .subscribe_string(id, mpsc_tx.clone())
+                                .await
+                        }
+                        _ => {}
+                    }
+                }
             }
         }
     });

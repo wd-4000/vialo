@@ -64,7 +64,7 @@ pub async fn activate(
     let evil_data = data.clone();
     tokio::spawn(async move {
         evil_data
-            .event_channel
+            .event_channels.bookables
             .broadcast(bookable_record.asset_type_id, bookable_record)
             .await;
     });
@@ -193,7 +193,7 @@ pub async fn delete_appointment(
     // let evil_data = data.clone();
     // tokio::spawn(async move {
     //     evil_data
-    //         .event_channel
+    //         .event_channels.bookables
     //         .broadcast(appointment.asset_type_id, appointment.asset_id)
     //         .await;
     // });
