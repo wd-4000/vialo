@@ -1,6 +1,7 @@
 use crate::{
     AppState,
     http::util::{JsonE, User, VialoError, grab_authd_conn_user},
+    permissions::{AppRole, check_app_role},
 };
 use std::sync::Arc;
 
@@ -15,23 +16,28 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use sqlx::query_as;
+use sqlx_conditional_queries::conditional_query_as;
 
 #[utoipa::path(get, path = "/network/networks", params(NetworkFilterOptions), responses((status = 200, description = "OK", body=Vec<NetworkModel>)))]
 pub async fn list_networks(
     Query(opts): Query<NetworkFilterOptions>,
+    Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
     let limit = opts.limit.unwrap_or(10);
-    let search = opts.search.unwrap_or("".to_string());
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
-    let record = query_as!(
+    let record = conditional_query_as!(
         NetworkModel,
-        r#"SELECT id, label, icon, wired, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as "auth: NetAuth", gen_username, gen_password, active FROM net_networks WHERE label ILIKE '%' || $1 || '%' LIMIT $2 OFFSET $3"#,
-        search,
-        limit as i32,
-        offset as i32
+        r#"SELECT id, label, icon, wired, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as "auth: NetAuth", gen_username, gen_password, active FROM net_networks WHERE TRUE {#wh_search} {#wh_active} LIMIT {limit} OFFSET {offset}"#,
+        #wh_search = match (opts.search){
+            Some(src) => "AND label ILIKE '%' || {src} || '%'",
+            _ => ""
+        },
+        #wh_active = match (check_app_role(user, AppRole::NetworkManager, &data.db).await.is_ok()){
+            true => "",
+            false => "AND active = true"
+        }
     )
     .fetch_all(&data.db)
     .await?;
@@ -46,6 +52,7 @@ pub async fn put_network(
     State(data): State<Arc<AppState>>,
     JsonE(body): JsonE<PostOrPutNetworkSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     let result = sqlx::query!(
@@ -88,6 +95,7 @@ pub async fn delete_network(
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     let rows_affected = sqlx::query!("DELETE FROM net_networks WHERE id = $1", id)
@@ -109,6 +117,7 @@ pub async fn post_network(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<PostOrPutNetworkSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     let _result = sqlx::query!(

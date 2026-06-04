@@ -56,8 +56,10 @@ async fn check_own_or_network_manager(
 #[utoipa::path(get, path = "/network/credentials", params(NetworkFilterOptions), responses((status = 200, description = "OK", body=Vec<CredentialModelWithAccountEmbed>)))]
 pub async fn list_credentials(
     Query(opts): Query<NetworkFilterOptions>,
+    Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user, AppRole::NetworkManager, &data.db).await?;
     let limit = opts.limit.unwrap_or(10);
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
     let records = conditional_query_as!(

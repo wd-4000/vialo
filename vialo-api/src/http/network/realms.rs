@@ -23,8 +23,10 @@ use uuid::Uuid;
 #[utoipa::path(get, path = "/network/realms", params(RealmFilterOptions), responses((status = 200, description = "OK", body=Vec<RealmModel>)))]
 pub async fn list_realms(
     Query(opts): Query<RealmFilterOptions>,
+    Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user, AppRole::NetworkManager, &data.db).await?;
     let limit = opts.limit.unwrap_or(10);
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
     let records =  conditional_query_as!(
@@ -86,6 +88,7 @@ pub async fn put_realm(
     State(data): State<Arc<AppState>>,
     JsonE(body): JsonE<UpdateRealmSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     let result = sqlx::query!(
@@ -107,6 +110,7 @@ pub async fn set_default_realm(
     State(data): State<Arc<AppState>>,
     JsonE(body): JsonE<SetDefaultRealmSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     if let Some(realm_id) = body.realm_id {
         let result = sqlx::query!(
