@@ -67,32 +67,37 @@ impl<K: Hash + std::cmp::Eq + Send + std::marker::Sync + Debug + Serialize + Clo
         self.wildcard_subscribers.write().await.string.push(sender);
     }
     pub async fn broadcast(&self, key: K, value: V) {
-        let subs = self.subscribers.read().await;
-        let subs = subs.get(&key);
-        let wildcard_subs = self.wildcard_subscribers.read().await;
+        let (string_senders, typed_senders) = {
+            let subs = self.subscribers.read().await;
+            let wildcard_subs = self.wildcard_subscribers.read().await;
 
-        let string_subs: Vec<_> = wildcard_subs
-            .string
-            .iter()
-            .chain(subs.map(|s| s.string.iter()).into_iter().flatten())
-            .collect();
-        let typed_subs: Vec<_> = wildcard_subs
-            .typed
-            .iter()
-            .chain(subs.map(|s| s.typed.iter()).into_iter().flatten())
-            .collect();
+            let string_senders: Vec<_> = wildcard_subs
+                .string
+                .iter()
+                .chain(subs.get(&key).map(|s| s.string.iter()).into_iter().flatten())
+                .cloned()
+                .collect();
+            let typed_senders: Vec<_> = wildcard_subs
+                .typed
+                .iter()
+                .chain(subs.get(&key).map(|s| s.typed.iter()).into_iter().flatten())
+                .cloned()
+                .collect();
 
-        if string_subs.is_empty() && typed_subs.is_empty() {
+            (string_senders, typed_senders)
+        };
+
+        if string_senders.is_empty() && typed_senders.is_empty() {
             return;
         }
 
         let envelope = EventEnvelope {
             __vlo_channel: self.name.clone(),
-            __vlo_id: key,
+            __vlo_id: key.clone(),
             data: value,
         };
 
-        let json_string = if !string_subs.is_empty() {
+        let json_string = if !string_senders.is_empty() {
             Some(Arc::new(
                 serde_json::to_string(&envelope).unwrap_or_default(),
             ))
@@ -100,19 +105,45 @@ impl<K: Hash + std::cmp::Eq + Send + std::marker::Sync + Debug + Serialize + Clo
             None
         };
 
-        if !typed_subs.is_empty() {
+        let mut any_dead = false;
+
+        if !typed_senders.is_empty() {
             let envelope = Arc::new(envelope);
-            let send_futures = typed_subs
-                .iter()
-                .map(|sender| sender.send(Arc::clone(&envelope)));
-            join_all(send_futures).await;
+            let results = join_all(
+                typed_senders
+                    .iter()
+                    .map(|sender| sender.send(Arc::clone(&envelope))),
+            )
+            .await;
+            any_dead |= results.iter().any(|r| r.is_err());
         }
 
         if let Some(json_string) = json_string {
-            let send_futures = string_subs
-                .iter()
-                .map(|sender| sender.send(Arc::clone(&json_string)));
-            join_all(send_futures).await;
+            let results = join_all(
+                string_senders
+                    .iter()
+                    .map(|sender| sender.send(Arc::clone(&json_string))),
+            )
+            .await;
+            any_dead |= results.iter().any(|r| r.is_err());
+        }
+
+        if any_dead {
+            {
+                let mut subs = self.subscribers.write().await;
+                if let Some(entry) = subs.get_mut(&key) {
+                    entry.string.retain(|tx| !tx.is_closed());
+                    entry.typed.retain(|tx| !tx.is_closed());
+                    if entry.string.is_empty() && entry.typed.is_empty() {
+                        subs.remove(&key);
+                    }
+                }
+            }
+            {
+                let mut wildcard = self.wildcard_subscribers.write().await;
+                wildcard.string.retain(|tx| !tx.is_closed());
+                wildcard.typed.retain(|tx| !tx.is_closed());
+            }
         }
     }
 }

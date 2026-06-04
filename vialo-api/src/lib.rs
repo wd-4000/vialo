@@ -26,9 +26,13 @@ pub struct KratosConfigs {
     pub admin: ory_kratos_client::apis::configuration::Configuration,
 }
 
+pub struct EventChannels {
+    pub bookables: EventChannel<i32, BookableAssetStatus>,
+}
+
 pub struct AppState {
     pub db: Pool<Postgres>,
-    pub event_channel: EventChannel<i32, BookableAssetStatus>,
+    pub event_channels: EventChannels,
     pub config: Config,
     pub kratos_config: Option<KratosConfigs>,
 }

@@ -246,7 +246,7 @@ pub async fn main(
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), anyhow::Error> {
     let (mpsc_tx, mut mpsc_rx) = mpsc::channel::<Arc<EventEnvelope<i32, BookableAssetStatus>>>(10);
-    app_state.event_channel.subscribe_wildcard(mpsc_tx).await;
+    app_state.event_channels.bookables.subscribe_wildcard(mpsc_tx).await;
 
     loop {
         auto_activate_appointments(&app_state).await?;
