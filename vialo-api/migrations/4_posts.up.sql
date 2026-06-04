@@ -79,3 +79,16 @@ CREATE TABLE board_subscriptions (
   board_id int NOT NULL REFERENCES boards (id) ON DELETE CASCADE,
   UNIQUE (account_id, board_id)
 );
+
+CREATE FUNCTION account_board_perm_exists (acid uuid, bid int, min_perm board_perm) RETURNS boolean LANGUAGE sql STABLE STRICT AS $$
+    SELECT (
+        account_role_exists(acid, 'board_manager')
+        OR EXISTS (
+            SELECT 1 FROM account_group_memberships agm
+            JOIN board_group_perms bgp ON agm.group_id = bgp.group_id
+            WHERE bgp.board_id = bid
+              AND agm.account_id = acid
+              AND bgp.perm >= min_perm
+        )
+    )
+$$;

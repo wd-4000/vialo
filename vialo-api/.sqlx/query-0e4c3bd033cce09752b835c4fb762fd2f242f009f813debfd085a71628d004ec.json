@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (\n            bp.account_id = $2\n            OR account_board_perm_exists($2, bp.board_id, 'moderate'::board_perm)\n        ) AS \"allowed: bool\"\n        FROM board_posts bp WHERE bp.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed: bool",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0e4c3bd033cce09752b835c4fb762fd2f242f009f813debfd085a71628d004ec"
+}

@@ -2,7 +2,7 @@ use super::models::{BookableAssetStatus, BookableStatus};
 use crate::helpers::PgDateTime;
 use crate::http::util::models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery};
 use crate::http::util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans};
-use crate::permissions::bookables::{BookablePerm, require_asset_type_perm};
+use super::permissions::{BookablePerm, require_asset_type_perm};
 use crate::permissions::{AppRole, check_app_role};
 // use crate::ketoapi::subject::Ref;
 // use crate::ketoapi::{self, CheckRequest, Subject};

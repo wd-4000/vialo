@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (\n            account_role_exists($1, 'board_manager')\n            OR (\n                EXISTS (SELECT 1 FROM account_group_memberships WHERE account_id = $1 AND group_id = $2 AND role = 'manager')\n                AND EXISTS (SELECT 1 FROM boards bd JOIN account_group_memberships am ON bd.group_id = am.group_id WHERE bd.id = $3 AND am.account_id = $1 AND am.role = 'manager')\n            )\n        ) AS \"allowed: bool\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed: bool",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ca66d7e28f04077628369ade8f56cc886cfae36546afee64b88c347c3c773073"
+}

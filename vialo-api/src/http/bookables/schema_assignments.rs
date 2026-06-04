@@ -1,4 +1,4 @@
-use crate::permissions::bookables::{BookablePerm, require_asset_type_perm_by_asset};
+use super::permissions::{BookablePerm, require_asset_type_perm_by_asset};
 use axum::{
     Extension, Json,
     extract::{Path, Query, State},
