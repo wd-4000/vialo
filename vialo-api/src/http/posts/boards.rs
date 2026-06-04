@@ -5,7 +5,7 @@ use crate::helpers::{I18nMap, LangVariant};
 use crate::http::posts::models::BoardPostIdModel;
 use crate::http::util::models::GroupEmbed;
 use crate::http::util::{JsonE, User, VialoError, grab_trans};
-use crate::permissions::{AppRole, check_app_role, check_manager_of_group};
+use crate::permissions::check_manager_of_group;
 use crate::{AppState, list_i18n_generic};
 use axum::Extension;
 use axum::{
@@ -177,22 +177,10 @@ async fn check_board_perm(
     required_perm: BoardPerm,
     db: &sqlx::PgPool,
 ) -> Result<(), VialoError> {
-    if check_app_role(user.clone(), AppRole::BoardManager, db)
-        .await
-        .is_ok()
-    {
-        return Ok(());
-    }
-
     let has_perm = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) > 0 AS "has_perm: bool"
-           FROM board_group_perms bgp
-           JOIN account_group_memberships agm ON bgp.group_id = agm.group_id
-           WHERE bgp.board_id = $1
-             AND agm.account_id = $2
-             AND bgp.perm >= $3"#,
-        board_id,
+        r#"SELECT account_board_perm_exists($1, $2, $3) AS "has_perm: bool""#,
         user.id,
+        board_id,
         required_perm as BoardPerm,
     )
     .fetch_one(db)
@@ -290,11 +278,13 @@ pub async fn add_board(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut trans, vec![("label", Some(body.label.into()))])
-            .await
-            .ok()
-            .unwrap();
+    let processed_i18n_fields = super::super::util::insert_i18n_strings(
+        &mut trans,
+        vec![("label", Some(body.label.into()))],
+    )
+    .await
+    .ok()
+    .unwrap();
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
@@ -324,37 +314,36 @@ pub async fn put_board(
        Boards can be modified by users that are managers of both the group they want to link the board to,
        and the original group.
     */
-    // Must be manager of both the new target group and the board's current group,
-    // OR hold the BoardManager app role.
-    let is_board_manager = check_app_role(user.clone(), AppRole::BoardManager, &data.db)
-        .await
-        .is_ok();
-    if !is_board_manager {
-        check_manager_of_group(user.clone(), body.group_id, &data.db).await?;
-        let is_current_group_manager = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) > 0 AS "is_current_group_manager: bool" FROM boards bd
-             JOIN account_group_memberships am ON bd.group_id = am.group_id
-             WHERE bd.id = $1 AND am.account_id = $2 AND am.role = 'manager'"#,
-            id,
-            user.id
-        )
-        .fetch_one(&data.db)
-        .await
-        .map_err(|e| VialoError::Anyhow(e.into()))?
-        .unwrap_or(false);
-        if !is_current_group_manager {
-            return Err(VialoError::Forbidden());
-        }
+    let allowed = sqlx::query_scalar!(
+        r#"SELECT (
+            account_role_exists($1, 'board_manager')
+            OR (
+                EXISTS (SELECT 1 FROM account_group_memberships WHERE account_id = $1 AND group_id = $2 AND role = 'manager')
+                AND EXISTS (SELECT 1 FROM boards bd JOIN account_group_memberships am ON bd.group_id = am.group_id WHERE bd.id = $3 AND am.account_id = $1 AND am.role = 'manager')
+            )
+        ) AS "allowed: bool""#,
+        user.id,
+        body.group_id,
+        id,
+    )
+    .fetch_one(&data.db)
+    .await
+    .map_err(|e| VialoError::Anyhow(e.into()))?
+    .unwrap_or(false);
+    if !allowed {
+        return Err(VialoError::Forbidden());
     }
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut trans, vec![("label", Some(body.label.into()))])
-            .await
-            .ok()
-            .unwrap();
+    let processed_i18n_fields = super::super::util::insert_i18n_strings(
+        &mut trans,
+        vec![("label", Some(body.label.into()))],
+    )
+    .await
+    .ok()
+    .unwrap();
 
     let record = sqlx::query_as!(
         BoardPostIdModel,

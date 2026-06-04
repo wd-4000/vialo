@@ -2,7 +2,7 @@ use super::models::BoardPostIdModel;
 use crate::AppState;
 use crate::http::util::grab_authd_conn_user;
 use crate::http::util::{JsonE, SearchableListOptions, User, VialoError};
-use crate::permissions::bookables::{
+use super::permissions::{
     BookablePerm, require_asset_type_perm, require_asset_type_perm_by_schema,
 };
 use axum::extract::Path;

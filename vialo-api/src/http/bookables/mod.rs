@@ -1,4 +1,5 @@
 pub mod appointments;
+pub mod permissions;
 pub mod connectors;
 pub mod handlers;
 pub mod models;

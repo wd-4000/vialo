@@ -5,7 +5,7 @@ use super::models::{
     BookableAssetTranslatedWithStatus, BookableStatus,
 };
 use crate::http::util::{grab_authd_conn_user, grab_trans};
-use crate::permissions::bookables::{BookablePerm, require_asset_type_perm};
+use super::permissions::{BookablePerm, require_asset_type_perm};
 use crate::{
     helpers::grab_authd_conn_subsystem,
     http::util::{JsonE, User, VialoError},

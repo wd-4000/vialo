@@ -13,7 +13,6 @@ use pulldown_cmark::{Parser, html};
 use crate::AppState;
 use crate::helpers::LangVariant;
 use crate::http::util::{JsonE, User, VialoError, get_i18n_arg_arrays, grab_trans};
-use crate::permissions::{AppRole, check_app_role};
 use axum::Extension;
 use axum::{
     Json,
@@ -103,13 +102,9 @@ pub async fn list_posts(
                           #THROWING_UP = match(opts.pinned_on) {
                             Some(true)=> r#"array_agg(bpp.board_id) FILTER (WHERE bpp.board_id IS NOT NULL) AS pinned_on
                             FROM board_posts bp
-                            LEFT JOIN board_group_perms bgp ON bp.board_id = bgp.board_id
-                            LEFT JOIN account_group_memberships agm ON bgp.group_id = agm.group_id
                             LEFT JOIN board_pinned_posts bpp ON bpp.post_id = bp.id"#,
                             _ => r#"NULL AS "pinned_on: Vec<i32>"
-                            FROM board_posts bp
-                            LEFT JOIN board_group_perms bgp ON bp.board_id = bgp.board_id
-                            LEFT JOIN account_group_memberships agm ON bgp.group_id = agm.group_id"#
+                            FROM board_posts bp"#
                           },
                           #SEARCH = match (opts.search){
                               Some(search) => "(title ILIKE '%' || {search} || '%' OR location ILIKE '%' || {search} || '%')",
@@ -120,7 +115,7 @@ pub async fn list_posts(
                               Some(false) => "TRUE"
                           },
                           #VISIBILITY = match (user_o){
-                              Some(User {id: uid} ) => "(bp.visibility IN ('public', 'logged_in') OR (bgp.perm >= 'view' AND agm.account_id = {uid}) OR account_role_exists({uid}, 'board_manager'::app_role))",
+                              Some(User {id: uid} ) => "(bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists({uid}, bp.board_id, 'view'::board_perm))",
                               _ => "bp.visibility = 'public'"
                           },
                           #BOARD = match (&opts.board_id){
@@ -131,29 +126,15 @@ pub async fn list_posts(
     Ok((StatusCode::OK, Json(posts)))
 }
 
-/// Returns Ok(()) if the user may post to the given board:
-/// they hold `board_perm >= post` via any of their groups, OR are a BoardManager.
 async fn check_can_post_to_board(
     user: &User,
     board_id: i32,
     db: &sqlx::PgPool,
 ) -> Result<(), VialoError> {
-    if check_app_role(user.clone(), AppRole::BoardManager, db)
-        .await
-        .is_ok()
-    {
-        return Ok(());
-    }
-
     let allowed = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) > 0 AS "allowed: bool"
-           FROM board_group_perms bgp
-           JOIN account_group_memberships agm ON bgp.group_id = agm.group_id
-           WHERE bgp.board_id = $1
-             AND agm.account_id = $2
-             AND bgp.perm >= $3"#,
-        board_id,
+        r#"SELECT account_board_perm_exists($1, $2, $3) AS "allowed: bool""#,
         user.id,
+        board_id,
         BoardPerm::Post as BoardPerm,
     )
     .fetch_one(db)
@@ -224,42 +205,28 @@ pub async fn update_post(
        - a moderator or admin of the post's board (board_perm >= moderate)
        - BoardManagers
     */
-    let is_board_manager = check_app_role(user.clone(), AppRole::BoardManager, &data.db)
-        .await
-        .is_ok();
+    let allowed = sqlx::query_scalar!(
+        r#"SELECT (
+            -- can edit on current board: moderate perm, or author with post perm
+            (
+                account_board_perm_exists($1, bp.board_id, 'moderate'::board_perm)
+                OR (bp.account_id = $1 AND account_board_perm_exists($1, bp.board_id, 'post'::board_perm))
+            )
+            -- if moving to a different board, also needs post perm there
+            AND ($2 = bp.board_id OR account_board_perm_exists($1, $2, 'post'::board_perm))
+        ) AS "allowed: bool"
+        FROM board_posts bp WHERE bp.id = $3"#,
+        user.id,
+        body.board_id,
+        id,
+    )
+    .fetch_one(&data.db)
+    .await
+    .map_err(|e| VialoError::Anyhow(e.into()))?
+    .unwrap_or(false);
 
-    if !is_board_manager {
-        let allowed = sqlx::query_scalar!(
-            r#"SELECT (
-                -- author with post permission
-                (
-                    (SELECT COUNT(*) > 0 FROM board_posts WHERE id = $1 AND account_id = $2)
-                    AND
-                    (SELECT COUNT(*) > 0
-                     FROM board_group_perms bgp
-                     JOIN account_group_memberships agm ON bgp.group_id = agm.group_id
-                     WHERE bgp.board_id = $3 AND agm.account_id = $2 AND bgp.perm >= 'post')
-                )
-                OR
-                -- moderator or admin of the post's board
-                (SELECT COUNT(*) > 0
-                 FROM board_posts bp
-                 JOIN board_group_perms bgp ON bp.board_id = bgp.board_id
-                 JOIN account_group_memberships agm ON bgp.group_id = agm.group_id
-                 WHERE bp.id = $1 AND agm.account_id = $2 AND bgp.perm >= 'moderate')
-            ) AS "allowed: bool""#,
-            id,
-            user.id,
-            body.board_id,
-        )
-        .fetch_one(&data.db)
-        .await
-        .map_err(|e| VialoError::Anyhow(e.into()))?
-        .unwrap_or(false);
-
-        if !allowed {
-            return Err(VialoError::Forbidden());
-        }
+    if !allowed {
+        return Err(VialoError::Forbidden());
     }
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
@@ -301,14 +268,6 @@ pub async fn get_post(
     let wants_md = opts.content_format.is_empty()
         || opts.content_format.contains(&PostContentFormat::Markdown);
 
-    let is_board_manager = if let Some(ref u) = user_o {
-        check_app_role(u.clone(), AppRole::BoardManager, &data.db)
-            .await
-            .is_ok()
-    } else {
-        false
-    };
-
     if langs == ["all"] {
         let post = conditional_query_as!(
             BoardPostModelTranslatedAllLanguages,
@@ -328,8 +287,6 @@ pub async fn get_post(
                 bp.created_at
             FROM
                 board_posts bp
-            LEFT JOIN board_group_perms bgp ON bp.board_id = bgp.board_id
-            LEFT JOIN account_group_memberships agm ON bgp.group_id = agm.group_id
             WHERE bp.id = {id} AND {#VISIBILITY}",
                 #CONTENT_PLAIN = match wants_plain {
                     true => "get_i18n_all_string_translations(bp.content_plain) AS content_plain",
@@ -343,10 +300,9 @@ pub async fn get_post(
                     true => "get_i18n_all_string_translations(bp.content) AS content",
                     false => "NULL::jsonb as content"
                 },
-                #VISIBILITY = match (is_board_manager, user_o.as_ref()){
-                    (true, _) => "TRUE",
-                    (false, Some(User {id: uid, ..} )) => "(bp.visibility IN ('public', 'logged_in') OR (bgp.perm >= 'view' AND agm.account_id = {uid}) OR account_role_exists({uid}, 'board_manager'::app_role))",
-                    (false, _) => "bp.visibility = 'public'"
+                #VISIBILITY = match user_o.as_ref() {
+                    Some(User {id: uid, ..}) => "(bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists({uid}, bp.board_id, 'view'::board_perm))",
+                    _ => "bp.visibility = 'public'"
                 }
         )
         .fetch_optional(&data.db)
@@ -374,8 +330,6 @@ pub async fn get_post(
                 bp.created_at
             FROM
                 board_posts bp
-            LEFT JOIN board_group_perms bgp ON bp.board_id = bgp.board_id
-            LEFT JOIN account_group_memberships agm ON bgp.group_id = agm.group_id
             WHERE bp.id = {id} AND {#VISIBILITY}",
             #CONTENT_PLAIN = match wants_plain {
                 true => "get_i18n_string(bp.content_plain, {langs}) AS content_plain",
@@ -389,10 +343,9 @@ pub async fn get_post(
                 true => "get_i18n_string(bp.content, {langs}) AS content",
                 false => "NULL as content"
             },
-            #VISIBILITY = match (is_board_manager, user_o.as_ref()){
-                (true, _) => "TRUE",
-                (false, Some(User {id: uid, ..} )) => "(bp.visibility IN ('public', 'logged_in') OR (bgp.perm >= 'view' AND agm.account_id = {uid}) OR account_role_exists({uid}, 'board_manager'::app_role))",
-                (false, _) => "bp.visibility = 'public'"
+            #VISIBILITY = match user_o.as_ref() {
+                Some(User {id: uid, ..}) => "(bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists({uid}, bp.board_id, 'view'::board_perm))",
+                _ => "bp.visibility = 'public'"
             }
         )
         .fetch_optional(&data.db)
@@ -414,34 +367,22 @@ pub async fn delete_post(
        Posts can be deleted by: the original author, a user whose group holds
        >= moderate permission on the post's board, or a BoardManager.
     */
-    let is_board_manager = check_app_role(user.clone(), AppRole::BoardManager, &data.db)
-        .await
-        .is_ok();
+    let allowed = sqlx::query_scalar!(
+        r#"SELECT (
+            bp.account_id = $2
+            OR account_board_perm_exists($2, bp.board_id, 'moderate'::board_perm)
+        ) AS "allowed: bool"
+        FROM board_posts bp WHERE bp.id = $1"#,
+        id,
+        user.id,
+    )
+    .fetch_one(&data.db)
+    .await
+    .map_err(|e| VialoError::Anyhow(e.into()))?
+    .unwrap_or(false);
 
-    if !is_board_manager {
-        let allowed = sqlx::query_scalar!(
-            r#"SELECT (
-                -- author
-                (SELECT COUNT(*) > 0 FROM board_posts WHERE id = $1 AND account_id = $2)
-                OR
-                -- moderate permission on the post's board
-                (SELECT COUNT(*) > 0
-                 FROM board_posts bp
-                 JOIN board_group_perms bgp ON bp.board_id = bgp.board_id
-                 JOIN account_group_memberships agm ON bgp.group_id = agm.group_id
-                 WHERE bp.id = $1 AND agm.account_id = $2 AND bgp.perm >= 'moderate')
-            ) AS "allowed: bool""#,
-            id,
-            user.id,
-        )
-        .fetch_one(&data.db)
-        .await
-        .map_err(|e| VialoError::Anyhow(e.into()))?
-        .unwrap_or(false);
-
-        if !allowed {
-            return Err(VialoError::Forbidden());
-        }
+    if !allowed {
+        return Err(VialoError::Forbidden());
     }
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
