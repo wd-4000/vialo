@@ -1,0 +1,160 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, label, icon, wired, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as \"auth: NetAuth\", gen_username, gen_password, active FROM net_networks WHERE TRUE AND label ILIKE '%' || $1 || '%'  LIMIT $2 OFFSET $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "label"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "icon",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "icon"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "wired",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "wired"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "multi_device",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "multi_device"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "auto_add_on_auth",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "auto_add_on_auth"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "auto_add_via_dhcp",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "auto_add_via_dhcp"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "auth: NetAuth",
+        "type_info": {
+          "Custom": {
+            "name": "net_auth",
+            "kind": {
+              "Enum": [
+                "username_password",
+                "password"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "auth"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "gen_username",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "gen_username"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "gen_password",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "gen_password"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "active",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "active"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "f39fffaa1f361875ed80a0eb3c157a7f21de306784e32135e4d3ed695a19ce9e"
+}
