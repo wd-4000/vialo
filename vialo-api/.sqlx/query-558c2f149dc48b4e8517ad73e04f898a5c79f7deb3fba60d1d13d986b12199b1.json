@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            id,\n            label,\n            schedule::text[] as \"schedule!\",\n            asset_type_id,\n            slot_price,\n            EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period\n        FROM\n            bookable_schemas\n        WHERE label  ILIKE '%' || $1 || '%'\n        LIMIT $2 OFFSET $3",
+  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period\n        FROM\n            bookable_schemas bs\n        WHERE account_bookable_perm_exists($1, bs.asset_type_id, 'view'::bookable_perm) AND\n        TRUE\n        LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -62,7 +62,7 @@
     ],
     "parameters": {
       "Left": [
-        "Text",
+        "Uuid",
         "Int8",
         "Int8"
       ]
@@ -76,5 +76,5 @@
       null
     ]
   },
-  "hash": "7fde81f6887987de0e83230dba35a0396b3e429a2d721c19cb8c81b36d60f381"
+  "hash": "558c2f149dc48b4e8517ad73e04f898a5c79f7deb3fba60d1d13d986b12199b1"
 }

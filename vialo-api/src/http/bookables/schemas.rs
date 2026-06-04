@@ -2,7 +2,9 @@ use super::models::BoardPostIdModel;
 use crate::AppState;
 use crate::http::util::grab_authd_conn_user;
 use crate::http::util::{JsonE, SearchableListOptions, User, VialoError};
-use crate::permissions::{AppRole, check_member_of_group_or_app_role};
+use crate::permissions::bookables::{
+    BookablePerm, require_asset_type_perm, require_asset_type_perm_by_schema,
+};
 use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
@@ -29,30 +31,31 @@ pub struct BookableSchema {
 #[utoipa::path(get, path = "/bookables/schemas", params(SearchableListOptions), responses((status = 200, description = "OK", body=Vec<BookableSchema>)))]
 pub async fn list(
     Query(opts): Query<SearchableListOptions>,
+    Extension(user_o): Extension<Option<User>>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
     let limit = opts.limit.unwrap_or(10);
-
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let user_id_o = user_o.as_ref().map(|u| u.id);
 
-    // Execute the query and handle the result
     let record = conditional_query_as!(
         BookableSchema,
         r#"SELECT
-            id,
-            label,
-            schedule::text[] as "schedule!",
-            asset_type_id,
-            slot_price,
-            EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period
+            bs.id,
+            bs.label,
+            bs.schedule::text[] as "schedule!",
+            bs.asset_type_id,
+            bs.slot_price,
+            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period
         FROM
-            bookable_schemas
+            bookable_schemas bs
+        WHERE account_bookable_perm_exists({user_id_o}, bs.asset_type_id, 'view'::bookable_perm) AND
         {#search}
         LIMIT {limit} OFFSET {offset}"#,
-            #search = match &opts.search {
-                Some(s) => "WHERE label  ILIKE '%' || {s} || '%'",
-                None => "",
-            }
+        #search = match &opts.search {
+            Some(s) => "label ILIKE '%' || {s} || '%'",
+            None => "TRUE",
+        }
     )
     .fetch_all(&data.db)
     .await?;
@@ -64,21 +67,25 @@ pub async fn list(
 pub async fn get(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
+    Extension(user_o): Extension<Option<User>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    // Execute the query and handle the result
-    let record = conditional_query_as!(
+    let user_id_o = user_o.as_ref().map(|u| u.id);
+
+    let record = sqlx::query_as!(
         BookableSchema,
         r#"SELECT
-            id,
-            label,
-            schedule::text[] as "schedule!",
-            asset_type_id,
-            slot_price,
-            EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period
+            bs.id,
+            bs.label,
+            bs.schedule::text[] as "schedule!",
+            bs.asset_type_id,
+            bs.slot_price,
+            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period
         FROM
-            bookable_schemas
-        WHERE
-            id = {id}"#,
+            bookable_schemas bs
+        WHERE bs.id = $1
+          AND account_bookable_perm_exists($2, bs.asset_type_id, 'view'::bookable_perm)"#,
+        id,
+        user_id_o
     )
     .fetch_one(&data.db)
     .await?;
@@ -92,35 +99,9 @@ pub async fn delete(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let group_id = sqlx::query_scalar!(
-        r#"SELECT bat.group_id FROM bookable_schemas bs
-         JOIN bookable_asset_types bat ON bs.asset_type_id = bat.id
-         WHERE bs.id = $1"#,
-        id
-    )
-    .fetch_optional(&data.db)
-    .await?
-    .flatten();
+    require_asset_type_perm_by_schema(user.id, id, BookablePerm::Admin, &data.db).await?;
 
-    match group_id {
-        Some(group_id) => {
-            check_member_of_group_or_app_role(
-                user.clone(),
-                group_id,
-                AppRole::BookableManager,
-                &data.db,
-            )
-            .await?;
-        }
-        // No resolvable group (schema has no asset_type, or the type has no group):
-        // fall back to requiring BookableManager.
-        None => {
-            crate::permissions::check_app_role(user.clone(), AppRole::BookableManager, &data.db)
-                .await?;
-        }
-    }
-
-    // Execute the query and handle the result
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let _record = query!(
         r#"DELETE FROM
             bookable_schemas
@@ -128,7 +109,7 @@ pub async fn delete(
             id = $1"#,
         id
     )
-    .execute(&data.db)
+    .execute(&mut *conn)
     .await?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -152,18 +133,7 @@ pub async fn post(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<BookableSchemaPostOrPut>,
 ) -> Result<impl IntoResponse, VialoError> {
-    // Member of the target asset type's group or BookableManager may create schemas.
-    let group_id = sqlx::query_scalar!(
-        "SELECT group_id FROM bookable_asset_types WHERE id = $1",
-        body.asset_type_id
-    )
-    .fetch_optional(&data.db)
-    .await?
-    .flatten()
-    .ok_or(VialoError::NotFound())?;
-
-    check_member_of_group_or_app_role(user.clone(), group_id, AppRole::BookableManager, &data.db)
-        .await?;
+    require_asset_type_perm(user.id, body.asset_type_id, BookablePerm::Admin, &data.db).await?;
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
@@ -186,46 +156,35 @@ pub async fn put(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<BookableSchemaPostOrPut>,
 ) -> Result<impl IntoResponse, VialoError> {
-    // Must be a member of the existing schema's asset type's group (or BookableManager).
-    // If reassigning to a new asset_type, must also be a member of that group.
-    let existing_group_id = sqlx::query_scalar!(
-        r#"SELECT bat.group_id FROM bookable_schemas bs
-         JOIN bookable_asset_types bat ON bs.asset_type_id = bat.id
-         WHERE bs.id = $1"#,
+    require_asset_type_perm_by_schema(user.id, id, BookablePerm::Admin, &data.db).await?;
+    require_asset_type_perm(user.id, body.asset_type_id, BookablePerm::Admin, &data.db).await?;
+
+    let existing_appointments = sqlx::query_scalar!(
+        r#"SELECT EXISTS (
+            (SELECT 1 FROM bookable_appointments ba
+            JOIN LATERAL (
+              SELECT DISTINCT ON (asset_id) schema_id, begins
+              FROM bookable_schema_assignments
+              WHERE asset_id = ba.asset_id
+                AND begins <= lower(ba.during)
+              ORDER BY asset_id, begins DESC
+            ) bsa ON true
+            WHERE schema_id = $1)
+        ) AS "existing: bool""#,
         id
     )
-    .fetch_optional(&data.db)
+    .fetch_one(&data.db)
     .await?
-    .flatten()
-    .ok_or(VialoError::NotFound())?;
+    .unwrap_or(false);
 
-    check_member_of_group_or_app_role(
-        user.clone(),
-        existing_group_id,
-        AppRole::BookableManager,
-        &data.db,
-    )
-    .await?;
-
-    let new_group_id = sqlx::query_scalar!(
-        "SELECT group_id FROM bookable_asset_types WHERE id = $1",
-        body.asset_type_id
-    )
-    .fetch_optional(&data.db)
-    .await?
-    .flatten()
-    .ok_or(VialoError::NotFound())?;
-
-    check_member_of_group_or_app_role(
-        user.clone(),
-        new_group_id,
-        AppRole::BookableManager,
-        &data.db,
-    )
-    .await?;
+    if existing_appointments {
+        return Err(VialoError::AppError(
+            StatusCode::BAD_REQUEST,
+            "existing_appointments".to_string(),
+        ));
+    }
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
-
     let record = sqlx::query_as!(
         BookableSchema,
         r#"UPDATE bookable_schemas SET (label, schedule, asset_type_id, slot_price, activation_grace_period) = ($1, $2::time[], $3, $4, $5) WHERE id = $6

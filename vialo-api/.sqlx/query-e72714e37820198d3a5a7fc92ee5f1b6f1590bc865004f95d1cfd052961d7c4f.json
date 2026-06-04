@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (\n            -- Bookable Manager\n            account_role_exists($1, 'bookable_manager')\n            OR\n            -- New type\n            (SELECT COUNT(*) > 0 FROM account_group_memberships agm\n                JOIN bookable_asset_type_group_perms batgp ON agm.group_id = batgp.group_id\n                WHERE agm.account_id = $1 AND batgp.perm >= 'admin'::bookable_perm)\n        ) AS \"allowed!: bool\" ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed!: bool",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e72714e37820198d3a5a7fc92ee5f1b6f1590bc865004f95d1cfd052961d7c4f"
+}

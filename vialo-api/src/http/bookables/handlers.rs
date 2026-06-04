@@ -5,7 +5,7 @@ use super::models::{
     BookableAssetTranslatedWithStatus, BookableStatus,
 };
 use crate::http::util::{grab_authd_conn_user, grab_trans};
-use crate::permissions::{AppRole, check_member_of_group_or_app_role};
+use crate::permissions::bookables::{BookablePerm, require_asset_type_perm};
 use crate::{
     helpers::grab_authd_conn_subsystem,
     http::util::{JsonE, User, VialoError},
@@ -21,7 +21,7 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
-use sqlx::{query, query_as};
+use sqlx::query_as;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 use std::{i64, time::Duration};
@@ -42,7 +42,7 @@ pub struct BookableFilterOptions {
 pub async fn list_bookables(
     Query(opts): Query<BookableFilterOptions>,
     State(data): State<Arc<AppState>>,
-    Extension(_user): Extension<User>,
+    Extension(user_o): Extension<Option<User>>,
 ) -> Result<impl IntoResponse, VialoError> {
     let limit = opts.limit.unwrap_or(10);
 
@@ -51,9 +51,8 @@ pub async fn list_bookables(
         .unwrap_or(vec![String::from("en"), String::from("de")]);
 
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
-    let re = query!("SELECT LOCALTIMESTAMP;").fetch_all(&data.db).await;
-    println!("{:?}", re);
-    // Execute the query and handle the result
+    let user_id_o = user_o.as_ref().map(|u| u.id);
+
     let record = conditional_query_as!(
             BookableAssetTranslatedWithStatus,
             r#"SELECT
@@ -66,9 +65,10 @@ pub async fn list_bookables(
                 ends as "ends: PgDateTime"
             FROM
                 bookable_asset_status
+            WHERE account_bookable_perm_exists({user_id_o}, asset_type_id, 'view'::bookable_perm)
             {#asset_type} ORDER BY id LIMIT {limit} OFFSET {offset}"#,
             #asset_type = match (opts.asset_types) {
-                Some(at) => "WHERE asset_type_id = ANY({at:Vec<i32>})",
+                Some(at) => "AND asset_type_id = ANY({at:Vec<i32>})",
                 None => "",
             },
     )
@@ -135,7 +135,6 @@ pub async fn quick_unlock(
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct PostBookableSchema {
-    //pub group_id: Option<i32>,
     pub name: I18nMap,
     pub icon: Option<String>,
     pub slug: Option<String>,
@@ -150,34 +149,9 @@ pub async fn post_bookable(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<PostBookableSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
-    // Member of the asset type's group or BookableManager may create assets.
-    let group_id = sqlx::query_scalar!(
-        "SELECT group_id FROM bookable_asset_types WHERE id = $1",
-        body.asset_type_id
-    )
-    .fetch_optional(&data.db)
-    .await?
-    .flatten()
-    .ok_or(VialoError::NotFound())?;
-
-    check_member_of_group_or_app_role(user.clone(), group_id, AppRole::BookableManager, &data.db)
-        .await?;
-
+    require_asset_type_perm(user.id, body.asset_type_id, BookablePerm::Admin, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
-
-    // data.permission.check.check(CheckRequest {
-    //     latest: true,
-    //     tuple: Some(ketoapi::RelationTuple {
-    //         namespace: "Bookables".into(),
-    //         object: "1".into(),
-    //         relation: "view".into(),
-    //         subject: Some(Subject {
-    //             r#ref: Some(Ref::Id("1".into())),
-    //         }),
-    //     }),
-    //     ..Default::default()
-    // });
 
     let processed_i18n_fields =
         super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name.into()))])
@@ -209,46 +183,16 @@ pub async fn put_bookable(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<PostBookableSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
-    // Must be a member of the existing asset's type's group (or BookableManager).
-    // If reassigning to a new asset_type, must also be a member of that group.
-    let existing_group_id = sqlx::query_scalar!(
-        r#"SELECT bat.group_id FROM bookable_assets ba
-         JOIN bookable_asset_types bat ON ba.asset_type_id = bat.id
-         WHERE ba.id = $1"#,
+    let current_type_id = sqlx::query_scalar!(
+        "SELECT asset_type_id FROM bookable_assets WHERE id = $1",
         id
     )
-    .fetch_optional(&data.db)
-    .await?
-    .flatten()
-    .ok_or(VialoError::NotFound())?;
-
-    check_member_of_group_or_app_role(
-        user.clone(),
-        existing_group_id,
-        AppRole::BookableManager,
-        &data.db,
-    )
+    .fetch_one(&data.db)
     .await?;
-
-    let new_group_id = sqlx::query_scalar!(
-        "SELECT group_id FROM bookable_asset_types WHERE id = $1",
-        body.asset_type_id
-    )
-    .fetch_optional(&data.db)
-    .await?
-    .flatten()
-    .ok_or(VialoError::NotFound())?;
-
-    if new_group_id != existing_group_id {
-        check_member_of_group_or_app_role(
-            user.clone(),
-            new_group_id,
-            AppRole::BookableManager,
-            &data.db,
-        )
-        .await?;
+    require_asset_type_perm(user.id, current_type_id, BookablePerm::Admin, &data.db).await?;
+    if body.asset_type_id != current_type_id {
+        require_asset_type_perm(user.id, body.asset_type_id, BookablePerm::Admin, &data.db).await?;
     }
-
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
@@ -282,10 +226,13 @@ pub async fn get_bookable(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
     Query(opts): Query<BookableFilterOptions>,
+    Extension(user_o): Extension<Option<User>>,
 ) -> Result<impl IntoResponse, VialoError> {
     let langs = opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
+
+    let user_id_o = user_o.as_ref().map(|u| u.id);
 
     if langs == ["all"] {
         let post = sqlx::query_as!(
@@ -299,8 +246,11 @@ pub async fn get_bookable(
                 bp.asset_type_id,
                 get_i18n_all_string_translations(bp.name_i18n) AS name
             FROM
-                bookable_assets bp WHERE id = $1",
-            id
+                bookable_assets bp
+            WHERE bp.id = $1
+              AND account_bookable_perm_exists($2, bp.asset_type_id, 'view'::bookable_perm)",
+            id,
+            user_id_o
         )
         .fetch_one(&data.db)
         .await?;
@@ -318,9 +268,12 @@ pub async fn get_bookable(
                begins,
                ends as "ends: PgDateTime"
            FROM
-               bookable_asset_status bd WHERE id = $2;"#,
+               bookable_asset_status bd
+           WHERE bd.id = $2
+             AND account_bookable_perm_exists($3, bd.asset_type_id, 'view'::bookable_perm)"#,
             &langs,
-            id
+            id,
+            user_id_o
         )
         .fetch_one(&data.db)
         .await?;

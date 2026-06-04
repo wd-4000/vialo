@@ -78,7 +78,6 @@ pub async fn list(
     let limit = opts.limit.unwrap_or(10);
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
-    // Execute the query and handle the result
     let record = conditional_query_as!(
         BookableConnector,
         r#"SELECT id,

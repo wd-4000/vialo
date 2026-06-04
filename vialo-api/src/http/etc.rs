@@ -10,7 +10,6 @@ use std::sync::Arc;
 pub async fn list_mail_recipients(
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    // Execute the query and handle the result
     // match query!(r#"SELECT ARRAY_AGG(email) AS emails FROM (select ag.email from account_groups ag WHERE ag.email IS NOT NULL UNION SELECT slug from boards bd WHERE slug IS NOT NULL);"#,)
     let record = query!(
         r#"select ARRAY_AGG(ag.email) as emails from account_groups ag WHERE ag.email IS NOT NULL"#,

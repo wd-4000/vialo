@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                id,\n                get_i18n_string(bd.name_i18n, $1) AS name,\n                bd.group_id\n            FROM\n                bookable_asset_types bd LIMIT $2 OFFSET $3",
+  "query": "SELECT\n                id,\n                get_i18n_string(bd.name_i18n, $1) AS name\n            FROM\n                bookable_asset_types bd LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -19,17 +19,6 @@
         "name": "name",
         "type_info": "Text",
         "origin": "Expression"
-      },
-      {
-        "ordinal": 2,
-        "name": "group_id",
-        "type_info": "Uuid",
-        "origin": {
-          "Table": {
-            "table": "bookable_asset_types",
-            "name": "group_id"
-          }
-        }
       }
     ],
     "parameters": {
@@ -41,9 +30,8 @@
     },
     "nullable": [
       false,
-      null,
-      true
+      null
     ]
   },
-  "hash": "b39804a94ecd20e0003f335afd4f67a55fe0a9ef8578ae85e2f456f8c4885df9"
+  "hash": "a49b8e138c0d738c1e8046ee3e18b9e7382cb00d9c156007faef67ed1932ce28"
 }
