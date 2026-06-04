@@ -7,7 +7,6 @@ use crate::{
     impl_jsonb_embed,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sqlx::{FromRow, types::ipnetwork::IpNetwork};
 use utoipa::ToSchema;
 use uuid::Uuid;

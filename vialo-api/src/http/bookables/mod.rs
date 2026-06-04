@@ -13,7 +13,6 @@ use std::sync::Arc;
 
 use axum::{
     Router,
-    handler::Handler,
     middleware::{self},
     routing::{delete, get, post, put},
 };

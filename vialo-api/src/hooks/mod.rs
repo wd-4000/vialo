@@ -12,9 +12,6 @@ use tower_http::trace::TraceLayer;
 use crate::helpers::{self, grab_authd_conn_subsystem, people::IdentityModel};
 use crate::http::util::{JsonE, VialoError};
 use axum::{extract::State, http::StatusCode, response::IntoResponse};
-use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
-use uuid::Uuid;
 
 pub async fn update_identity(
     State(data): State<Arc<AppState>>,

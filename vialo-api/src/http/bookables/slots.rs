@@ -9,7 +9,6 @@ use axum_extra::extract::Query;
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx::types::JsonValue;
 use sqlx::{query, query_as, query_scalar};
 use sqlx_conditional_queries::conditional_query_as;
 use std::collections::HashMap;

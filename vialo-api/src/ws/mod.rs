@@ -125,15 +125,12 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, state: Arc<AppSta
                 let id: i32 = sub.id.into();
                 let key = (sub.channel.clone(), id);
                 if subscribed.insert(key) {
-                    match sub.channel.as_str() {
-                        "bookables" => {
-                            state
-                                .event_channels
-                                .bookables
-                                .subscribe_string(id, mpsc_tx.clone())
-                                .await
-                        }
-                        _ => {}
+                    if sub.channel.as_str() == "bookables" {
+                        state
+                            .event_channels
+                            .bookables
+                            .subscribe_string(id, mpsc_tx.clone())
+                            .await
                     }
                 }
             }

@@ -14,7 +14,6 @@ use sqlx_conditional_queries::conditional_query_as;
 use std::i64;
 use std::sync::Arc;
 use utoipa::ToSchema;
-use uuid::Uuid;
 
 #[derive(Serialize, ToSchema)]
 pub struct BookableAssetTypeTranslated {
