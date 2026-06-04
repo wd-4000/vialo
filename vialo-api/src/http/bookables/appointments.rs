@@ -2,6 +2,7 @@ use super::models::{BookableAssetStatus, BookableStatus};
 use crate::helpers::PgDateTime;
 use crate::http::util::models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery};
 use crate::http::util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans};
+use crate::permissions::bookables::{BookablePerm, require_asset_type_perm};
 use crate::permissions::{AppRole, check_app_role};
 // use crate::ketoapi::subject::Ref;
 // use crate::ketoapi::{self, CheckRequest, Subject};
@@ -18,16 +19,7 @@ use std::i64;
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
-// CREATE TABLE bookable_appointments (
-//     id uuid PRIMARY KEY default gen_random_uuid (),
-//     asset_id int NOT NULL REFERENCES bookable_assets (id),
-//     transaction_id uuid REFERENCES credit_ledger (id),
-//     account_id uuid NOT NULL REFERENCES accounts (id), -- No cascade here, we want to make sure appointments are refunded appropriately.
-//     begins timestamptz NOT NULL,
-//     ends timestamptz,
-//     maintenance boolean
-// );
-//
+
 #[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct BookableAppointmentFilterOptions {
     pub lang: Option<Vec<String>>,
@@ -125,7 +117,7 @@ pub async fn delete_appointment(
           SELECT DISTINCT ON (asset_id) schema_id, begins
           FROM bookable_schema_assignments
           WHERE asset_id = ba.asset_id
-            AND begins <= lower(ba.during)
+            AND begins <= lower(ba.during) -- TODO base on created_at?
           ORDER BY asset_id, begins DESC
         ) bsa ON true
         -- Appropriate cancellation policy
@@ -144,40 +136,25 @@ pub async fn delete_appointment(
     .await?;
 
     let mut real_cancellation_reason = CancellationReason::User;
-    // Check whether current user is deleting the appointment
-    if (appointment.account_id != user.id) {
-        // If not, check permission on asset type OR bookable_manager role
-        let allowed = sqlx::query_scalar!(
-            r#"SELECT (
-                (SELECT COUNT(*) > 0 FROM account_group_memberships agm
-                 JOIN bookable_asset_type_group_perms batgp ON agm.group_id = batgp.group_id
-                 WHERE agm.account_id = $1 AND batgp.asset_type_id = $2 AND batgp.perm >= 'admin'::bookable_perm)
-                OR
-                account_role_exists($1, 'bookable_manager')
-            ) AS "allowed: bool""#,
+    if appointment.account_id != user.id {
+        require_asset_type_perm(
             user.id,
-            appointment.asset_type_id
+            appointment.asset_type_id,
+            BookablePerm::Admin,
+            &data.db,
         )
-        .fetch_one(&data.db)
-        .await
-        .map_err(|e| VialoError::Anyhow(e.into()))?
-        .unwrap_or(false);
-
-        if allowed {
-            real_cancellation_reason = CancellationReason::Admin;
-        } else {
-            return Err(VialoError::Forbidden());
-        }
+        .await?;
+        real_cancellation_reason = CancellationReason::Admin;
     }
 
-    if (appointment.activated.is_some()) {
+    if appointment.activated.is_some() {
         return Err(VialoError::AppError(
             StatusCode::FORBIDDEN,
             "already_activated".to_string(),
         ));
     }
 
-    if (appointment.cancelled_at.is_some()) {
+    if appointment.cancelled_at.is_some() {
         return Err(VialoError::AppError(
             StatusCode::FORBIDDEN,
             "already_cancelled".to_string(),
@@ -246,7 +223,6 @@ pub async fn list(
         check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
     }
 
-    // Execute the query and handle the result
     let record = conditional_query_as!(
         BookableAppointmentType,
         r#"SELECT

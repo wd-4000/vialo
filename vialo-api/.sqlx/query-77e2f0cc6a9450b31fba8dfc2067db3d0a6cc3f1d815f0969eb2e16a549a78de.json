@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT account_bookable_perm_exists($1, (SELECT asset_type_id FROM bookable_schemas WHERE id = $2), $3) AS \"allowed: bool\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed: bool",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        {
+          "Custom": {
+            "name": "bookable_perm",
+            "kind": {
+              "Enum": [
+                "view",
+                "book",
+                "admin"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "77e2f0cc6a9450b31fba8dfc2067db3d0a6cc3f1d815f0969eb2e16a549a78de"
+}

@@ -201,13 +201,17 @@ async fn get_person_capabilities_impl(
     )
     .fetch_all(&data.db);
 
-    // Can they manage *any* bookable? (Are they in a group that owns a bookable asset type?)
+    // Can they manage *any* bookable? (Are they in a group that has BookableManager or have >= admin)
     let bookable_future = sqlx::query_scalar!(
-        r#"SELECT EXISTS (
-             SELECT 1 FROM bookable_asset_types bat
-             JOIN account_group_memberships agm ON bat.group_id = agm.group_id
-             WHERE agm.account_id = $1
-           ) AS "exists!""#,
+        r#"SELECT (
+            -- Bookable Manager
+            account_role_exists($1, 'bookable_manager')
+            OR
+            -- New type
+            (SELECT COUNT(*) > 0 FROM account_group_memberships agm
+                JOIN bookable_asset_type_group_perms batgp ON agm.group_id = batgp.group_id
+                WHERE agm.account_id = $1 AND batgp.perm >= 'admin'::bookable_perm)
+        ) AS "allowed!: bool" "#,
         target_id
     )
     .fetch_one(&data.db);

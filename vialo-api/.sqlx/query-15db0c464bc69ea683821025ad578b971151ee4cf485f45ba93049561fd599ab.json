@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n            (SELECT 1 FROM bookable_appointments ba\n            JOIN LATERAL (\n              SELECT DISTINCT ON (asset_id) schema_id, begins\n              FROM bookable_schema_assignments\n              WHERE asset_id = ba.asset_id\n                AND begins <= lower(ba.during)\n              ORDER BY asset_id, begins DESC\n            ) bsa ON true\n            WHERE schema_id = $1)\n        ) AS \"existing: bool\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "existing: bool",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "15db0c464bc69ea683821025ad578b971151ee4cf485f45ba93049561fd599ab"
+}

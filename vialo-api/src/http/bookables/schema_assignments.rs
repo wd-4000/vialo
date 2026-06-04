@@ -1,4 +1,4 @@
-use crate::permissions::{AppRole, check_manager_of_group_or_app_role};
+use crate::permissions::bookables::{BookablePerm, require_asset_type_perm_by_asset};
 use axum::{
     Extension, Json,
     extract::{Path, Query, State},
@@ -32,7 +32,6 @@ pub async fn list(
 
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
-    // Execute the query and handle the result
     let record = conditional_query_as!(
         BookableSchemaAssignment,
         r#"SELECT
@@ -56,21 +55,7 @@ pub async fn post(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<BookableSchemaAssignment>,
 ) -> Result<impl IntoResponse, VialoError> {
-    // BookableManager or manager of the asset's type's group may assign schemas.
-    let group_id = sqlx::query_scalar!(
-        r#"SELECT bat.group_id FROM bookable_assets ba
-         JOIN bookable_asset_types bat ON ba.asset_type_id = bat.id
-         WHERE ba.id = $1"#,
-        id
-    )
-    .fetch_optional(&data.db)
-    .await?
-    .flatten()
-    .ok_or(VialoError::NotFound())?;
-
-    check_manager_of_group_or_app_role(user.clone(), group_id, AppRole::BookableManager, &data.db)
-        .await?;
-
+    require_asset_type_perm_by_asset(user.id, id, BookablePerm::Admin, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     sqlx::query!(
@@ -91,21 +76,7 @@ pub async fn delete(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
-    // BookableManager or manager of the asset's type's group may remove schema assignments.
-    let group_id = sqlx::query_scalar!(
-        r#"SELECT bat.group_id FROM bookable_assets ba
-         JOIN bookable_asset_types bat ON ba.asset_type_id = bat.id
-         WHERE ba.id = $1"#,
-        id
-    )
-    .fetch_optional(&data.db)
-    .await?
-    .flatten()
-    .ok_or(VialoError::NotFound())?;
-
-    check_manager_of_group_or_app_role(user.clone(), group_id, AppRole::BookableManager, &data.db)
-        .await?;
-
+    require_asset_type_perm_by_asset(user.id, id, BookablePerm::Admin, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     sqlx::query!(

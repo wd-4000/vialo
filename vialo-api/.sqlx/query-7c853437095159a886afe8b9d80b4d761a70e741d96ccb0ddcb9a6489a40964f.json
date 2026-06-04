@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            bp.id,\n            group_id,\n               get_i18n_string(bp.name_i18n, $1) AS name\n\n           FROM\n                bookable_asset_types bp WHERE id = $2;",
+  "query": "SELECT id, name FROM (SELECT\n                id,\n                get_i18n_string(bd.name_i18n, $1) AS name\n            FROM\n                bookable_asset_types bd) WHERE name ILIKE '%' || $2 || '%' LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -16,17 +16,6 @@
       },
       {
         "ordinal": 1,
-        "name": "group_id",
-        "type_info": "Uuid",
-        "origin": {
-          "Table": {
-            "table": "bookable_asset_types",
-            "name": "group_id"
-          }
-        }
-      },
-      {
-        "ordinal": 2,
         "name": "name",
         "type_info": "Text",
         "origin": "Expression"
@@ -35,14 +24,15 @@
     "parameters": {
       "Left": [
         "TextArray",
-        "Int4"
+        "Text",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
       false,
-      true,
       null
     ]
   },
-  "hash": "8691a35e3f0a27fe9e1b9f0a580315ba682c304dbb2defcc582cbca5d9af5e85"
+  "hash": "7c853437095159a886afe8b9d80b4d761a70e741d96ccb0ddcb9a6489a40964f"
 }

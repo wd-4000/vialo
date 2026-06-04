@@ -3,7 +3,7 @@ use crate::AppState;
 use crate::helpers::{I18nMap, LangVariant};
 use crate::http::util::{JsonE, User, VialoError};
 use crate::http::util::{grab_authd_conn_user, grab_trans};
-use crate::permissions::{AppRole, check_app_role, check_member_of_group_or_app_role};
+use crate::permissions::{AppRole, check_app_role};
 use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
@@ -20,7 +20,6 @@ use uuid::Uuid;
 pub struct BookableAssetTypeTranslated {
     pub id: i32,
     pub name: Option<String>,
-    pub group_id: Option<Uuid>,
 }
 
 #[utoipa::path(get, path = "/bookables/types", params(
@@ -38,14 +37,12 @@ pub async fn list(
 
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
-    // Execute the query and handle the result
     if let Some(search) = opts.search {
         let record = conditional_query_as!(
             BookableAssetTypeTranslated,
-            r#"SELECT id, name, group_id FROM (SELECT
+            r#"SELECT id, name FROM (SELECT
                 id,
-                get_i18n_string(bd.name_i18n, {langs:Vec<String>}) AS name,
-                bd.group_id
+                get_i18n_string(bd.name_i18n, {langs:Vec<String>}) AS name
             FROM
                 bookable_asset_types bd) WHERE name ILIKE '%' || {search} || '%' LIMIT {limit} OFFSET {offset}"#
         )
@@ -58,8 +55,7 @@ pub async fn list(
             BookableAssetTypeTranslated,
             r#"SELECT
                 id,
-                get_i18n_string(bd.name_i18n, {langs:Vec<String>}) AS name,
-                bd.group_id
+                get_i18n_string(bd.name_i18n, {langs:Vec<String>}) AS name
             FROM
                 bookable_asset_types bd LIMIT {limit} OFFSET {offset}"#
         )
@@ -72,9 +68,7 @@ pub async fn list(
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct PostBookableTypeSchema {
-    //pub group_id: Option<i32>,
     pub name: I18nMap,
-    pub group_id: Uuid,
 }
 
 #[utoipa::path(post, path = "/bookables/types", request_body = PostBookableTypeSchema, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
@@ -97,9 +91,8 @@ pub async fn post(
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
-        "INSERT INTO bookable_asset_types (name_i18n, group_id) VALUES ($1, $2) RETURNING id",
-        processed_i18n_fields.get("name"),
-        body.group_id
+        "INSERT INTO bookable_asset_types (name_i18n) VALUES ($1) RETURNING id",
+        processed_i18n_fields.get("name")
     )
     .fetch_one(&mut *trans)
     .await?;
@@ -111,11 +104,9 @@ pub async fn post(
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct BookableType {
-    //pub group_id: Option<i32>,
     pub id: i32,
     #[schema(value_type = Option<I18nMap>)]
     pub name: Option<JsonValue>,
-    pub group_id: Option<Uuid>,
 }
 
 #[utoipa::path(get, path = "/bookables/types/{id}", params(BookableFilterOptions), responses((status = 200, description = "OK", body = LangVariant<BookableType, BookableAssetTypeTranslated>)))]
@@ -133,7 +124,6 @@ pub async fn get(
             BookableType,
             "SELECT
                 bp.id,
-                group_id,
                 get_i18n_all_string_translations(bp.name_i18n) AS name
             FROM
                 bookable_asset_types bp WHERE id = $1",
@@ -148,7 +138,6 @@ pub async fn get(
             BookableAssetTypeTranslated,
             r#"SELECT
             bp.id,
-            group_id,
                get_i18n_string(bp.name_i18n, $1) AS name
 
            FROM
@@ -170,15 +159,7 @@ pub async fn put(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<PostBookableTypeSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
-    // BookableManager or any member of the type's group may edit it.
-    check_member_of_group_or_app_role(
-        user.clone(),
-        body.group_id,
-        AppRole::BookableManager,
-        &data.db,
-    )
-    .await?;
-
+    check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
@@ -189,9 +170,8 @@ pub async fn put(
             .unwrap();
 
     sqlx::query!(
-        r#"UPDATE bookable_asset_types SET (name_i18n, group_id) = ($1, $2) WHERE id = $3"#,
+        r#"UPDATE bookable_asset_types SET name_i18n = $1 WHERE id = $2"#,
         processed_i18n_fields.get("name"),
-        body.group_id,
         id
     )
     .execute(&mut *trans)
@@ -208,19 +188,7 @@ pub async fn delete(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
-    // BookableManager or any member of the type's group may delete it.
-    let group_id = sqlx::query_scalar!(
-        "SELECT group_id FROM bookable_asset_types WHERE id = $1",
-        id
-    )
-    .fetch_optional(&data.db)
-    .await?
-    .flatten()
-    .ok_or(VialoError::NotFound())?;
-
-    check_member_of_group_or_app_role(user.clone(), group_id, AppRole::BookableManager, &data.db)
-        .await?;
-
+    check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 

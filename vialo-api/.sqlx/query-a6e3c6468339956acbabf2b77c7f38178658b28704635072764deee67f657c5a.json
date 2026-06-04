@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                bp.id,\n                icon,\n                slug,\n                connector,\n                connector_output_id,\n                bp.asset_type_id,\n                get_i18n_all_string_translations(bp.name_i18n) AS name\n            FROM\n                bookable_assets bp WHERE id = $1",
+  "query": "SELECT\n                bp.id,\n                icon,\n                slug,\n                connector,\n                connector_output_id,\n                bp.asset_type_id,\n                get_i18n_all_string_translations(bp.name_i18n) AS name\n            FROM\n                bookable_assets bp\n            WHERE bp.id = $1\n              AND account_bookable_perm_exists($2, bp.asset_type_id, 'view'::bookable_perm)",
   "describe": {
     "columns": [
       {
@@ -88,7 +88,8 @@
     ],
     "parameters": {
       "Left": [
-        "Int4"
+        "Int4",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -101,5 +102,5 @@
       null
     ]
   },
-  "hash": "5c3c3b1f8f704e5a5ef54f18285723d33c25c4fbffa7acabb52dc2a3fef34633"
+  "hash": "a6e3c6468339956acbabf2b77c7f38178658b28704635072764deee67f657c5a"
 }

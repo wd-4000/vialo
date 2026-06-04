@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO bookable_asset_types (name_i18n, group_id) VALUES ($1, $2) RETURNING id",
+  "query": "INSERT INTO bookable_asset_types (name_i18n) VALUES ($1) RETURNING id",
   "describe": {
     "columns": [
       {
@@ -17,13 +17,12 @@
     ],
     "parameters": {
       "Left": [
-        "Int4",
-        "Uuid"
+        "Int4"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "e7b763041ac7f3ed20c63e3a94346d9fa7cb95312c4a867ee388e5c42e7dc36b"
+  "hash": "daa01860720de2488212a72b37df0766fc94a9142524388ff194bce826045a29"
 }

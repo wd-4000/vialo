@@ -18,7 +18,6 @@ CREATE TABLE bookable_asset_types (
   id int PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   name_i18n int REFERENCES i18n_index,
   icon citext,
-  group_id uuid REFERENCES account_groups (id) ON DELETE SET NULL,
   slug citext UNIQUE
 );
 
@@ -179,6 +178,19 @@ CREATE OR REPLACE FUNCTION slots_from_schedule (schedule time[], reference_date 
         END LOOP;
     END
     $$;
+
+CREATE FUNCTION account_bookable_perm_exists (acid uuid, at_id int, min_perm bookable_perm) RETURNS boolean LANGUAGE sql STABLE STRICT AS $$
+    SELECT (
+        account_role_exists(acid, 'bookable_manager')
+        OR EXISTS (
+            SELECT 1 FROM account_group_memberships agm
+            JOIN bookable_asset_type_group_perms batgp ON agm.group_id = batgp.group_id
+            WHERE batgp.asset_type_id = at_id
+              AND agm.account_id = acid
+              AND batgp.perm >= min_perm
+        )
+    )
+$$;
 
 CREATE OR REPLACE FUNCTION get_taken_slots (
   p_asset_ids int[],
