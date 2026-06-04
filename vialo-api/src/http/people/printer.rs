@@ -1,6 +1,7 @@
 use crate::{
     AppState,
     http::util::{JsonE, User, VialoError, grab_authd_conn_user},
+    permissions::{AppRole, check_app_role},
 };
 use crate::{
     helpers::encryption::{self as encryption, Encrypted},
@@ -65,9 +66,10 @@ pub struct PrinterFilterOptions {
 #[utoipa::path(get, path = "/people/printer", params(PrinterFilterOptions), responses((status = 200, description = "OK", body=Vec<PrinterListModel>)))]
 pub async fn list(
     Query(opts): Query<PrinterFilterOptions>,
-    Extension(_user): Extension<User>,
+    Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user, AppRole::AccountManager, &data.db).await?;
     let limit = opts.limit.unwrap_or(10);
     // let search = opts.search.unwrap_or("".to_string());
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
@@ -102,8 +104,12 @@ pub struct PersonPrinterResponse {
 #[utoipa::path(get, path = "/people/{id}/printer", responses((status = 200, description = "OK", body=PersonPrinterResponse)))]
 pub async fn get(
     Path(id): Path<Uuid>,
+    Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    if user.id != id {
+        check_app_role(user, AppRole::AccountManager, &data.db).await?;
+    }
     let details = sqlx::query_as!(
         PrinterInfo,
         r#"SELECT id as "id!", printer_id, printer_username, printer_password as "printer_password: Encrypted<String>", color, bw
@@ -140,6 +146,7 @@ pub async fn link_or_create(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<LinkOrCreate>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     if let Some(printer_id) = body.printer_id {
         sqlx::query!(
@@ -172,6 +179,7 @@ pub async fn delete(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     sqlx::query!("DELETE FROM subsystem_printer_context WHERE id = $1", id)
         .execute(&mut *conn)
@@ -186,6 +194,7 @@ pub async fn unlink(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     sqlx::query!(
         "UPDATE subsystem_printer_context SET id = NULL WHERE id = $1",

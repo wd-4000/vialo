@@ -155,6 +155,7 @@ pub async fn list_all_group_members(
 #[utoipa::path(get, path = "/people/groups/{id}", responses((status = 200, description = "OK", body=GroupGetModel)))]
 pub async fn get_group(
     Path(id): Path<Uuid>,
+    Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
     let group = sqlx::query_as!(
@@ -167,6 +168,14 @@ pub async fn get_group(
     )
     .fetch_one(&data.db)
     .await?;
+
+    if !group.public
+        && check_app_role(user, AppRole::AccountManager, &data.db)
+            .await
+            .is_err()
+    {
+        return Err(VialoError::Forbidden());
+    }
 
     Ok(Json(group))
 }
