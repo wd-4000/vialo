@@ -137,7 +137,7 @@ async fn form_email<'a>(
         .parse::<Mailbox>()?,
     );
 
-    return Ok(builder
+    Ok(builder
         .to(context.account.email.parse::<Mailbox>()?)
         .subject(email_title)
         .header(custom_headers::ListUnsubscribe(
@@ -147,7 +147,7 @@ async fn form_email<'a>(
         .multipart(MultiPart::alternative_plain_html(
             email_content_plain,
             email_content_html,
-        ))?);
+        ))?)
 }
 
 pub async fn main(app_state: Arc<AppState>) -> Result<(), anyhow::Error> {

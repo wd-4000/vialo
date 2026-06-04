@@ -2,7 +2,7 @@ use crate::events::EventEnvelope;
 use crate::helpers::{PgDateTime, encryption::Encrypted};
 use crate::http::bookables::connectors::BookableConnectorWithPassword;
 use crate::http::bookables::models::{BookableAssetStatus, BookableStatus};
-use crate::http::util::{VialoError, grab_trans};
+use crate::http::util::grab_trans;
 use crate::{AppState, helpers::grab_authd_conn_subsystem};
 use netio::models::OutputPost;
 use sqlx::{query, query_as, query_scalar};
@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, watch};
 use tokio::time;
-use tracing::{debug, info};
+use tracing::debug;
 
 mod models;
 

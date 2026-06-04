@@ -1,9 +1,9 @@
 use super::{
     models::{
         AccountModel, AccountModelForOverview, CreatePersonResponse, CurrentRoomOccupantsViewModel,
-        GroupStubListModel, GroupStubListModelWithRole, LeaseModelWithEmbeddedSublease,
-        PeopleLookupModel, PersonOverviewModel, PersonOverviewNetworkModel,
-        PersonalTransactionModel, TransactionStatus,
+        GroupStubListModelWithRole, LeaseModelWithEmbeddedSublease, PeopleLookupModel,
+        PersonOverviewModel, PersonOverviewNetworkModel, PersonalTransactionModel,
+        TransactionStatus,
     },
     schemas::{CreateUserSchema, UserFilterOptions},
 };
@@ -340,7 +340,7 @@ pub async fn get_person_overview(
     // what if conditional_query_as was evil
     cfg_if::cfg_if! {
     if #[cfg(feature = "printer")] {
-         account_task =  sqlx::query_as!(AccountModelForOverview, r#"SELECT ap.id,
+         account_task = sqlx::query_as!(AccountModelForOverview, r#"SELECT ap.id,
          ap.label,
        ap.auth_id,
         ap.email,
@@ -349,7 +349,7 @@ pub async fn get_person_overview(
           ap.full_name,
           ap.manually_suspended,
          ap.credit_balance, spc.printer_username, spc.printer_id as "printer_id?"
-         FROM accounts_people ap LEFT JOIN subsystem_printer_context spc ON ap.id = spc.id WHERE ap.id = $1"#, id).fetch_one(&data.db)
+         FROM accounts_people ap LEFT JOIN subsystem_printer_context spc ON ap.id = spc.id WHERE ap.id = $1"#, id).fetch_one(&data.db);
 
          } else {
               account_task =  sqlx::query_as!(AccountModelForOverview, r#"SELECT ap.id,
@@ -360,7 +360,7 @@ pub async fn get_person_overview(
              ap.membership_end as "membership_end: PgDate",
               ap.full_name,
               ap.manually_suspended,
-             ap.credit_balance FROM accounts_people ap WHERE ap.id = $1"#, id).fetch_one(&data.db)
+             ap.credit_balance FROM accounts_people ap WHERE ap.id = $1"#, id).fetch_one(&data.db);
       }
       }
     let q = try_join!(
@@ -597,7 +597,7 @@ pub async fn delete_person(
 
     helpers::people::delete_identity(id, &mut trans)
         .await
-        .map_err(|e| VialoError::Anyhow(e))?;
+        .map_err(VialoError::Anyhow)?;
 
     Ok(StatusCode::NO_CONTENT)
 }

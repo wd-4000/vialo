@@ -63,7 +63,7 @@ pub async fn list_devices(
         check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
     }
 
-    return match resolved_account_id {
+    match resolved_account_id {
         IdOrAllQuery::Id(account_id) => {
             let devices = conditional_query_as!(
                 ListDeviceWithRefs,
@@ -96,7 +96,7 @@ pub async fn list_devices(
 
             Ok(Json(ResponseVariant::A(devices)))
         }
-    };
+    }
 }
 
 #[derive(Deserialize, Debug, ToSchema)]

@@ -7,13 +7,10 @@ use super::{
 
 use crate::{
     AppState,
-    http::{
-        people::handlers::get_person_roles_me,
-        util::{
+    http::util::{
             JsonE, MaybeJsonE, User, VialoError, grab_authd_conn_user, grab_trans,
-            models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery, ProductEmbed, ProductType},
+            models::{AccountEmbed, IdOrAllQuery, ProductEmbed, ProductType},
         },
-    },
     permissions::{AppRole, check_app_role},
 };
 use axum::{
@@ -24,7 +21,6 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
-use sqlx::query_as;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 use utoipa::ToSchema;
