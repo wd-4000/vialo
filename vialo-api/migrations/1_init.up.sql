@@ -235,17 +235,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION account_role_exists (acid uuid, rl app_role) RETURNS BOOLEAN AS $$
-BEGIN
-    RETURN (
-        SELECT COUNT(*) > 0
-        FROM account_group_memberships agm
-        JOIN account_group_app_roles agra
-        ON agm.group_id = agra.group_id
-        WHERE agm.account_id = acid AND agra.role = rl
-    );
-END;
-$$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION account_role_exists (acid uuid, rl app_role) RETURNS BOOLEAN LANGUAGE sql STABLE STRICT AS $$
+    SELECT COUNT(*) > 0
+    FROM account_group_memberships agm
+    JOIN account_group_app_roles agra
+    ON agm.group_id = agra.group_id
+    WHERE agm.account_id = acid AND agra.role = rl
+$$;
 
 CREATE OR REPLACE FUNCTION update_i18n_strings (
   idx_id int,
