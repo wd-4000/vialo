@@ -18,7 +18,7 @@ pub mod email;
 #[cfg(feature = "printer")]
 pub mod printer;
 
-use crate::{config::Config, events::EventChannel, http::bookables::models::BookableAssetStatus};
+use crate::{config::Config, events::StatusChannel, http::bookables::models::BookableAssetStatus};
 use sqlx::{Pool, Postgres};
 
 pub struct KratosConfigs {
@@ -27,7 +27,7 @@ pub struct KratosConfigs {
 }
 
 pub struct EventChannels {
-    pub bookables: EventChannel<i32, BookableAssetStatus>,
+    pub bookables: StatusChannel<i32, BookableAssetStatus>,
 }
 
 pub struct AppState {

@@ -1,8 +1,10 @@
 use futures::future::join_all;
 use serde::Serialize;
 use std::fmt::Debug;
+use std::marker::PhantomData;
+use std::sync::{Mutex, Weak};
 use std::{collections::HashMap, hash::Hash, sync::Arc};
-use tokio::sync::{RwLock, mpsc::Sender};
+use tokio::sync::{Notify, RwLock, mpsc::Sender};
 
 #[derive(Serialize)]
 pub struct EventEnvelope<K, V> {
@@ -30,6 +32,96 @@ pub struct EventChannel<K, V> {
     pub name: String,
     subscribers: Arc<RwLock<HashMap<K, Subscribers<K, V>>>>,
     wildcard_subscribers: Arc<RwLock<Subscribers<K, V>>>,
+}
+
+/// broadcast channel that delivers the latest value per coalescing key to each subscriber.
+///
+/// example for bookables: subscribe via `routing_key` (asset type) and receive updates for any
+/// value broadcast under that key. `coalesce_key` (asset id), used to make sure that
+/// in the event of backpressure the most recent value for each asset is delivered
+pub struct StatusChannel<K, V> {
+    pub name: String,
+    subscribers: Arc<RwLock<HashMap<K, Vec<(Weak<Mutex<HashMap<K, Arc<String>>>>, Weak<Notify>)>>>>,
+    wildcard_notifiers: Arc<RwLock<Vec<Weak<Notify>>>>,
+    _phantom: PhantomData<V>,
+}
+
+impl<K: Hash + Eq + Clone + Debug + Serialize + Send + Sync + 'static, V: Serialize>
+    StatusChannel<K, V>
+{
+    pub fn new(name: String) -> Self {
+        StatusChannel {
+            name,
+            subscribers: Arc::new(RwLock::new(HashMap::new())),
+            wildcard_notifiers: Arc::new(RwLock::new(Vec::new())),
+            _phantom: PhantomData,
+        }
+    }
+
+    pub async fn subscribe(
+        &self,
+        key: K,
+        slot: Arc<Mutex<HashMap<K, Arc<String>>>>,
+        notify: Arc<Notify>,
+    ) {
+        self.subscribers
+            .write()
+            .await
+            .entry(key)
+            .or_default()
+            .push((Arc::downgrade(&slot), Arc::downgrade(&notify)));
+    }
+
+    pub async fn subscribe_notify(&self) -> Arc<Notify> {
+        let notify = Arc::new(Notify::new());
+        self.wildcard_notifiers
+            .write()
+            .await
+            .push(Arc::downgrade(&notify));
+        notify
+    }
+
+    pub async fn broadcast(&self, routing_key: K, coalesce_key: K, value: V) {
+        let envelope = EventEnvelope {
+            __vlo_channel: self.name.clone(),
+            __vlo_id: routing_key.clone(),
+            data: value,
+        };
+        let json = Arc::new(serde_json::to_string(&envelope).unwrap_or_default());
+
+        {
+            let mut subs = self.subscribers.write().await;
+            if let Some(list) = subs.get_mut(&routing_key) {
+                list.retain(|entry| {
+                    let (weak_slot, weak_notify) = entry;
+                    match (weak_slot.upgrade(), weak_notify.upgrade()) {
+                        (Some(slot), Some(notify)) => {
+                            slot.lock()
+                                .unwrap()
+                                .insert(coalesce_key.clone(), Arc::clone(&json));
+                            notify.notify_one();
+                            true
+                        }
+                        _ => false,
+                    }
+                });
+                if list.is_empty() {
+                    subs.remove(&routing_key);
+                }
+            }
+        }
+
+        {
+            let mut notifiers = self.wildcard_notifiers.write().await;
+            notifiers.retain(|weak| match weak.upgrade() {
+                Some(notify) => {
+                    notify.notify_one();
+                    true
+                }
+                None => false,
+            });
+        }
+    }
 }
 
 impl<K: Hash + std::cmp::Eq + Send + std::marker::Sync + Debug + Serialize + Clone, V: Serialize>
@@ -74,7 +166,12 @@ impl<K: Hash + std::cmp::Eq + Send + std::marker::Sync + Debug + Serialize + Clo
             let string_senders: Vec<_> = wildcard_subs
                 .string
                 .iter()
-                .chain(subs.get(&key).map(|s| s.string.iter()).into_iter().flatten())
+                .chain(
+                    subs.get(&key)
+                        .map(|s| s.string.iter())
+                        .into_iter()
+                        .flatten(),
+                )
                 .cloned()
                 .collect();
             let typed_senders: Vec<_> = wildcard_subs

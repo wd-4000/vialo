@@ -15,7 +15,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vialo_api::{
     AppState, EventChannels, KratosConfigs,
     config::{AuthConfig, Config},
-    events::EventChannel,
+    events::StatusChannel,
     helpers::{encryption, find_upward, grab_authd_conn_subsystem},
     http::util::grab_trans,
 };
@@ -150,7 +150,7 @@ async fn main() {
     let asp = Arc::new(AppState {
         db: pool.clone(),
         event_channels: EventChannels {
-            bookables: EventChannel::new("bookables".into()),
+            bookables: StatusChannel::new("bookables".into()),
         },
         config,
         kratos_config,

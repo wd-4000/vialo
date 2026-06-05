@@ -1,14 +1,13 @@
-use crate::events::EventEnvelope;
 use crate::helpers::{PgDateTime, encryption::Encrypted};
 use crate::http::bookables::connectors::BookableConnectorWithPassword;
-use crate::http::bookables::models::{BookableAssetStatus, BookableStatus};
+use crate::http::bookables::models::BookableStatus;
 use crate::http::util::grab_trans;
 use crate::{AppState, helpers::grab_authd_conn_subsystem};
 use netio::models::OutputPost;
 use sqlx::{query, query_as, query_scalar};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::watch;
 use tokio::time;
 use tracing::debug;
 
@@ -245,8 +244,7 @@ pub async fn main(
     app_state: Arc<AppState>,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), anyhow::Error> {
-    let (mpsc_tx, mut mpsc_rx) = mpsc::channel::<Arc<EventEnvelope<i32, BookableAssetStatus>>>(10);
-    app_state.event_channels.bookables.subscribe_wildcard(mpsc_tx).await;
+    let notify = app_state.event_channels.bookables.subscribe_notify().await;
 
     loop {
         auto_activate_appointments(&app_state).await?;
@@ -263,12 +261,8 @@ pub async fn main(
             _ = time::sleep_until(wakeup) => {
                 // Scheduled wakeup
             }
-            event = mpsc_rx.recv() => {
-                // oooh yeah there is an update hell yes !!!
-                let Some(event) = event else {
-                    break; // channel closed
-                };
-                debug!("event received for {}", event.data.id);
+            _ = notify.notified() => {
+                debug!("event received");
                 // TODO be less lazy about this
             }
             changed = shutdown.changed() => {

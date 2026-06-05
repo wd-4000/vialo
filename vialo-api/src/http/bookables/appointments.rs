@@ -65,7 +65,7 @@ pub async fn activate(
     tokio::spawn(async move {
         evil_data
             .event_channels.bookables
-            .broadcast(bookable_record.asset_type_id, bookable_record)
+            .broadcast(bookable_record.asset_type_id, bookable_record.id, bookable_record)
             .await;
     });
 

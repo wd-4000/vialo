@@ -99,7 +99,7 @@ pub async fn quick_unlock(
     tokio::spawn(async move {
         evil_data
             .event_channels.bookables
-            .broadcast(record.asset_type_id, record.clone())
+            .broadcast(record.asset_type_id, record.id, record.clone())
             .await;
         if let (Some(begins), Some(PgDateTime::DateTime(ends))) = (record.begins, record.ends) {
             sleep(Duration::from_secs(
@@ -124,7 +124,7 @@ pub async fn quick_unlock(
             {
                 evil_data
                     .event_channels.bookables
-                    .broadcast(record.asset_type_id, record_2)
+                    .broadcast(record.asset_type_id, record.id, record_2)
                     .await;
             }
         }
