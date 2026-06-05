@@ -12,7 +12,7 @@ pub enum BookablePerm {
 }
 
 pub async fn require_asset_type_perm<'c, T: PgExecutor<'c>>(
-    user_id: Uuid,
+    user_id: Option<Uuid>,
     asset_type_id: i32,
     min_perm: BookablePerm,
     db: T,

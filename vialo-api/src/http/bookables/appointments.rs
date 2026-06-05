@@ -138,7 +138,7 @@ pub async fn delete_appointment(
     let mut real_cancellation_reason = CancellationReason::User;
     if appointment.account_id != user.id {
         require_asset_type_perm(
-            user.id,
+            Some(user.id),
             appointment.asset_type_id,
             BookablePerm::Admin,
             &data.db,

@@ -133,7 +133,7 @@ pub async fn post(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<BookableSchemaPostOrPut>,
 ) -> Result<impl IntoResponse, VialoError> {
-    require_asset_type_perm(user.id, body.asset_type_id, BookablePerm::Admin, &data.db).await?;
+    require_asset_type_perm(Some(user.id), body.asset_type_id, BookablePerm::Admin, &data.db).await?;
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
@@ -157,7 +157,7 @@ pub async fn put(
     JsonE(body): JsonE<BookableSchemaPostOrPut>,
 ) -> Result<impl IntoResponse, VialoError> {
     require_asset_type_perm_by_schema(user.id, id, BookablePerm::Admin, &data.db).await?;
-    require_asset_type_perm(user.id, body.asset_type_id, BookablePerm::Admin, &data.db).await?;
+    require_asset_type_perm(Some(user.id), body.asset_type_id, BookablePerm::Admin, &data.db).await?;
 
     let existing_appointments = sqlx::query_scalar!(
         r#"SELECT EXISTS (

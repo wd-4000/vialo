@@ -149,7 +149,7 @@ pub async fn post_bookable(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<PostBookableSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
-    require_asset_type_perm(user.id, body.asset_type_id, BookablePerm::Admin, &data.db).await?;
+    require_asset_type_perm(Some(user.id), body.asset_type_id, BookablePerm::Admin, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
@@ -189,9 +189,9 @@ pub async fn put_bookable(
     )
     .fetch_one(&data.db)
     .await?;
-    require_asset_type_perm(user.id, current_type_id, BookablePerm::Admin, &data.db).await?;
+    require_asset_type_perm(Some(user.id), current_type_id, BookablePerm::Admin, &data.db).await?;
     if body.asset_type_id != current_type_id {
-        require_asset_type_perm(user.id, body.asset_type_id, BookablePerm::Admin, &data.db).await?;
+        require_asset_type_perm(Some(user.id), body.asset_type_id, BookablePerm::Admin, &data.db).await?;
     }
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
