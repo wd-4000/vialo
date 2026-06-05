@@ -1,0 +1,22 @@
+{{#> html/index}}
+    {{#*inline "slot"}}
+        <table width="100%" style="width: 100%; color: #546e7a; padding: 0; line-height: 1.5; font-size: 16px; max-width: 600px; overflow-wrap: break-word;">
+            <tbody>
+                <tr>
+                    <td>{{> hello}}</td>
+                </tr>
+                <tr>
+                    <td>{{> body}}</td>
+                </tr>
+                {{> @partial-block}}
+                <tr>
+                    <td>
+                        <p style="margin: 15px 0 0 0">
+                            <small>{{> footer}}</small>
+                        </p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    {{/inline}}
+{{/html/index}}

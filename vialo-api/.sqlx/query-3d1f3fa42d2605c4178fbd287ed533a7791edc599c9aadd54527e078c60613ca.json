@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period\n        FROM\n            bookable_schemas bs\n        WHERE bs.id = $1\n          AND account_bookable_perm_exists($2, bs.asset_type_id, 'view'::bookable_perm)",
+  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,\n            bs.expiry_refund_percent\n        FROM\n            bookable_schemas bs\n        WHERE bs.id = $1\n          AND account_bookable_perm_exists($2, bs.asset_type_id, 'view'::bookable_perm)",
   "describe": {
     "columns": [
       {
@@ -58,6 +58,17 @@
         "name": "activation_grace_period",
         "type_info": "Int8",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "expiry_refund_percent",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "bookable_schemas",
+            "name": "expiry_refund_percent"
+          }
+        }
       }
     ],
     "parameters": {
@@ -72,8 +83,9 @@
       null,
       false,
       false,
-      null
+      null,
+      true
     ]
   },
-  "hash": "98130e6b016cc2173907e932a08bb5c7acec483f6115313b0a0c15efc1897232"
+  "hash": "3d1f3fa42d2605c4178fbd287ed533a7791edc599c9aadd54527e078c60613ca"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT ap.full_name, ap.email as \"email!\", bs.id as unsubscribe FROM accounts_people ap\n        JOIN board_subscriptions bs ON bs.account_id = ap.id\n        WHERE ap.email IS NOT NULL AND bs.board_id = $1",
+  "query": "SELECT ap.full_name, ap.email as \"email!\", bs.id as unsubscribe\n        FROM accounts_people ap\n        JOIN board_subscriptions bs ON bs.account_id = ap.id\n        WHERE ap.email IS NOT NULL AND bs.board_id = $1",
   "describe": {
     "columns": [
       {
@@ -53,5 +53,5 @@
       false
     ]
   },
-  "hash": "60339bf12cc67f367b4a9b533e8fe165f9fc711373588ea54b012eb6920bbd28"
+  "hash": "6f7e61487128d4f883af7f0cce6f9734802dba90dca97568c104fc3dd2225a3d"
 }

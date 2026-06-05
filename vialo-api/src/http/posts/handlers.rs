@@ -187,6 +187,7 @@ pub async fn add_post(
     .await?;
 
     trans.commit().await?;
+    let _ = data.event_channels.posts_tx.send(record.id);
 
     Ok((StatusCode::CREATED, Json(record)))
 }

@@ -1,10 +1,10 @@
 use super::models::BoardPostIdModel;
-use crate::AppState;
-use crate::http::util::grab_authd_conn_user;
-use crate::http::util::{JsonE, SearchableListOptions, User, VialoError};
 use super::permissions::{
     BookablePerm, require_asset_type_perm, require_asset_type_perm_by_schema,
 };
+use crate::AppState;
+use crate::http::util::grab_authd_conn_user;
+use crate::http::util::{JsonE, SearchableListOptions, User, VialoError};
 use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
@@ -26,6 +26,7 @@ pub struct BookableSchema {
     pub asset_type_id: i32,
     pub slot_price: Option<i32>,
     pub activation_grace_period: Option<i64>,
+    pub expiry_refund_percent: Option<i16>,
 }
 
 #[utoipa::path(get, path = "/bookables/schemas", params(SearchableListOptions), responses((status = 200, description = "OK", body=Vec<BookableSchema>)))]
@@ -46,7 +47,8 @@ pub async fn list(
             bs.schedule::text[] as "schedule!",
             bs.asset_type_id,
             bs.slot_price,
-            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period
+            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,
+            bs.expiry_refund_percent
         FROM
             bookable_schemas bs
         WHERE account_bookable_perm_exists({user_id_o}, bs.asset_type_id, 'view'::bookable_perm) AND
@@ -79,7 +81,8 @@ pub async fn get(
             bs.schedule::text[] as "schedule!",
             bs.asset_type_id,
             bs.slot_price,
-            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period
+            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,
+            bs.expiry_refund_percent
         FROM
             bookable_schemas bs
         WHERE bs.id = $1
@@ -125,6 +128,7 @@ pub struct BookableSchemaPostOrPut {
     #[serde_as(as = "Option<DurationSeconds<i64>>")]
     #[schema(value_type = Option<i64>)]
     pub activation_grace_period: Option<TimeDelta>,
+    pub expiry_refund_percent: Option<i16>,
 }
 
 #[utoipa::path(post, path = "/bookables/schemas", request_body = BookableSchemaPostOrPut, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
@@ -133,15 +137,22 @@ pub async fn post(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<BookableSchemaPostOrPut>,
 ) -> Result<impl IntoResponse, VialoError> {
-    require_asset_type_perm(Some(user.id), body.asset_type_id, BookablePerm::Admin, &data.db).await?;
+    require_asset_type_perm(
+        Some(user.id),
+        body.asset_type_id,
+        BookablePerm::Admin,
+        &data.db,
+    )
+    .await?;
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
-        "INSERT INTO bookable_schemas (label, schedule, asset_type_id, slot_price, activation_grace_period) VALUES ($1, $2::time[], $3, $4, $5) RETURNING id",
+        "INSERT INTO bookable_schemas (label, schedule, asset_type_id, slot_price, activation_grace_period, expiry_refund_percent) VALUES ($1, $2::time[], $3, $4, $5, $6) RETURNING id",
         body.label, body.schedule as Vec<String>, body.asset_type_id, body.slot_price, body.activation_grace_period.map(PgInterval::try_from)
-          .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?
+          .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?,
+        body.expiry_refund_percent
     )
     .fetch_one(&mut *conn)
     .await?;
@@ -157,7 +168,13 @@ pub async fn put(
     JsonE(body): JsonE<BookableSchemaPostOrPut>,
 ) -> Result<impl IntoResponse, VialoError> {
     require_asset_type_perm_by_schema(user.id, id, BookablePerm::Admin, &data.db).await?;
-    require_asset_type_perm(Some(user.id), body.asset_type_id, BookablePerm::Admin, &data.db).await?;
+    require_asset_type_perm(
+        Some(user.id),
+        body.asset_type_id,
+        BookablePerm::Admin,
+        &data.db,
+    )
+    .await?;
 
     let existing_appointments = sqlx::query_scalar!(
         r#"SELECT EXISTS (
@@ -187,16 +204,17 @@ pub async fn put(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let record = sqlx::query_as!(
         BookableSchema,
-        r#"UPDATE bookable_schemas SET (label, schedule, asset_type_id, slot_price, activation_grace_period) = ($1, $2::time[], $3, $4, $5) WHERE id = $6
+        r#"UPDATE bookable_schemas SET (label, schedule, asset_type_id, slot_price, activation_grace_period, expiry_refund_percent) = ($1, $2::time[], $3, $4, $5, $6) WHERE id = $7
         RETURNING
         id,
         label,
         schedule::text[] as "schedule!",
         asset_type_id,
         slot_price,
-        EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period"#,
+        EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period,
+        expiry_refund_percent"#,
         body.label, body.schedule as Vec<String>, body.asset_type_id, body.slot_price, body.activation_grace_period.map(PgInterval::try_from)
-          .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?, id
+          .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?, body.expiry_refund_percent, id
     )
     .fetch_one(&mut *conn)
     .await?;
