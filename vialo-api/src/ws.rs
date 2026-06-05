@@ -14,8 +14,11 @@ use axum::{
 use axum_extra::TypedHeader;
 use serde::Deserialize;
 use std::net::SocketAddr;
-use std::{collections::HashSet, sync::Arc};
-use tokio::sync::mpsc::{self};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
+use tokio::sync::Notify;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::debug;
 
@@ -84,12 +87,20 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, state: Arc<AppSta
     // By splitting socket we can send and receive at the same time. In this example we will send
     // unsolicited messages to client based on some sort of server's internal event (i.e .timer).
     let (mut sender, mut receiver) = socket.split();
-    let (mpsc_tx, mut mpsc_rx) = mpsc::channel::<Arc<String>>(10);
-    // Spawn a task that will push several messages to the client (does not matter what client does)
+
+    let slot: Arc<Mutex<HashMap<i32, Arc<String>>>> = Arc::new(Mutex::new(HashMap::new()));
+    let notify = Arc::new(Notify::new());
+
+    let slot_send = Arc::clone(&slot);
+    let notify_send = Arc::clone(&notify);
     let mut send_task = tokio::spawn(async move {
         loop {
-            if let Some(msg) = mpsc_rx.recv().await {
-                // In case of any websocket error, we exit.
+            notify_send.notified().await;
+            let pending: Vec<Arc<String>> = {
+                let mut map = slot_send.lock().unwrap();
+                map.drain().map(|(_, v)| v).collect()
+            };
+            for msg in pending {
                 if sender
                     .send(Message::Text(msg.to_string().into()))
                     .await
@@ -97,25 +108,12 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, state: Arc<AppSta
                 {
                     return 1;
                 }
-            } else {
-                return 0;
             }
         }
-
-        // debug!("Sending close to {who}...");
-        // if let Err(e) = sender
-        //     .send(Message::Close(Some(CloseFrame {
-        //         code: axum::extract::ws::close_code::NORMAL,
-        //         reason: Utf8Bytes::from_static("Goodbye"),
-        //     })))
-        //     .await
-        // {
-        //     debug!("Could not send Close due to {e}, probably it is ok?");
-        // }
-        // n_msg
     });
 
-    // This task receives messages from the client and subscribes it to events based on the message contents
+    let slot_recv = Arc::clone(&slot);
+    let notify_recv = Arc::clone(&notify);
     let mut recv_task = tokio::spawn(async move {
         let mut subscribed: HashSet<(String, i32)> = HashSet::new();
         while let Some(Ok(msg)) = receiver.next().await {
@@ -129,8 +127,8 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, state: Arc<AppSta
                         state
                             .event_channels
                             .bookables
-                            .subscribe_string(id, mpsc_tx.clone())
-                            .await
+                            .subscribe(id, Arc::clone(&slot_recv), Arc::clone(&notify_recv))
+                            .await;
                     }
                 }
             }
