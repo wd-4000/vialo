@@ -1,3 +1,6 @@
+mod channel;
+pub use channel::BookableChannel;
+
 use crate::helpers::{PgDateTime, encryption::Encrypted};
 use crate::http::bookables::connectors::BookableConnectorWithPassword;
 use crate::http::bookables::models::BookableStatus;

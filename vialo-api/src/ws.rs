@@ -2,12 +2,13 @@
 //! Handles event subscriptions
 
 use axum::{
-    Router,
+    Extension, Router,
     body::Bytes,
     extract::{
         State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
+    middleware,
     response::IntoResponse,
     routing::any,
 };
@@ -21,24 +22,29 @@ use std::{
 use tokio::sync::Notify;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::debug;
+use uuid::Uuid;
 
 //allows to extract the IP of connecting user
 use axum::extract::connect_info::ConnectInfo;
 
 //allows to split the websocket stream into separate TX and RX branches
 use crate::AppState;
+use crate::http::util::{User, middleware::auth_middleware};
 use futures::{sink::SinkExt, stream::StreamExt};
+
 #[derive(Deserialize, Debug)]
 struct EventSubscriptionSchema {
     pub channel: String,
     pub id: u16,
 }
-pub fn main(app_state: Arc<AppState>) -> Router {
-    // build our application with some routes
 
+pub fn main(app_state: Arc<AppState>) -> Router {
     Router::new()
         .route("/ws", any(ws_handler))
-        // logging so we can see what's going on
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            auth_middleware,
+        ))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
@@ -56,6 +62,7 @@ async fn ws_handler(
     user_agent: Option<TypedHeader<headers::UserAgent>>,
     State(state): State<Arc<AppState>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Extension(user): Extension<Option<User>>,
 ) -> impl IntoResponse {
     let user_agent = if let Some(TypedHeader(user_agent)) = user_agent {
         user_agent.to_string()
@@ -63,13 +70,16 @@ async fn ws_handler(
         String::from("Unknown browser")
     };
     debug!("`{user_agent}` at {addr} connected.");
-    // finalize the upgrade process by returning upgrade callback.
-    // we can customize the callback by sending additional info such as address.
-    ws.on_upgrade(move |socket| handle_socket(socket, addr, state))
+    ws.on_upgrade(move |socket| handle_socket(socket, addr, state, user))
 }
 
 /// Actual websocket state machine (one will be spawned per connection)
-async fn handle_socket(mut socket: WebSocket, who: SocketAddr, state: Arc<AppState>) {
+async fn handle_socket(
+    mut socket: WebSocket,
+    who: SocketAddr,
+    state: Arc<AppState>,
+    user: Option<User>,
+) {
     // send a ping (unsupported by some browsers) just to kick things off and get a response
     if socket
         .send(Message::Ping(Bytes::from_static(&[1, 2, 3])))
@@ -114,6 +124,7 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, state: Arc<AppSta
 
     let slot_recv = Arc::clone(&slot);
     let notify_recv = Arc::clone(&notify);
+    let user_id: Option<Uuid> = user.map(|u| u.id);
     let mut recv_task = tokio::spawn(async move {
         let mut subscribed: HashSet<(String, i32)> = HashSet::new();
         while let Some(Ok(msg)) = receiver.next().await {
@@ -127,7 +138,7 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, state: Arc<AppSta
                         state
                             .event_channels
                             .bookables
-                            .subscribe(id, Arc::clone(&slot_recv), Arc::clone(&notify_recv))
+                            .subscribe(id, user_id, Arc::clone(&slot_recv), Arc::clone(&notify_recv))
                             .await;
                     }
                 }
