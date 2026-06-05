@@ -58,10 +58,11 @@ CREATE TABLE bookable_schema_assignments (
 CREATE TYPE bookable_perm AS ENUM('view', 'book', 'admin');
 
 CREATE TABLE bookable_asset_type_group_perms (
+  id int PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   group_id uuid REFERENCES account_groups (id) ON DELETE CASCADE,
   asset_type_id int NOT NULL REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
   perm bookable_perm NOT NULL,
-  PRIMARY KEY (group_id, asset_type_id)
+  UNIQUE NULLS NOT DISTINCT (group_id, asset_type_id)
 );
 
 CREATE TYPE bookable_appointment_cancellation_reason AS ENUM('expired', 'user', 'admin');
@@ -179,16 +180,22 @@ CREATE OR REPLACE FUNCTION slots_from_schedule (schedule time[], reference_date 
     END
     $$;
 
-CREATE FUNCTION account_bookable_perm_exists (acid uuid, at_id int, min_perm bookable_perm) RETURNS boolean LANGUAGE sql STABLE STRICT AS $$
+CREATE FUNCTION account_bookable_perm_exists (acid uuid, at_id int, min_perm bookable_perm) RETURNS boolean LANGUAGE sql STABLE AS $$
     SELECT (
-        account_role_exists(acid, 'bookable_manager')
+        (acid IS NOT NULL AND account_role_exists(acid, 'bookable_manager'))
         OR EXISTS (
+            SELECT 1 FROM bookable_asset_type_group_perms
+            WHERE asset_type_id = at_id
+              AND group_id IS NULL
+              AND perm >= min_perm
+        )
+        OR (acid IS NOT NULL AND EXISTS (
             SELECT 1 FROM account_group_memberships agm
             JOIN bookable_asset_type_group_perms batgp ON agm.group_id = batgp.group_id
             WHERE batgp.asset_type_id = at_id
               AND agm.account_id = acid
               AND batgp.perm >= min_perm
-        )
+        ))
     )
 $$;
 
