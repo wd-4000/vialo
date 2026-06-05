@@ -13,6 +13,16 @@ pub struct BookableAssetStatusWithConnector {
     pub connector_output_id: i32,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ExpiredAppointmentMessage {
+    pub id: uuid::Uuid,
+    pub account_id: uuid::Uuid,
+    pub full_name: Option<String>,
+    pub email: String,
+    pub asset_name: String,
+    pub credits_refunded: i32,
+}
+
 #[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Serialize, Deserialize, ToSchema)]
 #[sqlx(
     type_name = "bookable_appointment_cancellation_reason",

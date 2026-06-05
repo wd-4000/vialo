@@ -20,6 +20,7 @@ pub mod printer;
 
 use crate::{bookables::BookableChannel, config::Config};
 use sqlx::{Pool, Postgres};
+use tokio::sync::broadcast;
 
 pub struct KratosConfigs {
     pub frontend: ory_kratos_client::apis::configuration::Configuration,
@@ -28,6 +29,8 @@ pub struct KratosConfigs {
 
 pub struct EventChannels {
     pub bookables: BookableChannel,
+    pub posts_tx: broadcast::Sender<i32>,
+    pub expired_appointments_tx: broadcast::Sender<crate::bookables::ExpiredAppointmentMessage>,
 }
 
 pub struct AppState {

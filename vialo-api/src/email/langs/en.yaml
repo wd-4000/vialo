@@ -24,3 +24,10 @@ post:
 direct:
   title: "{{direct.subject}} - {{group.label}}"
   footer: "This is a direct message from {{group.label}}."
+
+bookable:
+  expired:
+    title: "Your appointment has expired"
+    body: "Your appointment for <strong>{{message.bookable_expired.asset_name}}</strong> was not activated in time and has been released."
+    credits_info: "<strong>{{message.bookable_expired.credits_refunded}} credits</strong> have been refunded to your account."
+    footer: 'You can <a href="{{url_email_preferences}}" target="_blank">manage your email preferences</a>.'

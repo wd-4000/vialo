@@ -38,7 +38,9 @@ CREATE TABLE bookable_schemas (
   schedule time[] NOT NULL,
   asset_type_id int NOT NULL REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
   slot_price int NOT NULL,
-  activation_grace_period interval
+  activation_grace_period interval,
+  expiry_refund_percent smallint CHECK (expiry_refund_percent BETWEEN 0 AND 100),
+  CHECK ((activation_grace_period IS NULL) = (expiry_refund_percent IS NULL)); -- one doesn't make sense without the other
 );
 
 CREATE TABLE bookable_schema_cancellation_policy (

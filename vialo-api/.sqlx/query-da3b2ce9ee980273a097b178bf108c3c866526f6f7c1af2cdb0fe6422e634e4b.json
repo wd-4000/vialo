@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period\n        FROM\n            bookable_schemas bs\n        WHERE account_bookable_perm_exists($1, bs.asset_type_id, 'view'::bookable_perm) AND\n        TRUE\n        LIMIT $2 OFFSET $3",
+  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,\n            bs.expiry_refund_percent\n        FROM\n            bookable_schemas bs\n        WHERE account_bookable_perm_exists($1, bs.asset_type_id, 'view'::bookable_perm) AND\n        label ILIKE '%' || $2 || '%'\n        LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -58,11 +58,23 @@
         "name": "activation_grace_period",
         "type_info": "Int8",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "expiry_refund_percent",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "bookable_schemas",
+            "name": "expiry_refund_percent"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
+        "Text",
         "Int8",
         "Int8"
       ]
@@ -73,8 +85,9 @@
       null,
       false,
       false,
-      null
+      null,
+      true
     ]
   },
-  "hash": "558c2f149dc48b4e8517ad73e04f898a5c79f7deb3fba60d1d13d986b12199b1"
+  "hash": "da3b2ce9ee980273a097b178bf108c3c866526f6f7c1af2cdb0fe6422e634e4b"
 }

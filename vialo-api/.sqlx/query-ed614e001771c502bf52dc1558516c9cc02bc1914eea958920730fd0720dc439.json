@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT ba.id,\n    ba.asset_id,\n    ba.account_id,\n    ba.transaction_id,\n    cl.from_account,\n    cl.credits,\n    ba.cancelled_at,\n    ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n    ba.activated\n    FROM bookable_appointments ba\n    JOIN (\n        SELECT DISTINCT ON (bsa.asset_id)\n            bsa.asset_id,\n            bs.activation_grace_period\n        FROM bookable_schema_assignments bsa\n        JOIN bookable_schemas bs ON bs.id = bsa.schema_id\n        WHERE bsa.begins <= now()\n        ORDER BY bsa.asset_id, bsa.begins DESC\n    ) cs ON cs.asset_id = ba.asset_id\n    JOIN credit_ledger cl ON ba.transaction_id = cl.id\n    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND lower(ba.during) + cs.activation_grace_period <= NOW()",
+  "query": "SELECT ba.id,\n    ba.asset_id,\n    ba.account_id,\n    ba.transaction_id,\n    cl.from_account,\n    cl.credits,\n    ba.cancelled_at,\n    ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n    ba.activated,\n    cs.expiry_refund_percent as \"expiry_refund_percent!\",\n    ap.full_name,\n    ap.email as \"email!\",\n    get_i18n_string(bast.name_i18n, $1) as \"asset_name?\"\n    FROM bookable_appointments ba\n    JOIN (\n        SELECT DISTINCT ON (bsa.asset_id)\n            bsa.asset_id,\n            bs.activation_grace_period,\n            bs.expiry_refund_percent\n        FROM bookable_schema_assignments bsa\n        JOIN bookable_schemas bs ON bs.id = bsa.schema_id\n        WHERE bsa.begins <= now()\n        ORDER BY bsa.asset_id, bsa.begins DESC\n    ) cs ON cs.asset_id = ba.asset_id\n    JOIN credit_ledger cl ON ba.transaction_id = cl.id\n    JOIN accounts_people ap ON ap.id = ba.account_id\n    JOIN bookable_assets bast ON bast.id = ba.asset_id\n    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.expiry_refund_percent IS NOT NULL AND lower(ba.during) + cs.activation_grace_period <= NOW()",
   "describe": {
     "columns": [
       {
@@ -112,10 +112,56 @@
             "name": "activated"
           }
         }
+      },
+      {
+        "ordinal": 9,
+        "name": "expiry_refund_percent!",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "bookable_schemas",
+            "name": "expiry_refund_percent"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "full_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "full_name"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "email!",
+        "type_info": {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "asset_name?",
+        "type_info": "Text",
+        "origin": "Expression"
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "TextArray"
+      ]
     },
     "nullable": [
       false,
@@ -126,8 +172,12 @@
       false,
       true,
       true,
-      true
+      true,
+      true,
+      true,
+      true,
+      null
     ]
   },
-  "hash": "2693bfa0d76466287b257e4d6df65e4d86808d68cad22c6ec3d90361691d9a12"
+  "hash": "ed614e001771c502bf52dc1558516c9cc02bc1914eea958920730fd0720dc439"
 }

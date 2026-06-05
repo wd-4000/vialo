@@ -8,6 +8,7 @@ use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast;
 use tokio::sync::watch;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info, warn};
@@ -147,10 +148,15 @@ async fn main() {
         None
     };
 
+    let (posts_tx, _) = broadcast::channel::<i32>(256);
+    let (expired_appointments_tx, _) =
+        broadcast::channel::<vialo_api::bookables::ExpiredAppointmentMessage>(256);
     let asp = Arc::new(AppState {
         db: pool.clone(),
         event_channels: EventChannels {
             bookables: BookableChannel::new("bookables".into(), pool.clone()),
+            posts_tx,
+            expired_appointments_tx,
         },
         config,
         kratos_config,
@@ -303,7 +309,11 @@ async fn main() {
                 break;
             }
 
-            let result = vialo_api::email::main(email_subsystem_asp.clone()).await;
+            let result = vialo_api::email::main(
+                email_subsystem_asp.clone(),
+                email_subsystem_shutdown.clone(),
+            )
+            .await;
             if *email_subsystem_shutdown.borrow() {
                 break;
             }

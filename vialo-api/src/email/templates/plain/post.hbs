@@ -1,8 +1,4 @@
-{{> hello}}
-
-{{> body}}
-
-
+{{#> plain/message}}
 {{message.post.title}}
 {{#if message.post.time}}
 {{message.post.time}}
@@ -13,7 +9,6 @@
 {{> read_more}}: {{message.post.url}}
 
 {{#if group.email}}
-{{>email_replyable}}
+{{> email_replyable}}
 {{/if}}
-
-{{> footer}}
+{{/plain/message}}

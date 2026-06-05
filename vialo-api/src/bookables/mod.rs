@@ -153,19 +153,27 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
     cl.credits,
     ba.cancelled_at,
     ba.cancellation_reason as "cancellation_reason: CancellationReason",
-    ba.activated
+    ba.activated,
+    cs.expiry_refund_percent as "expiry_refund_percent!",
+    ap.full_name,
+    ap.email as "email!",
+    get_i18n_string(bast.name_i18n, $1) as "asset_name?"
     FROM bookable_appointments ba
     JOIN (
         SELECT DISTINCT ON (bsa.asset_id)
             bsa.asset_id,
-            bs.activation_grace_period
+            bs.activation_grace_period,
+            bs.expiry_refund_percent
         FROM bookable_schema_assignments bsa
         JOIN bookable_schemas bs ON bs.id = bsa.schema_id
         WHERE bsa.begins <= now()
         ORDER BY bsa.asset_id, bsa.begins DESC
     ) cs ON cs.asset_id = ba.asset_id
     JOIN credit_ledger cl ON ba.transaction_id = cl.id
-    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND lower(ba.during) + cs.activation_grace_period <= NOW()"#
+    JOIN accounts_people ap ON ap.id = ba.account_id
+    JOIN bookable_assets bast ON bast.id = ba.asset_id
+    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.expiry_refund_percent IS NOT NULL AND lower(ba.during) + cs.activation_grace_period <= NOW()"#,
+        &["en".into(), "de".into()],
     )
     .fetch_all(&app_state.db)
     .await?;
@@ -183,12 +191,23 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
             "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
             appointment.from_account,
             appointment.transaction_id,
-            appointment.credits / 2
+            appointment.credits * appointment.expiry_refund_percent as i32 / 100
         )
         .execute(&mut *trans)
         .await?;
-        // TODO send email
         trans.commit().await?;
+        let _ = app_state
+            .event_channels
+            .expired_appointments_tx
+            .send(ExpiredAppointmentMessage {
+                id: appointment.id,
+                account_id: appointment.account_id,
+                full_name: appointment.full_name,
+                email: appointment.email,
+                asset_name: appointment.asset_name.unwrap_or_else(|| "Unknown".into()),
+                credits_refunded: appointment.credits * appointment.expiry_refund_percent as i32
+                    / 100,
+            });
     }
 
     Ok(())
@@ -210,7 +229,8 @@ async fn next_wakeup(app_state: &AppState) -> tokio::time::Instant {
         LEFT JOIN (
             SELECT DISTINCT ON (bsa.asset_id)
                 bsa.asset_id,
-                bs.activation_grace_period
+                bs.activation_grace_period,
+                bs.expiry_refund_percent
             FROM bookable_schema_assignments bsa
             JOIN bookable_schemas bs ON bs.id = bsa.schema_id
             WHERE bsa.begins <= now()
@@ -226,6 +246,7 @@ async fn next_wakeup(app_state: &AppState) -> tokio::time::Instant {
             lower(ba.during) > now()::timestamp
             OR (
                 cs.activation_grace_period IS NOT NULL
+                AND cs.expiry_refund_percent IS NOT NULL
                 AND lower(ba.during) + cs.activation_grace_period > now()::timestamp
             )
         )"#
