@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT bgp.group_id, ag.label, bgp.perm as \"perm!: BoardPerm\" from board_group_perms bgp JOIN account_groups ag ON bgp.group_id = ag.id WHERE board_id = $1 LIMIT $2 OFFSET $3",
+  "query": "SELECT bgp.group_id, ag.label, bgp.perm as \"perm!: BoardPerm\" from board_group_perms bgp LEFT JOIN account_groups ag ON bgp.group_id = ag.id WHERE board_id = $1 LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -57,10 +57,10 @@
       ]
     },
     "nullable": [
-      false,
+      true,
       false,
       false
     ]
   },
-  "hash": "76dbdc620e21cfad5409c6518b6608205488f754ff532d2651d7672ca5b210ca"
+  "hash": "03d01b2fb0d589fcb3fd2cfab28ee9ab5058c038571a2b14b3081b1ad1d545fa"
 }

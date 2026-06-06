@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT nnl.nms_id, nnl.network_id FROM net_network_nms_link nnl\n                     JOIN net_networks n ON n.id = nnl.network_id\n                     WHERE nnl.nms_connector_id = $1 AND n.auth = 'password'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "nms_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_network_nms_link",
+            "name": "nms_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "network_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "net_network_nms_link",
+            "name": "network_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "19fb3973b50dd6d71fdcd26d05b932328c215df8a3f88c95094bedc92ca9635d"
+}

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, label, icon, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as \"auth: NetAuth\", gen_username, gen_password, active, wired FROM net_networks WHERE id = $1",
+  "query": "SELECT id, label, icon, wired, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as \"auth: NetAuth\", gen_username, gen_password, active, ssid, tls_trust, outer_identity FROM net_networks WHERE TRUE AND label ILIKE '%' || $1 || '%' AND active = true LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -38,6 +38,17 @@
       },
       {
         "ordinal": 3,
+        "name": "wired",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "wired"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
         "name": "multi_device",
         "type_info": "Bool",
         "origin": {
@@ -48,7 +59,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "auto_add_on_auth",
         "type_info": "Bool",
         "origin": {
@@ -59,7 +70,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "auto_add_via_dhcp",
         "type_info": "Bool",
         "origin": {
@@ -70,7 +81,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "auth: NetAuth",
         "type_info": {
           "Custom": {
@@ -91,7 +102,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "gen_username",
         "type_info": "Int4",
         "origin": {
@@ -102,7 +113,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "gen_password",
         "type_info": "Int4",
         "origin": {
@@ -113,7 +124,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "active",
         "type_info": "Bool",
         "origin": {
@@ -124,20 +135,44 @@
         }
       },
       {
-        "ordinal": 10,
-        "name": "wired",
-        "type_info": "Bool",
+        "ordinal": 11,
+        "name": "ssid",
+        "type_info": "Text",
         "origin": {
           "Table": {
             "table": "net_networks",
-            "name": "wired"
+            "name": "ssid"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "tls_trust",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "tls_trust"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "outer_identity",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "outer_identity"
           }
         }
       }
     ],
     "parameters": {
       "Left": [
-        "Int4"
+        "Text",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -147,12 +182,15 @@
       false,
       false,
       false,
+      false,
       true,
       true,
       true,
       false,
-      false
+      true,
+      true,
+      true
     ]
   },
-  "hash": "08f343ef25513c7f5e77f79d45e064642575df61be98d72c73e3aaa49c0c26cf"
+  "hash": "e828ce9a8c93ee40f78fa2865a1c9320cbad90c82fc1e9631a55e7e6cb30403a"
 }

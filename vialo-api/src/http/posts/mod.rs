@@ -12,6 +12,7 @@ use crate::http::util;
 pub mod boards;
 pub mod handlers;
 pub mod models;
+pub mod permissions;
 pub mod schemas;
 
 pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {

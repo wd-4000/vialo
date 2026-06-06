@@ -15,7 +15,10 @@ CREATE TABLE net_networks (
   auth net_auth, -- Auth type (NULL permitted yeah)
   gen_username int, -- Preferences for username/password generation
   gen_password int,
-  active boolean NOT NULL DEFAULT true -- New devices/credentials may be added
+  active boolean NOT NULL DEFAULT true, -- New devices/credentials may be added
+  ssid text, -- WiFi SSID to use in mobileconfig (NULL = use label)
+  tls_trust text, -- TLS trusted server name for EAP (NULL = use org domain)
+  outer_identity text -- EAP outer identity (NULL = anonymous@org.domain)
 );
 
 CREATE TYPE net_nms_type AS ENUM('unifi', 'mikrotik');
@@ -27,7 +30,11 @@ CREATE TABLE net_nms_connectors (
   api_key BYTEA,
   site_id text,
   username BYTEA,
-  password BYTEA
+  password BYTEA,
+  CONSTRAINT nms_auth_check CHECK (
+    (api_key IS NULL OR (username IS NULL AND password IS NULL))
+    AND (username IS NULL) = (password IS NULL)
+  )
 );
 
 CREATE TABLE net_network_nms_link (

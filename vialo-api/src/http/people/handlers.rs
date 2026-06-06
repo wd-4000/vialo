@@ -591,6 +591,17 @@ pub async fn delete_person(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
+    #[cfg(feature = "printer")]
+    if let Some(printer_id) = sqlx::query_scalar!(
+        "SELECT printer_id FROM subsystem_printer_context WHERE id = $1",
+        id
+    )
+    .fetch_optional(&mut *trans)
+    .await?
+    {
+        printer::add_task(&mut *trans, JobData::DeleteAccount { printer_id }).await?;
+    }
+
     sqlx::query!("DELETE FROM accounts WHERE id = $1", id)
         .execute(&mut *trans)
         .await?;
@@ -599,6 +610,7 @@ pub async fn delete_person(
         .await
         .map_err(VialoError::Anyhow)?;
 
+    trans.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

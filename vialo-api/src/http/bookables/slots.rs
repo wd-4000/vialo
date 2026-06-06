@@ -85,17 +85,13 @@ pub async fn slot_schemas(
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
 
-    let asset_types = if opts.asset_type_id.clone().unwrap_or(vec![]).is_empty() {
-        None
-    } else {
-        opts.asset_type_id.clone()
-    };
+    let asset_types = opts
+        .asset_type_id
+        .filter(|v| !v.is_empty());
 
-    let asset_ids = if opts.asset_id.clone().unwrap_or(vec![]).is_empty() {
-        None
-    } else {
-        opts.asset_id.clone()
-    };
+    let asset_ids = opts
+        .asset_id
+        .filter(|v| !v.is_empty());
     let assets = conditional_query_as!(
         BookableAssetTranslated,
         r#"SELECT

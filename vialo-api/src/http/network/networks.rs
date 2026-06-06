@@ -29,7 +29,7 @@ pub async fn list_networks(
 
     let record = conditional_query_as!(
         NetworkModel,
-        r#"SELECT id, label, icon, wired, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as "auth: NetAuth", gen_username, gen_password, active FROM net_networks WHERE TRUE {#wh_search} {#wh_active} LIMIT {limit} OFFSET {offset}"#,
+        r#"SELECT id, label, icon, wired, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as "auth: NetAuth", gen_username, gen_password, active, ssid, tls_trust, outer_identity FROM net_networks WHERE TRUE {#wh_search} {#wh_active} LIMIT {limit} OFFSET {offset}"#,
         #wh_search = match (opts.search){
             Some(src) => "AND label ILIKE '%' || {src} || '%'",
             _ => ""
@@ -66,7 +66,10 @@ pub async fn put_network(
         gen_username = $8,
         gen_password = $9,
         active = $10,
-        wired = $11
+        wired = $11,
+        ssid = $12,
+        tls_trust = $13,
+        outer_identity = $14
         WHERE id = $1",
         id,
         body.label,
@@ -78,7 +81,10 @@ pub async fn put_network(
         body.gen_username,
         body.gen_password,
         body.active,
-        body.wired
+        body.wired,
+        body.ssid,
+        body.tls_trust,
+        body.outer_identity,
     )
     .execute(&mut *conn)
     .await?;
@@ -121,8 +127,8 @@ pub async fn post_network(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     let _result = sqlx::query!(
-        "INSERT INTO net_networks (label, icon, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth,gen_username, gen_password, active, wired)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+        "INSERT INTO net_networks (label, icon, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth, gen_username, gen_password, active, wired, ssid, tls_trust, outer_identity)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
         body.label,
         body.icon,
         body.multi_device,
@@ -132,7 +138,10 @@ pub async fn post_network(
         body.gen_username,
         body.gen_password,
         body.active,
-        body.wired
+        body.wired,
+        body.ssid,
+        body.tls_trust,
+        body.outer_identity,
     )
     .execute(&mut *conn)
     .await?;

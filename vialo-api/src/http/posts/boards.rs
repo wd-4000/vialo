@@ -1,12 +1,13 @@
 use super::super::util::grab_authd_conn_user;
 use super::models::PostVisibility;
+use super::permissions::require_board_perm;
 use super::schemas::PostFilterOptions;
 use crate::helpers::{I18nMap, LangVariant};
 use crate::http::posts::models::BoardPostIdModel;
 use crate::http::util::models::GroupEmbed;
 use crate::http::util::{JsonE, User, VialoError, grab_trans};
 use crate::permissions::check_manager_of_group;
-use crate::{AppState, list_i18n_generic};
+use crate::AppState;
 use axum::Extension;
 use axum::{
     Json,
@@ -78,14 +79,17 @@ pub struct BoardModelTranslatedAllLanguages {
 #[utoipa::path(get, path = "/posts/boards", params(PostFilterOptions), responses((status = 200, description = "OK", body=Vec<BoardModelTranslatedEmbeddedGroup>)))]
 pub async fn list_boards(
     Query(opts): Query<PostFilterOptions>,
+    Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    /*
-       PERM
-       All boards are default_post_visibility.
-    */
-    list_i18n_generic!(
-        &data.db,
+    let limit = opts.limit.unwrap_or(10);
+    let langs = opts
+        .lang
+        .unwrap_or(vec![String::from("en"), String::from("de")]);
+    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+
+    let boards = query_as!(
+        BoardModelTranslatedEmbeddedGroup,
         r#"SELECT
             bd.id,
             bd.slug,
@@ -100,28 +104,33 @@ pub async fn list_boards(
             END AS "group: GroupEmbed",
             bd.default_post_visibility AS "default_post_visibility: PostVisibility"
         FROM
-            boards bd LEFT JOIN account_groups ag ON bd.group_id = ag.id LIMIT $2 OFFSET $3"#,
-        opts,
-        BoardModelTranslatedEmbeddedGroup
-    );
+            boards bd LEFT JOIN account_groups ag ON bd.group_id = ag.id
+        WHERE account_board_perm_exists($4, bd.id, 'view')
+        LIMIT $2 OFFSET $3"#,
+        &langs,
+        limit as i32,
+        offset as i32,
+        user.id,
+    )
+    .fetch_all(&data.db)
+    .await?;
+
+    Ok((StatusCode::OK, Json(boards)))
 }
 
 #[utoipa::path(get, path = "/posts/boards/{id}", params(PostFilterOptions), responses((status = 200, description = "OK", body=LangVariant<BoardModelTranslatedAllLanguages, BoardModelTranslated>)))]
 pub async fn get_board(
     Query(opts): Query<PostFilterOptions>,
+    Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
     Path(id_or_slug): Path<String>,
 ) -> Result<impl IntoResponse, VialoError> {
-    /*
-       PERM
-       Group ACL in board_group_perms (TODO)
-    */
-
     let langs = opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
 
     if langs == ["all"] {
+        let uid = user.id;
         let post = conditional_query_as!(
                     BoardModelTranslatedAllLanguages,
                     r#"SELECT
@@ -130,17 +139,19 @@ pub async fn get_board(
             bb.icon,
             bb.slug,
             bb.default_post_visibility AS "default_post_visibility: PostVisibility"
-            FROM boards bb {#SELECTID}"#,
+            FROM boards bb {#SELECTID} AND account_board_perm_exists({uid}, bb.id, 'view')"#,
         #SELECTID = match id_or_slug.parse::<i32>() {
             Ok(id_int) => "WHERE id = {id_int}",
             _ => "WHERE slug = {id_or_slug}"
         }
                 )
-        .fetch_one(&data.db)
-        .await?;
+        .fetch_optional(&data.db)
+        .await?
+        .ok_or(VialoError::NotFound())?;
 
         Ok(Json(LangVariant::AllLangs(post)))
     } else {
+        let uid = user.id;
         let post = conditional_query_as!(
             BoardModelTranslated,
             r#"SELECT
@@ -150,13 +161,14 @@ pub async fn get_board(
                 bb.default_post_visibility AS "default_post_visibility: PostVisibility",
                 get_i18n_string(bb.label, {langs:Vec<String>}) AS label
             FROM
-                boards bb {#SELECTID}"#,
+                boards bb {#SELECTID} AND account_board_perm_exists({uid}, bb.id, 'view')"#,
         #SELECTID = match id_or_slug.parse::<i32>() {
             Ok(id_int) => "WHERE id = {id_int}",
             _ => "WHERE slug = {id_or_slug}"
         })
-        .fetch_one(&data.db)
-        .await?;
+        .fetch_optional(&data.db)
+        .await?
+        .ok_or(VialoError::NotFound())?;
 
         Ok(Json(LangVariant::Localized(post)))
     }
@@ -164,36 +176,11 @@ pub async fn get_board(
 
 #[derive(Serialize, ToSchema)]
 pub struct BoardPermissions {
-    pub group_id: Uuid,
+    pub group_id: Option<Uuid>,
     pub label: Option<String>,
     pub perm: BoardPerm,
 }
 
-/// Returns Ok(()) if the user holds `board_perm >= required_perm` on the given board,
-/// OR holds the BoardManager app role.
-async fn check_board_perm(
-    user: &User,
-    board_id: i32,
-    required_perm: BoardPerm,
-    db: &sqlx::PgPool,
-) -> Result<(), VialoError> {
-    let has_perm = sqlx::query_scalar!(
-        r#"SELECT account_board_perm_exists($1, $2, $3) AS "has_perm: bool""#,
-        user.id,
-        board_id,
-        required_perm as BoardPerm,
-    )
-    .fetch_one(db)
-    .await
-    .map_err(|e| VialoError::Anyhow(e.into()))?
-    .unwrap_or(false);
-
-    if has_perm {
-        Ok(())
-    } else {
-        Err(VialoError::Forbidden())
-    }
-}
 
 #[utoipa::path(get, path = "/posts/boards/{id}/permissions", params(PostFilterOptions), responses((status = 200, description = "OK", body=Vec<BoardPermissions>)))]
 pub async fn get_permissions(
@@ -202,14 +189,14 @@ pub async fn get_permissions(
     State(data): State<Arc<AppState>>,
     Path(id): Path<i32>,
 ) -> Result<impl IntoResponse, VialoError> {
-    check_board_perm(&user, id, BoardPerm::Admin, &data.db).await?;
+    require_board_perm(user.id,id, BoardPerm::Admin, &data.db).await?;
 
     let limit = opts.limit.unwrap_or(10);
     let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
     let res = query_as!(
         BoardPermissions,
-        r#"SELECT bgp.group_id, ag.label, bgp.perm as "perm!: BoardPerm" from board_group_perms bgp JOIN account_groups ag ON bgp.group_id = ag.id WHERE board_id = $1 LIMIT $2 OFFSET $3"#,
+        r#"SELECT bgp.group_id, ag.label, bgp.perm as "perm!: BoardPerm" from board_group_perms bgp LEFT JOIN account_groups ag ON bgp.group_id = ag.id WHERE board_id = $1 LIMIT $2 OFFSET $3"#,
         id, limit, offset).fetch_all(&data.db).await?;
 
     Ok((StatusCode::OK, Json(res)))
@@ -227,11 +214,11 @@ pub async fn put_permission(
     Path((board_id, group_id)): Path<(i32, Uuid)>,
     JsonE(body): JsonE<PermSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
-    check_board_perm(&user, board_id, BoardPerm::Admin, &data.db).await?;
+    require_board_perm(user.id,board_id, BoardPerm::Admin, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     sqlx::query!(
-        r#"INSERT INTO board_group_perms (board_id, group_id, perm) VALUES ($1, $2, $3) ON CONFLICT (board_id, group_id) DO UPDATE SET perm = $3"#,
+        r#"INSERT INTO board_group_perms (board_id, group_id, perm) VALUES ($1, $2, $3) ON CONFLICT (group_id, board_id) DO UPDATE SET perm = $3"#,
         board_id,
         group_id,
         body.perm as BoardPerm
@@ -248,7 +235,7 @@ pub async fn delete_permission(
     Extension(user): Extension<User>,
     Path((board_id, group_id)): Path<(i32, Uuid)>,
 ) -> Result<impl IntoResponse, VialoError> {
-    check_board_perm(&user, board_id, BoardPerm::Admin, &data.db).await?;
+    require_board_perm(user.id,board_id, BoardPerm::Admin, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     sqlx::query!(
@@ -368,7 +355,7 @@ pub async fn pin_post(
     Path(id): Path<i32>,
     JsonE(body): JsonE<PinPostSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
-    check_board_perm(&user, id, BoardPerm::Moderate, &data.db).await?;
+    require_board_perm(user.id,id, BoardPerm::Moderate, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     sqlx::query!(
@@ -389,7 +376,7 @@ pub async fn unpin_post(
     Extension(user): Extension<User>,
     Path((board_id, post_id)): Path<(i32, i32)>,
 ) -> Result<impl IntoResponse, VialoError> {
-    check_board_perm(&user, board_id, BoardPerm::Moderate, &data.db).await?;
+    require_board_perm(user.id,board_id, BoardPerm::Moderate, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     sqlx::query!(

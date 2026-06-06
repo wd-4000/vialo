@@ -72,7 +72,8 @@ pub async fn list_posts(
 ) -> Result<impl IntoResponse, VialoError> {
     /*
        PERM
-       Some posts are only visible to logged-in users. TODO
+       Logged-in users see 'public' and 'logged_in' posts (plus view-permissioned boards).
+       Anonymous users see only 'public' posts. Enforced via #VISIBILITY below.
     */
     let limit = opts.limit.unwrap_or(10);
     let langs = &(opts

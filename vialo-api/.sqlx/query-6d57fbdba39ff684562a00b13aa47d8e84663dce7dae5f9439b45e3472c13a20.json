@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            get_i18n_all_string_translations(bb.label) AS label,\n            bb.group_id,\n            bb.icon,\n            bb.slug,\n            bb.default_post_visibility AS \"default_post_visibility: PostVisibility\"\n            FROM boards bb WHERE id = $1",
+  "query": "SELECT\n            get_i18n_all_string_translations(bb.label) AS label,\n            bb.group_id,\n            bb.icon,\n            bb.slug,\n            bb.default_post_visibility AS \"default_post_visibility: PostVisibility\"\n            FROM boards bb WHERE id = $1 AND account_board_perm_exists($2, bb.id, 'view')",
   "describe": {
     "columns": [
       {
@@ -77,7 +77,8 @@
     ],
     "parameters": {
       "Left": [
-        "Int4"
+        "Int4",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -88,5 +89,5 @@
       false
     ]
   },
-  "hash": "5bc7f372d454d9f5a38f2c4cd2d4c73e111b8b3090f6cbb34db815d5a4615ec3"
+  "hash": "6d57fbdba39ff684562a00b13aa47d8e84663dce7dae5f9439b45e3472c13a20"
 }

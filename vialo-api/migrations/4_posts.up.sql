@@ -30,10 +30,11 @@ VALUES
 CREATE TYPE board_perm AS ENUM('view', 'post', 'moderate', 'admin');
 
 CREATE TABLE board_group_perms (
+  id int PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   group_id uuid REFERENCES account_groups (id) ON DELETE CASCADE,
   board_id int NOT NULL REFERENCES boards (id) ON DELETE CASCADE,
   perm board_perm NOT NULL,
-  PRIMARY KEY (group_id, board_id)
+  UNIQUE NULLS NOT DISTINCT (group_id, board_id)
 );
 
 CREATE TABLE board_posts (
@@ -80,15 +81,21 @@ CREATE TABLE board_subscriptions (
   UNIQUE (account_id, board_id)
 );
 
-CREATE FUNCTION account_board_perm_exists (acid uuid, bid int, min_perm board_perm) RETURNS boolean LANGUAGE sql STABLE STRICT AS $$
+CREATE FUNCTION account_board_perm_exists (acid uuid, bid int, min_perm board_perm) RETURNS boolean LANGUAGE sql STABLE AS $$
     SELECT (
-        account_role_exists(acid, 'board_manager')
+        (acid IS NOT NULL AND account_role_exists(acid, 'board_manager'))
         OR EXISTS (
+            SELECT 1 FROM board_group_perms
+            WHERE board_id = bid
+              AND group_id IS NULL
+              AND perm >= min_perm
+        )
+        OR (acid IS NOT NULL AND EXISTS (
             SELECT 1 FROM account_group_memberships agm
             JOIN board_group_perms bgp ON agm.group_id = bgp.group_id
             WHERE bgp.board_id = bid
               AND agm.account_id = acid
               AND bgp.perm >= min_perm
-        )
+        ))
     )
 $$;

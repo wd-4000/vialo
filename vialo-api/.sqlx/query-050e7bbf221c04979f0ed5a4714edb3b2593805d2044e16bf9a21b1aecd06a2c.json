@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM net_network_nms_link WHERE network_id = $1 AND nms_connector_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "050e7bbf221c04979f0ed5a4714edb3b2593805d2044e16bf9a21b1aecd06a2c"
+}

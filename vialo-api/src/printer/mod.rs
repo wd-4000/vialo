@@ -332,17 +332,11 @@ pub async fn main(
 
                             sqlx::query!("INSERT INTO subsystem_printer_context (id, printer_id, printer_username, printer_password, bw, color) VALUES ($1,$2,$3,$4,$5,$6)", account_id, printer_id as i32, username, password_encrypted, 0,0).execute(&mut *conn).await?;
                         }
-                        JobData::DeleteAccount { account_id } => {
-                            let printer_id = query_scalar!(
-                                "SELECT printer_id from subsystem_printer_context where id = $1",
-                                account_id
-                            )
-                            .fetch_one(&mut *conn)
-                            .await?;
-                            printer.delete_user(printer_id as u16).await?;
+                        JobData::DeleteAccount { printer_id } => {
+                            printer.delete_user(*printer_id as u16).await?;
                             sqlx::query!(
-                                "DELETE from subsystem_printer_context where id = $1",
-                                account_id
+                                "DELETE from subsystem_printer_context where printer_id = $1",
+                                printer_id
                             )
                             .execute(&mut *conn)
                             .await?;

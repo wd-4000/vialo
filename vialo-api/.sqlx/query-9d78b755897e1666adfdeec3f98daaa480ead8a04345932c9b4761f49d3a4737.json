@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT nc.id, nc.username as \"username!\", nc.password AS \"password: Encrypted<String>\", nc.network_id, nc.last_updated,\n         n.label AS network_label,\n         nc.account_id, coalesce(ap.full_name, ag.label) as account_full_name\n         FROM net_cred nc\n         JOIN net_networks n ON nc.network_id = n.id\n         LEFT JOIN accounts_people ap ON nc.account_id = ap.id\n         LEFT JOIN account_groups ag ON nc.account_id = ag.id\n         WHERE nc.id = $1 AND nc.username IS NOT NULL AND nc.password IS NOT NULL",
+  "query": "SELECT nc.id, nc.username as \"username!\", nc.password AS \"password: Encrypted<String>\", nc.network_id, nc.last_updated,\n         n.label AS network_label, n.ssid AS network_ssid, n.tls_trust, n.outer_identity,\n         nc.account_id, coalesce(ap.full_name, ag.label) as account_full_name,\n         nd.label as device_label\n         FROM net_cred nc\n         JOIN net_networks n ON nc.network_id = n.id\n         LEFT JOIN accounts_people ap ON nc.account_id = ap.id\n         LEFT JOIN account_groups ag ON nc.account_id = ag.id\n         LEFT JOIN LATERAL (SELECT label FROM net_devices WHERE cred_id = nc.id LIMIT 1) nd ON NOT n.multi_device\n         WHERE nc.id = $1 AND nc.username IS NOT NULL AND nc.password IS NOT NULL",
   "describe": {
     "columns": [
       {
@@ -71,6 +71,39 @@
       },
       {
         "ordinal": 6,
+        "name": "network_ssid",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "ssid"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "tls_trust",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "tls_trust"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "outer_identity",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "outer_identity"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
         "name": "account_id",
         "type_info": "Uuid",
         "origin": {
@@ -81,10 +114,21 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 10,
         "name": "account_full_name",
         "type_info": "Text",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 11,
+        "name": "device_label",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "label"
+          }
+        }
       }
     ],
     "parameters": {
@@ -99,9 +143,13 @@
       false,
       true,
       false,
+      true,
+      true,
+      true,
       false,
-      null
+      null,
+      true
     ]
   },
-  "hash": "be377c8cb354e8df71e6a07afcf267045787f801381b8fd2020466ece5f5ca76"
+  "hash": "9d78b755897e1666adfdeec3f98daaa480ead8a04345932c9b4761f49d3a4737"
 }

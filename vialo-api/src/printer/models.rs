@@ -39,7 +39,7 @@ pub enum JobData {
         bw_limit: u16,
     },
     DeleteAccount {
-        account_id: Uuid,
+        printer_id: i32,
     },
 }
 

@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT nnl.nms_connector_id, nc.type as \"type: NmsType\", nc.hostname, nnl.nms_id\n           FROM net_network_nms_link nnl\n           JOIN net_nms_connectors nc ON nc.id = nnl.nms_connector_id\n           WHERE nnl.network_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "nms_connector_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "net_network_nms_link",
+            "name": "nms_connector_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "type: NmsType",
+        "type_info": {
+          "Custom": {
+            "name": "net_nms_type",
+            "kind": {
+              "Enum": [
+                "unifi",
+                "mikrotik"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "net_nms_connectors",
+            "name": "type"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "hostname",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_nms_connectors",
+            "name": "hostname"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "nms_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_network_nms_link",
+            "name": "nms_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "29e2d3e17d653c72d9835af9a6557afc050054c8509c2fb40fa4a23920a10e57"
+}

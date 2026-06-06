@@ -15,6 +15,14 @@ pub enum NetAuth {
     Password,
 }
 
+#[derive(Clone, Debug, PartialEq, sqlx::Type, Deserialize, Serialize, ToSchema)]
+#[sqlx(type_name = "net_nms_type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum NmsType {
+    Unifi,
+    Mikrotik,
+}
+
 #[derive(FromRow, Serialize, Deserialize, Debug, ToSchema)]
 pub struct NetworkModel {
     pub id: i32,
@@ -28,6 +36,9 @@ pub struct NetworkModel {
     pub gen_password: Option<i32>,
     pub active: bool,
     pub wired: bool,
+    pub ssid: Option<String>,
+    pub tls_trust: Option<String>,
+    pub outer_identity: Option<String>,
 }
 impl_jsonb_embed!(NetworkModel);
 
