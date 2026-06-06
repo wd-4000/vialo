@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, label, icon, wired, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as \"auth: NetAuth\", gen_username, gen_password, active FROM net_networks WHERE TRUE AND label ILIKE '%' || $1 || '%'  LIMIT $2 OFFSET $3",
+  "query": "SELECT id, label, icon, wired, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as \"auth: NetAuth\", gen_username, gen_password, active, ssid, tls_trust, outer_identity FROM net_networks WHERE TRUE AND label ILIKE '%' || $1 || '%'  LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -133,6 +133,39 @@
             "name": "active"
           }
         }
+      },
+      {
+        "ordinal": 11,
+        "name": "ssid",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "ssid"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "tls_trust",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "tls_trust"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "outer_identity",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "outer_identity"
+          }
+        }
       }
     ],
     "parameters": {
@@ -153,8 +186,11 @@
       true,
       true,
       true,
-      false
+      false,
+      true,
+      true,
+      true
     ]
   },
-  "hash": "f39fffaa1f361875ed80a0eb3c157a7f21de306784e32135e4d3ed695a19ce9e"
+  "hash": "097271a78cd0c561c5f44ee13c3f44048fe671ab646393f3b328e4a8208f910b"
 }

@@ -56,7 +56,7 @@ pub async fn sync_connectors(app_state: &AppState) -> Result<(), anyhow::Error> 
         .await
         .unwrap();
 
-        let _outputs: Vec<OutputPost> = statuses
+        let outputs: Vec<OutputPost> = statuses
             .into_iter()
             .map(|s| OutputPost {
                 id: s.connector_output_id,
@@ -75,19 +75,10 @@ pub async fn sync_connectors(app_state: &AppState) -> Result<(), anyhow::Error> 
             connector.password.expose(),
             &app_state.config.proxy,
         );
-        // info!("{:}", json!(NetioPost { outputs }));
 
-        // let res = api
-        //     .post()
-        //     .json(&NetioPost { outputs })
-        //     .send()
-        //     .await?
-        //     .json::<netio::models::NetioGet>()
-        //     .await?;
-
-        // Dry sync_connectors
         let res = api
-            .get()
+            .post()
+            .json(&netio::models::NetioPost { outputs })
             .send()
             .await?
             .json::<netio::models::NetioGet>()

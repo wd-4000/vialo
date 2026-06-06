@@ -72,4 +72,7 @@ pub struct PostOrPutNetworkSchema {
     pub gen_username: Option<i32>,
     pub gen_password: Option<i32>,
     pub active: bool,
+    pub ssid: Option<String>,
+    pub tls_trust: Option<String>,
+    pub outer_identity: Option<String>,
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT printer_id from subsystem_printer_context where id = $1",
+  "query": "SELECT printer_id FROM subsystem_printer_context WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "adac0b334cb5428694fceef545442a008c449cac3f7bbb527f1d287acdba3dae"
+  "hash": "6233ea6497bfd2e6d825374a73d7f21ddb484d0cc917f6335c2ad6df84ba677f"
 }

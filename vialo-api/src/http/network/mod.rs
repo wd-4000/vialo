@@ -13,6 +13,8 @@ pub mod devices;
 pub mod mac;
 pub mod models;
 pub mod networks;
+pub mod nms_connectors;
+pub mod nms_links;
 pub mod realms;
 pub mod schemas;
 
@@ -31,6 +33,24 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/realms/set_default", post(realms::set_default_realm))
         .route("/realms/{id}", put(realms::put_realm))
         .route("/credentials", get(credentials::list_credentials))
+        .route(
+            "/nms-connectors",
+            get(nms_connectors::list).post(nms_connectors::post),
+        )
+        .route(
+            "/nms-connectors/{id}",
+            get(nms_connectors::get)
+                .put(nms_connectors::put)
+                .delete(nms_connectors::delete),
+        )
+        .route(
+            "/networks/{id}/nms-links",
+            get(nms_links::list),
+        )
+        .route(
+            "/networks/{network_id}/nms-links/{connector_id}",
+            put(nms_links::put).delete(nms_links::delete),
+        )
         .route_layer(middleware::from_fn_with_state(
             app_state.clone(),
             |state, ext, req, next| {

@@ -183,7 +183,7 @@ pub async fn post_device(
 
             let network = sqlx::query_as!(
                 NetworkModel,
-                r#"SELECT id, label, icon, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as "auth: NetAuth", gen_username, gen_password, active, wired FROM net_networks WHERE id = $1"#,
+                r#"SELECT id, label, icon, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as "auth: NetAuth", gen_username, gen_password, active, wired, ssid, tls_trust, outer_identity FROM net_networks WHERE id = $1"#,
                 network_id
             )
             .fetch_one(&mut *trans)

@@ -1,32 +1,22 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                bb.group_id,\n                bb.slug,\n                bb.icon,\n                bb.default_post_visibility AS \"default_post_visibility: PostVisibility\",\n                get_i18n_string(bb.label, $1) AS label\n            FROM\n                boards bb WHERE id = $2",
+  "query": "SELECT\n            get_i18n_all_string_translations(bb.label) AS label,\n            bb.group_id,\n            bb.icon,\n            bb.slug,\n            bb.default_post_visibility AS \"default_post_visibility: PostVisibility\"\n            FROM boards bb WHERE slug = $1 AND account_board_perm_exists($2, bb.id, 'view')",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
+        "name": "label",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
         "name": "group_id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
             "table": "boards",
             "name": "group_id"
-          }
-        }
-      },
-      {
-        "ordinal": 1,
-        "name": "slug",
-        "type_info": {
-          "Custom": {
-            "name": "citext",
-            "kind": "Simple"
-          }
-        },
-        "origin": {
-          "Table": {
-            "table": "boards",
-            "name": "slug"
           }
         }
       },
@@ -48,6 +38,22 @@
       },
       {
         "ordinal": 3,
+        "name": "slug",
+        "type_info": {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "boards",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
         "name": "default_post_visibility: PostVisibility",
         "type_info": {
           "Custom": {
@@ -67,27 +73,26 @@
             "name": "default_post_visibility"
           }
         }
-      },
-      {
-        "ordinal": 4,
-        "name": "label",
-        "type_info": "Text",
-        "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
-        "TextArray",
-        "Int4"
+        {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        },
+        "Uuid"
       ]
     },
     "nullable": [
+      null,
+      true,
       true,
       false,
-      true,
-      false,
-      null
+      false
     ]
   },
-  "hash": "4ce0cfc3de3f65a64c1e702df89cdc06e7c5b94e1463c783b118a6011313e272"
+  "hash": "6decd4326ef848367bc88e125628b160b94ac910034df943ead7e29cb3a48440"
 }

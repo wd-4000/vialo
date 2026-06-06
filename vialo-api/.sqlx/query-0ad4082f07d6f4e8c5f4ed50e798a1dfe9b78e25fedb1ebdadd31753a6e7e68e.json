@@ -1,19 +1,12 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT account_board_perm_exists($1, $2, $3) AS \"has_perm: bool\"",
+  "query": "INSERT INTO board_group_perms (board_id, group_id, perm) VALUES ($1, $2, $3) ON CONFLICT (group_id, board_id) DO UPDATE SET perm = $3",
   "describe": {
-    "columns": [
-      {
-        "ordinal": 0,
-        "name": "has_perm: bool",
-        "type_info": "Bool",
-        "origin": "Expression"
-      }
-    ],
+    "columns": [],
     "parameters": {
       "Left": [
-        "Uuid",
         "Int4",
+        "Uuid",
         {
           "Custom": {
             "name": "board_perm",
@@ -29,9 +22,7 @@
         }
       ]
     },
-    "nullable": [
-      null
-    ]
+    "nullable": []
   },
-  "hash": "23aa972170e0e0979ec934f46bfeed994591fbb1f07806700b8cae84310417e9"
+  "hash": "0ad4082f07d6f4e8c5f4ed50e798a1dfe9b78e25fedb1ebdadd31753a6e7e68e"
 }

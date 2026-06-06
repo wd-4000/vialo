@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, type as \"type: NmsType\", hostname, site_id FROM net_nms_connectors WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "net_nms_connectors",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "type: NmsType",
+        "type_info": {
+          "Custom": {
+            "name": "net_nms_type",
+            "kind": {
+              "Enum": [
+                "unifi",
+                "mikrotik"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "net_nms_connectors",
+            "name": "type"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "hostname",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_nms_connectors",
+            "name": "hostname"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "site_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_nms_connectors",
+            "name": "site_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "6fbba16095815eb26c506b6221f7c28b39106f650afef2c95e0d4605d89afdbc"
+}

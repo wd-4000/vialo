@@ -62,7 +62,7 @@ pub async fn main(
     }
         if let Some(job_id) = current_job_id {
             let mut run_task = async || -> Result<(), anyhow::Error> {
-                let credentials = sqlx::query!(r#"SELECT hostname, api_key as "api_key!: Encrypted<String>", site_id as "site_id!" FROM net_nms_connectors WHERE type = 'unifi'"#)
+                let credentials = sqlx::query!(r#"SELECT id, hostname, api_key as "api_key!: Encrypted<String>", site_id as "site_id!" FROM net_nms_connectors WHERE type = 'unifi'"#)
         .fetch_one(&db_pool)
         .await?;
                 // https://i.kym-cdn.com/photos/images/newsfeed/002/425/217/e06
@@ -79,28 +79,20 @@ pub async fn main(
                     .map(|n| (n.vlan_id, n))
                     .collect();
 
-                let unifi_wlan_summaries: HashMap<String, _> = session
-                    .get_wlans()
-                    .await?
-                    .into_iter()
-                    .map(|u| (u.name.clone(), u))
-                    .collect();
+                let vialo_networks: Vec<_> = sqlx::query!(
+                    "SELECT nnl.nms_id, nnl.network_id FROM net_network_nms_link nnl
+                     JOIN net_networks n ON n.id = nnl.network_id
+                     WHERE nnl.nms_connector_id = $1 AND n.auth = 'password'",
+                    credentials.id
+                )
+                .fetch_all(&db_pool)
+                .await?
+                .into_iter()
+                .map(|r| (r.nms_id, r.network_id))
+                .collect();
 
-                // Look up the network by label (TODO: set up proper linking)
-                let vialo_networks: Vec<_> =
-                    sqlx::query!("SELECT id, label FROM net_networks WHERE auth = 'password'")
-                        .fetch_all(&db_pool)
-                        .await?
-                        .into_iter()
-                        .filter_map(|v| {
-                            unifi_wlan_summaries
-                                .get(&v.label)
-                                .map(|u| (u.id.clone(), v.id))
-                        })
-                        .collect();
-
-                for (wlan_summary_id, net_id) in vialo_networks {
-                    let mut old_wlan_unifi = session.get_wlan(&wlan_summary_id).await?;
+                for (nms_id, net_id) in vialo_networks {
+                    let mut old_wlan_unifi = session.get_wlan(&nms_id).await?;
                     let mut ppsk: Vec<WlanPresharedKey> = vec![];
                     for p in sqlx::query!(
             r#"select nc.password as "password!: Encrypted<String>", nr.vlan as "vlan!", nc.id from net_cred nc JOIN net_realm_assignments nra ON nc.account_id = nra.account_ID JOIN net_realms nr ON nr.id = nra.realm_id WHERE nc.network_id = $1 AND nc.password IS NOT NULL AND nr.vlan IS NOT NULL"#,
@@ -127,7 +119,7 @@ pub async fn main(
             });
         }
                     // UniFi doesn't like empty PPSK
-                    if !ppsk.is_empty() {
+                    if ppsk.is_empty() {
                         add_health_event(
                             &mut *conn,
                             Subsystem::Ppsk,
@@ -137,7 +129,7 @@ pub async fn main(
                             false,
                         )
                         .await?;
-
+                    } else {
                         old_wlan_unifi.security_configuration.preshared_keys = Some(ppsk);
                         session.set_wlan(&old_wlan_unifi).await?;
                     }

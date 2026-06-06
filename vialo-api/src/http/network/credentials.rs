@@ -113,29 +113,35 @@ pub async fn get_mobileconfig(
 
     let record = query!(
         r#"SELECT nc.id, nc.username as "username!", nc.password AS "password: Encrypted<String>", nc.network_id, nc.last_updated,
-         n.label AS network_label,
-         nc.account_id, coalesce(ap.full_name, ag.label) as account_full_name
+         n.label AS network_label, n.ssid AS network_ssid, n.tls_trust, n.outer_identity,
+         nc.account_id, coalesce(ap.full_name, ag.label) as account_full_name,
+         nd.label as device_label
          FROM net_cred nc
          JOIN net_networks n ON nc.network_id = n.id
          LEFT JOIN accounts_people ap ON nc.account_id = ap.id
          LEFT JOIN account_groups ag ON nc.account_id = ag.id
+         LEFT JOIN LATERAL (SELECT label FROM net_devices WHERE cred_id = nc.id LIMIT 1) nd ON NOT n.multi_device
          WHERE nc.id = $1 AND nc.username IS NOT NULL AND nc.password IS NOT NULL"#,
         id
     )
     .fetch_one(&data.db)
     .await?;
-    // TODO gracefully handle per-device profiles
+    let account_full_name = record.account_full_name.unwrap_or(record.id.to_string());
+    let display_name = match record.device_label {
+        Some(label) => format!("{account_full_name} \u{2014} {label}"),
+        None => account_full_name,
+    };
     let file = format!(
         include_str!("template.mobileconfig.xml"),
         network_label = record.network_label,
-        account_full_name = record.account_full_name.unwrap_or(record.id.to_string()),
+        account_full_name = display_name,
         username = record.username,
         password = record.password.map(|p| p.expose()).unwrap_or_default(),
         cred_id = record.id,
         network_id = record.network_id,
-        network_ssid = record.network_label,       // TODO
-        network_tlstrust = data.config.org.domain, // TODO: make configurable per network
-        outer_identity = format!("anonymous@{}", data.config.org.domain), // TODO: make configurable per network
+        network_ssid = record.network_ssid.as_deref().unwrap_or(&record.network_label),
+        network_tlstrust = record.tls_trust.as_deref().unwrap_or(&data.config.org.domain),
+        outer_identity = record.outer_identity.unwrap_or_else(|| format!("anonymous@{}", data.config.org.domain)),
         org_name = data.config.org.name
     );
     Ok((
