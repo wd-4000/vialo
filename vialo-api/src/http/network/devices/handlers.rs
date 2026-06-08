@@ -11,7 +11,7 @@ use crate::{
                 NetworkCredentialEmbed,
             },
             mac::MacAddressWrapper,
-            models::{CredentialModelWithPassword, NetAuth, NetworkModel},
+            models::{CredentialModelWithPassword, NetAuth, NetworkListModel},
         },
         util::{
             JsonE, User, VialoError, grab_authd_conn_user, grab_trans,
@@ -182,7 +182,7 @@ pub async fn post_device(
             };
 
             let network = sqlx::query_as!(
-                NetworkModel,
+                NetworkListModel,
                 r#"SELECT id, label, icon, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as "auth: NetAuth", gen_username, gen_password, active, wired, ssid, tls_trust, outer_identity FROM net_networks WHERE id = $1"#,
                 network_id
             )

@@ -24,7 +24,7 @@ pub enum NmsType {
 }
 
 #[derive(FromRow, Serialize, Deserialize, Debug, ToSchema)]
-pub struct NetworkModel {
+pub struct NetworkListModel {
     pub id: i32,
     pub label: String,
     pub icon: Option<String>,
@@ -40,7 +40,35 @@ pub struct NetworkModel {
     pub tls_trust: Option<String>,
     pub outer_identity: Option<String>,
 }
-impl_jsonb_embed!(NetworkModel);
+impl_jsonb_embed!(NetworkListModel);
+
+#[derive(Serialize, ToSchema)]
+pub struct NmsLinkModel {
+    pub nms_connector_id: i32,
+    #[serde(rename = "type")]
+    pub r#type: NmsType,
+    pub hostname: String,
+    pub nms_id: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct NetworkModel {
+    pub id: i32,
+    pub label: String,
+    pub icon: Option<String>,
+    pub multi_device: bool,
+    pub auto_add_on_auth: bool,
+    pub auto_add_via_dhcp: bool,
+    pub auth: Option<NetAuth>,
+    pub gen_username: Option<i32>,
+    pub gen_password: Option<i32>,
+    pub active: bool,
+    pub wired: bool,
+    pub ssid: Option<String>,
+    pub tls_trust: Option<String>,
+    pub outer_identity: Option<String>,
+    pub nms_links: Vec<NmsLinkModel>,
+}
 
 #[derive(FromRow, Serialize, ToSchema)]
 pub struct RealmModel {

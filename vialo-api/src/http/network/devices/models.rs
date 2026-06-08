@@ -1,7 +1,7 @@
 use crate::{
     helpers::encryption::{self, Encrypted},
     http::{
-        network::{mac::MacAddressWrapper, models::NetworkModel},
+        network::{mac::MacAddressWrapper, models::NetworkListModel},
         util::models::AccountEmbed,
     },
     impl_jsonb_embed,
@@ -80,7 +80,7 @@ pub struct NetworkCredentialEmbed {
     pub account_id: Uuid,
     pub network_id: Uuid,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
-    pub network: Option<NetworkModel>,
+    pub network: Option<NetworkListModel>,
 }
 
 impl_jsonb_embed!(NetworkCredentialEmbed);
