@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            a.id as \"id!\",\n            COALESCE(a.full_name, a.label, i.full_name) AS \"full_name?\",\n            jsonb_build_object('label', r.label, 'id', r.id) AS \"room: RoomEmbed\",\n            agm.role as \"role: GroupRole\"\n        FROM\n            accounts_people a\n            FULL JOIN identities i ON i.id = a.auth_id\n            LEFT JOIN res_leases l ON a.id = l.tenant_id\n            LEFT JOIN res_rooms r ON l.room_id = r.id JOIN account_group_memberships agm ON a.id = agm.account_id WHERE agm.group_id = $1  ORDER BY (a.id IS NULL) DESC, (i.id IS NULL) DESC, r.label DESC LIMIT $2 OFFSET $3",
+  "query": "SELECT\n            a.id as \"id!\",\n            COALESCE(a.full_name, a.label, i.full_name) AS \"full_name?\",\n            CASE WHEN r.id IS NOT NULL THEN jsonb_build_object('label', r.label, 'id', r.id) ELSE NULL END AS \"room: RoomEmbed\",\n            agm.role as \"role: GroupRole\"\n        FROM\n            accounts_people a\n            FULL JOIN identities i ON i.id = a.auth_id\n            LEFT JOIN res_leases l ON a.id = l.tenant_id\n            LEFT JOIN res_rooms r ON l.room_id = r.id JOIN account_group_memberships agm ON a.id = agm.account_id WHERE agm.group_id = $1 AND COALESCE(a.full_name, a.label) ILIKE '%' || $2 || '%' OR r.label ILIKE '%' || $2 || '%' ORDER BY (a.id IS NULL) DESC, (i.id IS NULL) DESC, r.label DESC LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -51,6 +51,7 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Text",
         "Int8",
         "Int8"
       ]
@@ -62,5 +63,5 @@
       false
     ]
   },
-  "hash": "97da3d86b1efd2273e7cb61648af179505d0a74b85d9f8c8477eef1815d5c13d"
+  "hash": "3c714fc635f1e6ffc964b1142fd01f0cd44a55b5fb3c65253a41f983571021f4"
 }

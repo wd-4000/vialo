@@ -99,7 +99,7 @@ pub async fn list_group_members(
         r#"SELECT
             a.id as "id!",
             COALESCE(a.full_name, a.label, i.full_name) AS "full_name?",
-            jsonb_build_object('label', r.label, 'id', r.id) AS "room: RoomEmbed",
+            CASE WHEN r.id IS NOT NULL THEN jsonb_build_object('label', r.label, 'id', r.id) ELSE NULL END AS "room: RoomEmbed",
             agm.role as "role: GroupRole"
         FROM
             accounts_people a

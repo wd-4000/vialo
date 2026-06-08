@@ -14,7 +14,6 @@ pub mod mac;
 pub mod models;
 pub mod networks;
 pub mod nms_connectors;
-pub mod nms_links;
 pub mod realms;
 pub mod schemas;
 
@@ -26,7 +25,7 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     let manager_routes = Router::new()
         .route(
             "/networks/{id}",
-            put(networks::put_network).delete(networks::delete_network),
+            get(networks::get_network).put(networks::put_network).delete(networks::delete_network),
         )
         .route("/networks", post(networks::post_network))
         .route("/realms", get(realms::list_realms))
@@ -42,14 +41,6 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(nms_connectors::get)
                 .put(nms_connectors::put)
                 .delete(nms_connectors::delete),
-        )
-        .route(
-            "/networks/{id}/nms-links",
-            get(nms_links::list),
-        )
-        .route(
-            "/networks/{network_id}/nms-links/{connector_id}",
-            put(nms_links::put).delete(nms_links::delete),
         )
         .route_layer(middleware::from_fn_with_state(
             app_state.clone(),

@@ -61,6 +61,12 @@ pub struct UpdateRealmSchema {
 }
 
 #[derive(Deserialize, ToSchema)]
+pub struct NmsLinkEntry {
+    pub nms_connector_id: i32,
+    pub nms_id: String,
+}
+
+#[derive(Deserialize, ToSchema)]
 pub struct PostOrPutNetworkSchema {
     pub label: String,
     pub icon: Option<String>,
@@ -75,4 +81,5 @@ pub struct PostOrPutNetworkSchema {
     pub ssid: Option<String>,
     pub tls_trust: Option<String>,
     pub outer_identity: Option<String>,
+    pub nms_links: Option<Vec<NmsLinkEntry>>,
 }
