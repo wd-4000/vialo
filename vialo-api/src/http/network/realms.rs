@@ -1,6 +1,6 @@
 use crate::{
     AppState,
-    http::util::{JsonE, User, VialoError, grab_authd_conn_user},
+    http::util::{JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user},
     permissions::{AppRole, check_app_role},
 };
 use std::sync::Arc;
@@ -27,8 +27,7 @@ pub async fn list_realms(
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user, AppRole::NetworkManager, &data.db).await?;
-    let limit = opts.limit.unwrap_or(10);
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     let records =  conditional_query_as!(
         RealmModel,
         "SELECT nr.* FROM net_realms nr {#account} {#search} ORDER BY id ASC LIMIT {limit} OFFSET {offset}",

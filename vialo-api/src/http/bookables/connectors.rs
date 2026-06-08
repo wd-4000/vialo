@@ -3,7 +3,7 @@ use crate::AppState;
 use crate::helpers::PatchOption;
 use crate::helpers::encryption::{self, Encrypted};
 use crate::http::util::grab_authd_conn_user;
-use crate::http::util::{JsonE, User, VialoError};
+use crate::http::util::{JsonE, User, VialoError, clamp_pagination};
 use crate::permissions::{AppRole, check_app_role};
 use axum::{
     Extension, Json,
@@ -75,8 +75,7 @@ pub async fn list(
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
-    let limit = opts.limit.unwrap_or(10);
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
     let record = conditional_query_as!(
         BookableConnector,

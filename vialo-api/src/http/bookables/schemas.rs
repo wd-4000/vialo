@@ -4,7 +4,7 @@ use super::permissions::{
 };
 use crate::AppState;
 use crate::http::util::grab_authd_conn_user;
-use crate::http::util::{JsonE, SearchableListOptions, User, VialoError};
+use crate::http::util::{JsonE, SearchableListOptions, User, VialoError, clamp_pagination};
 use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
@@ -35,8 +35,7 @@ pub async fn list(
     Extension(user_o): Extension<Option<User>>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     let user_id_o = user_o.as_ref().map(|u| u.id);
 
     let record = conditional_query_as!(

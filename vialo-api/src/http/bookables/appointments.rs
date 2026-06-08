@@ -1,8 +1,10 @@
 use super::models::{BookableAssetStatus, BookableStatus};
+use super::permissions::{BookablePerm, require_asset_type_perm};
 use crate::helpers::PgDateTime;
 use crate::http::util::models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery};
-use crate::http::util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans};
-use super::permissions::{BookablePerm, require_asset_type_perm};
+use crate::http::util::{
+    JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
+};
 use crate::permissions::{AppRole, check_app_role};
 // use crate::ketoapi::subject::Ref;
 // use crate::ketoapi::{self, CheckRequest, Subject};
@@ -64,8 +66,13 @@ pub async fn activate(
     let evil_data = data.clone();
     tokio::spawn(async move {
         evil_data
-            .event_channels.bookables
-            .broadcast(bookable_record.asset_type_id, bookable_record.id, bookable_record)
+            .event_channels
+            .bookables
+            .broadcast(
+                bookable_record.asset_type_id,
+                bookable_record.id,
+                bookable_record,
+            )
             .await;
     });
 
@@ -92,6 +99,37 @@ pub async fn delete_appointment(
     State(data): State<Arc<AppState>>,
     JsonE(body): JsonE<CancelAppointmentBody>,
 ) -> Result<impl IntoResponse, VialoError> {
+    let owner_check = query!(
+        "SELECT ba.account_id, b.asset_type_id FROM bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id WHERE ba.id = $1",
+        id
+    )
+    .fetch_one(&data.db)
+    .await?;
+
+    let mut real_cancellation_reason = CancellationReason::User;
+    if owner_check.account_id != user.id {
+        require_asset_type_perm(
+            Some(user.id),
+            owner_check.asset_type_id,
+            BookablePerm::Admin,
+            &data.db,
+        )
+        .await?;
+        real_cancellation_reason = CancellationReason::Admin;
+    }
+
+    if real_cancellation_reason != body.cancellation_reason.unwrap_or(CancellationReason::User) {
+        return Err(VialoError::AppError(
+            StatusCode::BAD_REQUEST,
+            "invalid_cancellation_reason".to_string(),
+        ));
+    };
+
+    // Open transaction and re-read with FOR UPDATE so the read, state check,
+    // update, and refund are all atomic — prevents double-refund races.
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+    let mut trans = grab_trans(&mut conn).await?;
+
     let appointment = query!(
         r#"SELECT
           ba.id,
@@ -108,19 +146,15 @@ pub async fn delete_appointment(
           b.asset_type_id,
           COALESCE(p.refund_percent, 0) AS current_refund_percent
         FROM bookable_appointments ba
-        -- Bookable asset (to get type)
         JOIN bookable_assets b ON b.id = ba.asset_id
-        -- Transaction (to calculate refund amount)
         LEFT JOIN credit_ledger cl ON cl.id = ba.transaction_id
-        -- Schema currently in effect
         JOIN LATERAL (
           SELECT DISTINCT ON (asset_id) schema_id, begins
           FROM bookable_schema_assignments
           WHERE asset_id = ba.asset_id
-            AND begins <= lower(ba.during) -- TODO base on created_at?
+            AND begins <= lower(ba.during)
           ORDER BY asset_id, begins DESC
         ) bsa ON true
-        -- Appropriate cancellation policy
         LEFT JOIN LATERAL (
           SELECT refund_percent
           FROM bookable_schema_cancellation_policy
@@ -129,23 +163,12 @@ pub async fn delete_appointment(
           ORDER BY min_notice DESC
           LIMIT 1
         ) p ON true
-        WHERE ba.id = $1;"#,
+        WHERE ba.id = $1
+        FOR UPDATE OF ba;"#,
         id
     )
-    .fetch_one(&data.db)
+    .fetch_one(&mut *trans)
     .await?;
-
-    let mut real_cancellation_reason = CancellationReason::User;
-    if appointment.account_id != user.id {
-        require_asset_type_perm(
-            Some(user.id),
-            appointment.asset_type_id,
-            BookablePerm::Admin,
-            &data.db,
-        )
-        .await?;
-        real_cancellation_reason = CancellationReason::Admin;
-    }
 
     if appointment.activated.is_some() {
         return Err(VialoError::AppError(
@@ -161,31 +184,31 @@ pub async fn delete_appointment(
         ));
     }
 
-    if real_cancellation_reason != body.cancellation_reason.unwrap_or(CancellationReason::User) {
-        return Err(VialoError::AppError(
-            StatusCode::BAD_REQUEST,
-            "invalid_cancellation_reason".to_string(),
-        ));
-    };
-
-    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
-    let mut trans = grab_trans(&mut conn).await?;
-
-    sqlx::query!(
-        "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = $2 WHERE id = $1",
+    let result = sqlx::query!(
+        "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = $2 WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",
         appointment.id,
         real_cancellation_reason as CancellationReason
     )
     .execute(&mut *trans).await?;
 
-    query!(
-        "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
-        appointment.from_account,
-        appointment.transaction_id,
-        appointment.credits.unwrap_or(0) * appointment.current_refund_percent.unwrap_or(0) / 100
-    )
-    .execute(&mut *trans)
-    .await?;
+    if result.rows_affected() == 0 {
+        return Err(VialoError::AppError(
+            StatusCode::CONFLICT,
+            "already_cancelled".to_string(),
+        ));
+    }
+
+    if body.process_refund {
+        query!(
+            "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
+            appointment.from_account,
+            appointment.transaction_id,
+            appointment.credits.unwrap_or(0) * appointment.current_refund_percent.unwrap_or(0)
+                / 100
+        )
+        .execute(&mut *trans)
+        .await?;
+    }
 
     trans.commit().await?;
 
@@ -209,13 +232,11 @@ pub async fn list(
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
     let _langs = opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
-
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
     // Permission check in case we receive an account ID different from the current account
     let resolved_account_id = opts.account_id.resolve(user.id);

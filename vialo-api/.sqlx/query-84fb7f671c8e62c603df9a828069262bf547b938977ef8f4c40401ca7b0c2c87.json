@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE boards SET label=$1, group_id=$2, default_post_visibility=$3, slug=$4, icon=$5 WHERE id = $6 RETURNING id",
+  "query": "UPDATE bookable_assets SET name_i18n = update_i18n_strings(name_i18n, $1, $2), icon = $3, asset_type_id = $4, slug = $5, connector = $6, connector_output_id = $7 WHERE id = $8 RETURNING id",
   "describe": {
     "columns": [
       {
@@ -9,7 +9,7 @@
         "type_info": "Int4",
         "origin": {
           "Table": {
-            "table": "boards",
+            "table": "bookable_assets",
             "name": "id"
           }
         }
@@ -17,32 +17,23 @@
     ],
     "parameters": {
       "Left": [
+        "TextArray",
+        "TextArray",
+        {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        },
         "Int4",
-        "Uuid",
-        {
-          "Custom": {
-            "name": "post_visibility",
-            "kind": {
-              "Enum": [
-                "public",
-                "logged_in",
-                "board"
-              ]
-            }
-          }
-        },
         {
           "Custom": {
             "name": "citext",
             "kind": "Simple"
           }
         },
-        {
-          "Custom": {
-            "name": "citext",
-            "kind": "Simple"
-          }
-        },
+        "Int4",
+        "Int4",
         "Int4"
       ]
     },
@@ -50,5 +41,5 @@
       false
     ]
   },
-  "hash": "0b508df602b03069c1d69cd523ffeb5e072d82d149f44a02f07f6ceccdc2ef60"
+  "hash": "84fb7f671c8e62c603df9a828069262bf547b938977ef8f4c40401ca7b0c2c87"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            bp.id,\n            bp.icon,\n            -- Use get_i18n_string for title, content, and location translations with fallback\n            get_i18n_string(bp.title, $1) AS title,\n            left(get_i18n_string(bp.content_html, $1), 400) AS content,\n            get_i18n_string(bp.location, $1) AS location,\n            bp.event_from,\n            bp.event_to,\n            bp.created_at,\n            bpp.pinned_until\n        FROM\n            board_posts bp\n        LEFT JOIN\n            board_pinned_posts bpp ON bp.id = bpp.post_id\n        WHERE (bp.created_at >= CURRENT_DATE::timestamptz) OR (bpp.pinned_until <= NOW() AND bpp.board_id = 0)\n        ORDER BY created_at DESC LIMIT $2 OFFSET $3 ",
+  "query": "SELECT\n            bp.id,\n            bp.icon,\n            get_i18n_string(bp.title, $1) AS title,\n            left(get_i18n_string(bp.content_html, $1), 400) AS content,\n            get_i18n_string(bp.location, $1) AS location,\n            bp.event_from,\n            bp.event_to,\n            bp.created_at,\n            bpp.pinned_until\n        FROM\n            board_posts bp\n        LEFT JOIN\n            board_pinned_posts bpp ON bp.id = bpp.post_id\n        WHERE ((bp.created_at >= CURRENT_DATE::timestamptz) OR (bpp.pinned_until <= NOW() AND bpp.board_id = 0))\n          AND (bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists($2, bp.board_id, 'view'))\n        ORDER BY created_at DESC LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -91,6 +91,7 @@
     "parameters": {
       "Left": [
         "TextArray",
+        "Uuid",
         "Int8",
         "Int8"
       ]
@@ -107,5 +108,5 @@
       true
     ]
   },
-  "hash": "0e70d30b959a323298e585213735884238724fed2feb0f5aa22be4b8a480abb2"
+  "hash": "a1b2f15f9fb21f796cfec6cad54a60f74258acacb0cf1e4d31b1f4d1c96be1b6"
 }

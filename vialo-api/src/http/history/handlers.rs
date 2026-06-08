@@ -2,7 +2,7 @@ use super::models::{HistoryEntryModel, Subsystem, TgOp};
 use super::schemas::HistoryFilterOptions;
 
 use crate::AppState;
-use crate::http::util::VialoError;
+use crate::http::util::{VialoError, clamp_pagination};
 use crate::http::util::models::AccountPersonEmbed;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
@@ -31,9 +31,7 @@ pub async fn list_history(
     Query(opts): Query<HistoryFilterOptions>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
-    // let search = opts.search.unwrap_or("".to_string());
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     // This might be red in rust-analyzer. Ignore this.
     let record = conditional_query_as!(
         HistoryEntryModel,

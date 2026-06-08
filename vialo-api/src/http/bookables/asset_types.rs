@@ -1,7 +1,7 @@
 use super::{handlers::BookableFilterOptions, models::BoardPostIdModel};
 use crate::AppState;
 use crate::helpers::{I18nMap, LangVariant};
-use crate::http::util::{JsonE, User, VialoError};
+use crate::http::util::{JsonE, User, VialoError, clamp_pagination};
 use crate::http::util::{grab_authd_conn_user, grab_trans};
 use crate::permissions::{AppRole, check_app_role};
 use axum::extract::Path;
@@ -28,13 +28,11 @@ pub async fn list(
     Query(opts): Query<BookableFilterOptions>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
     let langs = opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
-
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
     if let Some(search) = opts.search {
         let record = conditional_query_as!(
@@ -84,9 +82,7 @@ pub async fn post(
 
     let processed_i18n_fields =
         super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name.into()))])
-            .await
-            .ok()
-            .unwrap();
+            .await?;
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
@@ -162,15 +158,13 @@ pub async fn put(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name.into()))])
-            .await
-            .ok()
-            .unwrap();
+    let (name_langs, name_contents) =
+        super::super::util::get_i18n_arg_arrays(Some(body.name.into()));
 
     sqlx::query!(
-        r#"UPDATE bookable_asset_types SET name_i18n = $1 WHERE id = $2"#,
-        processed_i18n_fields.get("name"),
+        r#"UPDATE bookable_asset_types SET name_i18n = update_i18n_strings(name_i18n, $1, $2) WHERE id = $3"#,
+        &name_langs,
+        &name_contents,
         id
     )
     .execute(&mut *trans)

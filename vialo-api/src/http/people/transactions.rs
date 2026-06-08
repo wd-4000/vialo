@@ -8,7 +8,7 @@ use super::{
 use crate::{
     AppState,
     http::util::{
-            JsonE, MaybeJsonE, User, VialoError, grab_authd_conn_user, grab_trans,
+            JsonE, MaybeJsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
             models::{AccountEmbed, IdOrAllQuery, ProductEmbed, ProductType},
         },
     permissions::{AppRole, check_app_role},
@@ -38,8 +38,7 @@ pub async fn list(
         check_app_role(user.clone(), AppRole::CreditManager, &data.db).await?;
     }
 
-    let limit = opts.limit.unwrap_or(10);
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     let record = conditional_query_as!(PersonalTransactionModel,
         r#"SELECT cl.id,
         CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",

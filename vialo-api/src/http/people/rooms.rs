@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     AppState,
-    http::util::{JsonE, User, VialoError, grab_authd_conn_user},
+    http::util::{JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user},
 };
 use axum::{
     Extension, Json,
@@ -42,16 +42,15 @@ pub async fn list_rooms(
     Query(opts): Query<UserFilterOptions>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     let search = opts.search.unwrap_or("".to_string());
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
     let record = query_as!(
         RoomModel,
         "SELECT * FROM res_rooms WHERE label ILIKE '%' || $1 || '%' LIMIT $2 OFFSET $3",
         search,
-        limit as i32,
-        offset as i32
+        limit,
+        offset
     )
     .fetch_all(&data.db)
     .await?;

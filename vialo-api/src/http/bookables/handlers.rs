@@ -4,7 +4,7 @@ use super::models::{
     BoardPostIdModel, BookableAssetStatus, BookableAssetTranslatedAllLanguages,
     BookableAssetTranslatedWithStatus, BookableStatus,
 };
-use crate::http::util::{grab_authd_conn_user, grab_trans};
+use crate::http::util::{clamp_pagination, grab_authd_conn_user, grab_trans};
 use super::permissions::{BookablePerm, require_asset_type_perm};
 use crate::{
     helpers::grab_authd_conn_subsystem,
@@ -44,13 +44,12 @@ pub async fn list_bookables(
     State(data): State<Arc<AppState>>,
     Extension(user_o): Extension<Option<User>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
     let langs = opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
 
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
     let user_id_o = user_o.as_ref().map(|u| u.id);
 
     let record = conditional_query_as!(
@@ -155,9 +154,7 @@ pub async fn post_bookable(
 
     let processed_i18n_fields =
         super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name.into()))])
-            .await
-            .ok()
-            .unwrap();
+            .await?;
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
@@ -196,16 +193,14 @@ pub async fn put_bookable(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name.into()))])
-            .await
-            .ok()
-            .unwrap();
+    let (name_langs, name_contents) =
+        super::super::util::get_i18n_arg_arrays(Some(body.name.into()));
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
-        "UPDATE bookable_assets SET (name_i18n, icon, asset_type_id, slug, connector, connector_output_id) = ($1, $2, $3,$4,$5, $6) WHERE id = $7 RETURNING id",
-        processed_i18n_fields.get("name"),
+        "UPDATE bookable_assets SET name_i18n = update_i18n_strings(name_i18n, $1, $2), icon = $3, asset_type_id = $4, slug = $5, connector = $6, connector_output_id = $7 WHERE id = $8 RETURNING id",
+        &name_langs,
+        &name_contents,
         body.icon,
         body.asset_type_id,
         body.slug,

@@ -1,13 +1,14 @@
 use super::super::home::models::JumboModelTranslated;
 use super::{models::QuickLinkModelTranslated, schemas::PostFilterOptions};
 use crate::http::home::models::BoardPostModelHomeTranslated;
-use crate::http::util::VialoError;
+use crate::http::util::{User, VialoError, clamp_pagination};
 use crate::{AppState, list_i18n_generic};
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
 use serde::Serialize;
 use serde_json::json;
 use sqlx::query_as;
+use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 use utoipa::ToSchema;
 
@@ -54,19 +55,19 @@ pub struct HomeResponse {
 pub async fn get_home_aggregated(
     Query(opts): Query<PostFilterOptions>,
     State(data): State<Arc<AppState>>,
+    Extension(user_o): Extension<Option<User>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     let langs = opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
     let jumbo = query_as!(
         JumboModelTranslated,
         r#"SELECT id as "id!", img, headline, title, content, link FROM get_i18n_jumbo($1) LIMIT $2 OFFSET $3"#,
         &langs,
-        limit as i32,
-        offset as i32
+        limit,
+        offset
     )
     .fetch_all(&data.db);
 
@@ -74,20 +75,21 @@ pub async fn get_home_aggregated(
         QuickLinkModelTranslated,
         r#"SELECT id as "id!", label, link FROM get_i18n_quicklinks($1) LIMIT $2 OFFSET $3"#,
         &langs,
-        limit as i32,
-        offset as i32
+        limit,
+        offset
     )
     .fetch_all(&data.db);
 
-    let posts = query_as!(
+    let langs = &langs;
+
+    let posts = conditional_query_as!(
         BoardPostModelHomeTranslated,
         "SELECT
             bp.id,
             bp.icon,
-            -- Use get_i18n_string for title, content, and location translations with fallback
-            get_i18n_string(bp.title, $1) AS title,
-            left(get_i18n_string(bp.content_html, $1), 400) AS content,
-            get_i18n_string(bp.location, $1) AS location,
+            get_i18n_string(bp.title, {langs}) AS title,
+            left(get_i18n_string(bp.content_html, {langs}), 400) AS content,
+            get_i18n_string(bp.location, {langs}) AS location,
             bp.event_from,
             bp.event_to,
             bp.created_at,
@@ -96,11 +98,13 @@ pub async fn get_home_aggregated(
             board_posts bp
         LEFT JOIN
             board_pinned_posts bpp ON bp.id = bpp.post_id
-        WHERE (bp.created_at >= CURRENT_DATE::timestamptz) OR (bpp.pinned_until <= NOW() AND bpp.board_id = 0)
-        ORDER BY created_at DESC LIMIT $2 OFFSET $3 ",
-        &langs,
-        limit as i32,
-        offset as i32
+        WHERE ((bp.created_at >= CURRENT_DATE::timestamptz) OR (bpp.pinned_until <= NOW() AND bpp.board_id = 0))
+          AND {#visibility}
+        ORDER BY created_at DESC LIMIT {limit} OFFSET {offset}",
+        #visibility = match &user_o {
+            Some(User {id: uid}) => "(bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists({uid}, bp.board_id, 'view'))",
+            None => "bp.visibility = 'public'"
+        }
     )
     .fetch_all(&data.db);
 

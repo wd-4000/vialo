@@ -1,7 +1,7 @@
 use crate::{
     AppState,
     helpers::encryption::{self, Encrypted},
-    http::util::{JsonE, User, VialoError, grab_authd_conn_user, models::AccountEmbed},
+    http::util::{JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, models::AccountEmbed},
     permissions::{AppRole, check_app_role},
 };
 use std::sync::Arc;
@@ -60,8 +60,7 @@ pub async fn list_credentials(
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user, AppRole::NetworkManager, &data.db).await?;
-    let limit = opts.limit.unwrap_or(10);
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     let records = conditional_query_as!(
         CredentialModelWithAccountEmbed,
         "SELECT nc.id, nc.username, nc.network_id, nc.last_updated,
