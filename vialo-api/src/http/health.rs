@@ -2,7 +2,7 @@ use crate::{
     AppState,
     http::{
         history::models::Subsystem,
-        util::{ListOptions, VialoError},
+        util::{ListOptions, VialoError, clamp_pagination},
     },
     permissions::{AppRole, require_app_role},
 };
@@ -45,8 +45,7 @@ pub async fn get_health_events(
     Query(opts): Query<ListOptions>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
     let events = sqlx::query_as!(
         HealthEvent,

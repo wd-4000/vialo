@@ -1,6 +1,6 @@
 use crate::{
     AppState,
-    http::util::{JsonE, User, VialoError, grab_authd_conn_user},
+    http::util::{JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user},
     permissions::{AppRole, check_app_role},
 };
 use std::sync::Arc;
@@ -24,8 +24,7 @@ pub async fn list_networks(
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
     let record = conditional_query_as!(
         NetworkListModel,

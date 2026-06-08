@@ -45,12 +45,11 @@ macro_rules! list_i18n_generic {
     ($db:expr, $query:expr, $opts:expr, $result_type:ty) => {{
         use sqlx::query_as;
 
-        let limit = $opts.limit.unwrap_or(10);
+        let (offset, limit) = crate::http::util::clamp_pagination($opts.limit, $opts.page)?;
         let langs = $opts
             .lang
             .unwrap_or(vec![String::from("en"), String::from("de")]);
-        let offset = ($opts.page.unwrap_or(1) - 1) * limit;
-        let record = query_as!($result_type, $query, &langs, limit as i32, offset as i32)
+        let record = query_as!($result_type, $query, &langs, limit as i64, offset as i64)
             .fetch_all($db)
             .await?;
 

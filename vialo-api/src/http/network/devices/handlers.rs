@@ -14,7 +14,7 @@ use crate::{
             models::{CredentialModelWithPassword, NetAuth, NetworkListModel},
         },
         util::{
-            JsonE, User, VialoError, grab_authd_conn_user, grab_trans,
+            JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
             models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery, IdOrMeQuery},
         },
     },
@@ -54,8 +54,7 @@ pub async fn list_devices(
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
     // Permission check in case we receive an account ID different from the current account
     let resolved_account_id = opts.account_id.resolve(user.id);

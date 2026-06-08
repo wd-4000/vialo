@@ -1,4 +1,5 @@
 use super::models::{BookableAssetTranslated, BookableStatus};
+use super::permissions::{BookablePerm, require_asset_type_perm_by_asset};
 use crate::http::util::{JsonE, User, VialoError};
 use crate::http::util::{grab_authd_conn_user, grab_trans};
 // use crate::ketoapi::subject::Ref;
@@ -177,6 +178,13 @@ pub async fn book_slots(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<BookSlotSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
+    // Check book permission on every asset being booked
+    let asset_ids: Vec<i32> = body.slots.iter().map(|s| s.asset_id).collect();
+    for asset_id in &asset_ids {
+        require_asset_type_perm_by_asset(user.id, *asset_id, BookablePerm::Book, &data.db)
+            .await?;
+    }
+
     // Materialize the slots (Give them concrete start and end points)
     let materialized_slots = query_as!(MaterializedSlots, r#"SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index, ((j_v->>'expected_start')::date + bs.schedule[(j_v->>'slot_index')::int+1]) as begins, ((j_v->>'expected_start')::date + bs.schedule[(j_v->>'slot_index')::int+2]) as ends, bs.slot_price as price, (j_v->>'asset_id')::int as asset_id
         FROM bookable_schema_assignments bsa

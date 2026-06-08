@@ -5,7 +5,7 @@ use super::schemas::PostFilterOptions;
 use crate::helpers::{I18nMap, LangVariant};
 use crate::http::posts::models::BoardPostIdModel;
 use crate::http::util::models::GroupEmbed;
-use crate::http::util::{JsonE, User, VialoError, grab_trans};
+use crate::http::util::{JsonE, User, VialoError, clamp_pagination, grab_trans};
 use crate::permissions::check_manager_of_group;
 use crate::AppState;
 use axum::Extension;
@@ -82,11 +82,10 @@ pub async fn list_boards(
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     let langs = opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
     let boards = query_as!(
         BoardModelTranslatedEmbeddedGroup,
@@ -108,8 +107,8 @@ pub async fn list_boards(
         WHERE account_board_perm_exists($4, bd.id, 'view')
         LIMIT $2 OFFSET $3"#,
         &langs,
-        limit as i32,
-        offset as i32,
+        limit as i64,
+        offset as i64,
         user.id,
     )
     .fetch_all(&data.db)
@@ -191,8 +190,7 @@ pub async fn get_permissions(
 ) -> Result<impl IntoResponse, VialoError> {
     require_board_perm(user.id,id, BoardPerm::Admin, &data.db).await?;
 
-    let limit = opts.limit.unwrap_or(10);
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
     let res = query_as!(
         BoardPermissions,
@@ -269,9 +267,7 @@ pub async fn add_board(
         &mut trans,
         vec![("label", Some(body.label.into()))],
     )
-    .await
-    .ok()
-    .unwrap();
+    .await?;
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
@@ -324,18 +320,21 @@ pub async fn put_board(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let processed_i18n_fields = super::super::util::insert_i18n_strings(
-        &mut trans,
-        vec![("label", Some(body.label.into()))],
-    )
-    .await
-    .ok()
-    .unwrap();
+    let (label_langs, label_contents) =
+        super::super::util::get_i18n_arg_arrays(Some(body.label.into()));
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
-        r#"UPDATE boards SET label=$1, group_id=$2, default_post_visibility=$3, slug=$4, icon=$5 WHERE id = $6 RETURNING id"#,
-        processed_i18n_fields.get("label"), body.group_id, body.default_post_visibility as PostVisibility, body.slug, body.icon, id).fetch_one(&mut *trans)
+        r#"UPDATE boards SET label=update_i18n_strings(label, $2, $3), group_id=$4, default_post_visibility=$5, slug=$6, icon=$7 WHERE id = $1 RETURNING id"#,
+        id,
+        &label_langs,
+        &label_contents,
+        body.group_id,
+        body.default_post_visibility as PostVisibility,
+        body.slug,
+        body.icon,
+    )
+    .fetch_one(&mut *trans)
     .await?;
 
     let device_response = record;

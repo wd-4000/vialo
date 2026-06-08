@@ -175,7 +175,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
         query!(
-            "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = 'expired' WHERE id = $1",
+            "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = 'expired' WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",
             appointment.id,
         ).execute(&mut *trans).await?;
         query!(

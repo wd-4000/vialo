@@ -12,7 +12,7 @@ use pulldown_cmark::{Parser, html};
 
 use crate::AppState;
 use crate::helpers::LangVariant;
-use crate::http::util::{JsonE, User, VialoError, get_i18n_arg_arrays, grab_trans};
+use crate::http::util::{JsonE, User, VialoError, clamp_pagination, get_i18n_arg_arrays, grab_trans};
 use axum::Extension;
 use axum::{
     Json,
@@ -75,11 +75,10 @@ pub async fn list_posts(
        Logged-in users see 'public' and 'logged_in' posts (plus view-permissioned boards).
        Anonymous users see only 'public' posts. Enforced via #VISIBILITY below.
     */
-    let limit = opts.limit.unwrap_or(10);
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     let langs = &(opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]));
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
 
     // This might be red in rust-analyzer. Ignore that.
     let posts = conditional_query_as!(BoardPostModelTranslatedWithPinnedOn, "SELECT * FROM (SELECT

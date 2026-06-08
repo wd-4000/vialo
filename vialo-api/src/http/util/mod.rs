@@ -32,6 +32,28 @@ pub struct SearchableListOptions {
     pub search: Option<String>,
 }
 
+pub const MAX_PAGE_SIZE: i64 = 100;
+
+pub fn clamp_pagination(limit: Option<i64>, page: Option<i64>) -> Result<(i64, i64), VialoError> {
+    let limit = limit.unwrap_or(10);
+    let page = page.unwrap_or(1);
+
+    if limit < 1 || limit > MAX_PAGE_SIZE {
+        return Err(VialoError::AppError(
+            StatusCode::BAD_REQUEST,
+            format!("limit must be between 1 and {}", MAX_PAGE_SIZE),
+        ));
+    }
+    if page < 1 {
+        return Err(VialoError::AppError(
+            StatusCode::BAD_REQUEST,
+            "page must be >= 1".into(),
+        ));
+    }
+
+    Ok(((page - 1) * limit, limit))
+}
+
 #[derive(Debug)]
 pub enum VialoError {
     Anyhow(anyhow::Error),
@@ -148,7 +170,9 @@ pub async fn insert_i18n_strings(
         .await
         {
             Ok(device) => {
-                processed_i18n_fields.insert(field_name, device.insert_i18n_strings.unwrap());
+                let idx_id = device.insert_i18n_strings
+                    .ok_or_else(|| sqlx::Error::Protocol("insert_i18n_strings returned NULL".into()))?;
+                processed_i18n_fields.insert(field_name, idx_id);
             }
             Err(e) => {
                 return Err(e);
@@ -263,7 +287,7 @@ where
         }
 
         // Buffer the full request body
-        let bytes = to_bytes(body, usize::MAX).await.map_err(|_| {
+        let bytes = to_bytes(body, 1_048_576).await.map_err(|_| {
             (
                 StatusCode::BAD_REQUEST,
                 axum::Json(json!({

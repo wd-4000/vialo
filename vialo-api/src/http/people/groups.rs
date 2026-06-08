@@ -10,7 +10,7 @@ use crate::{
     http::{
         people::models::GroupGetModel,
         util::{
-            JsonE, User, VialoError, grab_authd_conn_user, grab_trans,
+            JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
             models::{AccountPersonEmbed, RoomEmbed},
         },
     },
@@ -35,9 +35,7 @@ pub async fn list_groups(
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
-    // let search = opts.search.unwrap_or("".to_string());
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     // This might be red in rust-analyzer. Ignore this.
     let record = conditional_query_as!(
         GroupListModel,
@@ -90,9 +88,7 @@ pub async fn list_group_members(
             }
         }
     }
-    let limit = opts.limit.unwrap_or(10);
-    // let search = opts.search.unwrap_or("".to_string());
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     // This might be red in rust-analyzer. Ignore this.
     let record = conditional_query_as!(
         GroupMemberModel,
@@ -132,9 +128,7 @@ pub async fn list_all_group_members(
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
-    // let search = opts.search.unwrap_or("".to_string());
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
     // This might be red in rust-analyzer. Ignore this.
     let record = conditional_query_as!(

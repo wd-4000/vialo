@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE boards SET label=update_i18n_strings(label, $2, $3), group_id=$4, default_post_visibility=$5, slug=$6, icon=$7 WHERE id = $1 RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "boards",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "TextArray",
+        "TextArray",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "post_visibility",
+            "kind": {
+              "Enum": [
+                "public",
+                "logged_in",
+                "board"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        },
+        {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0a046c130e7ab16eae0dc1b295e533a35ffcea1d93ceffb8f46fd1d203a9c11c"
+}

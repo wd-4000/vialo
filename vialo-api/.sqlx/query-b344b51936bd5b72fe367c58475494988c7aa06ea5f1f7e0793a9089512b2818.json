@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = 'expired' WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b344b51936bd5b72fe367c58475494988c7aa06ea5f1f7e0793a9089512b2818"
+}

@@ -6,8 +6,8 @@ use utoipa::{IntoParams, ToSchema};
 #[derive(Deserialize, Debug, Default, ToSchema, IntoParams)]
 pub struct PostFilterOptions {
     pub lang: Option<Vec<String>>,
-    pub page: Option<usize>,
-    pub limit: Option<usize>,
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]

@@ -13,7 +13,7 @@ use utoipa::ToSchema;
 
 use crate::{
     AppState,
-    http::util::{JsonE, ListOptions, User, VialoError, grab_authd_conn_user},
+    http::util::{JsonE, ListOptions, User, VialoError, clamp_pagination, grab_authd_conn_user},
 };
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -28,9 +28,7 @@ pub async fn list(
     Query(opts): Query<ListOptions>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let limit = opts.limit.unwrap_or(10);
-
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
     let record = conditional_query_as!(
         BookableSchemaAssignment,

@@ -14,7 +14,7 @@ use crate::printer::{self, models::JobData};
 use crate::{
     AppState, helpers,
     http::util::{
-        JsonE, User, VialoError, grab_authd_conn_user, grab_trans,
+        JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
         models::{AccountEmbed, AccountPersonEmbed, GroupEmbed, ProductType, RoomEmbed},
     },
 };
@@ -69,9 +69,8 @@ pub async fn list_people(
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user, AppRole::AccountManager, &data.db).await?;
 
-    let limit = opts.limit.unwrap_or(10);
-    // let search = opts.search.unwrap_or("".to_string());
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
+
     // This might be red in rust-analyzer. Ignore this.
     let record = conditional_query_as!(
         CurrentRoomOccupantsViewModel,
@@ -128,9 +127,7 @@ pub async fn lookup_people(
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user, AppRole::AccountManager, &data.db).await?;
 
-    let limit = opts.limit.unwrap_or(10);
-    // let search = opts.search.unwrap_or("".to_string());
-    let offset = (opts.page.unwrap_or(1) - 1) * limit;
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     // This might be red in rust-analyzer. Ignore this.
     let record = conditional_query_as!(
         PeopleLookupModel,
