@@ -49,6 +49,7 @@ pub struct ContractInfo {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ContractInfoSchema {
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub room: String,
     pub begins: chrono::NaiveDate,
     pub ends: chrono::NaiveDate,
@@ -58,12 +59,14 @@ pub struct ContractInfoSchema {
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreateUserSchema {
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub full_name: String,
     #[serde_as(as = "NoneAsEmptyString")]
     #[schema(format = Email)]
     pub email: Option<String>,
     pub auth_id: Option<Uuid>,
     pub contract: Option<ContractInfoSchema>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
     pub label: Option<String>,
     pub membership_end: PgDate,
     pub auto_setup_network: Option<bool>,
@@ -72,6 +75,7 @@ pub struct CreateUserSchema {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreateRoomSchema {
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub label: String,
     pub capacity: i32,
     pub floor: Option<i32>,

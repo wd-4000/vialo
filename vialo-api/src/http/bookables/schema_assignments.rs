@@ -27,7 +27,9 @@ pub async fn list(
     Path(id): Path<i32>,
     Query(opts): Query<ListOptions>,
     State(data): State<Arc<AppState>>,
+    Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
+    require_asset_type_perm_by_asset(user.id, id, BookablePerm::Admin, &data.db).await?;
     let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
     let record = conditional_query_as!(

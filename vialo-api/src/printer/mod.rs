@@ -301,7 +301,7 @@ pub async fn main(
                                         100,
                                         false,
                                     )
-                                    .await?;
+                                    .await;
                                     //continue;
                                 }
 

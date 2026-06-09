@@ -1,5 +1,5 @@
 use serde::Serialize;
-use sqlx::{Executor, PgExecutor};
+use sqlx::PgExecutor;
 
 use crate::http::history::models::Subsystem;
 
@@ -10,8 +10,8 @@ pub async fn add_health_event<'e, T: Serialize>(
     data: Option<T>,
     badness: i32,
     resolved: bool,
-) -> Result<(), anyhow::Error> {
-    sqlx::query!(
+) {
+    if let Err(e) = sqlx::query!(
         "INSERT INTO health_events (subsystem, data, label, badness, resolved) VALUES ($1,$2,$3,$4,$5)",
         subsystem as Subsystem,
         sqlx::types::Json(data) as _,
@@ -20,6 +20,8 @@ pub async fn add_health_event<'e, T: Serialize>(
         resolved
     )
     .execute(database)
-    .await?;
-    Ok(())
+    .await
+    {
+        tracing::error!("Failed to write health event '{label}': {e:?}");
+    }
 }

@@ -236,10 +236,18 @@ async fn notify_post_subscribers(
 
         match mailer.send(&email) {
             Ok(_) => debug!("Post {} notification to {} sent!", post_id, person.email),
-            Err(e) => error!(
-                "Post {} notification for {} failed: {:?}",
-                post_id, person.email, e
-            ),
+            Err(e) => {
+                error!("Post {} notification for {} failed: {:?}", post_id, person.email, e);
+                crate::health::add_health_event(
+                    &app_state.db,
+                    crate::http::history::models::Subsystem::Email,
+                    "smtp_failure",
+                    Some(serde_json::json!({"post_id": post_id, "recipient": person.email, "error": e.to_string()})),
+                    5,
+                    false,
+                )
+                .await;
+            }
         }
     }
 
@@ -284,10 +292,18 @@ async fn notify_expired_appointment(
             "Expired appointment {} notification to {} sent!",
             message.id, message.email
         ),
-        Err(e) => error!(
-            "Expired appointment {} notification for {} failed: {:?}",
-            message.id, message.email, e
-        ),
+        Err(e) => {
+            error!("Expired appointment {} notification for {} failed: {:?}", message.id, message.email, e);
+            crate::health::add_health_event(
+                &app_state.db,
+                crate::http::history::models::Subsystem::Email,
+                "smtp_failure",
+                Some(serde_json::json!({"appointment_id": message.id, "recipient": message.email, "error": e.to_string()})),
+                20,
+                false,
+            )
+            .await;
+        }
     }
 
     Ok(())
@@ -329,6 +345,15 @@ pub async fn main(
                     }
                     Err(RecvError::Lagged(n)) => {
                         warn!("Email subsystem lagged, missed {} post notifications", n);
+                        crate::health::add_health_event(
+                            &app_state.db,
+                            crate::http::history::models::Subsystem::Email,
+                            "channel_lagged",
+                            Some(serde_json::json!({"missed": n, "channel": "posts"})),
+                            10,
+                            false,
+                        )
+                        .await;
                     }
                     Err(RecvError::Closed) => return Ok(()),
                 }
@@ -346,10 +371,16 @@ pub async fn main(
                         }
                     }
                     Err(RecvError::Lagged(n)) => {
-                        warn!(
-                            "Email subsystem lagged, missed {} expiry notifications",
-                            n
-                        );
+                        warn!("Email subsystem lagged, missed {} expiry notifications", n);
+                        crate::health::add_health_event(
+                            &app_state.db,
+                            crate::http::history::models::Subsystem::Email,
+                            "channel_lagged",
+                            Some(serde_json::json!({"missed": n, "channel": "expired_appointments"})),
+                            30,
+                            false,
+                        )
+                        .await;
                     }
                     Err(RecvError::Closed) => return Ok(()),
                 }

@@ -187,7 +187,18 @@ pub async fn add_post(
     .await?;
 
     trans.commit().await?;
-    let _ = data.event_channels.posts_tx.send(record.id);
+    if data.event_channels.posts_tx.send(record.id).is_err() {
+        tracing::error!(post_id = record.id, "posts channel has no receivers — post email notifications will not be sent");
+        crate::health::add_health_event(
+            &data.db,
+            crate::http::history::models::Subsystem::Email,
+            "channel_no_receivers",
+            Some(serde_json::json!({"post_id": record.id})),
+            20,
+            false,
+        )
+        .await;
+    }
 
     Ok((StatusCode::CREATED, Json(record)))
 }

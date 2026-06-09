@@ -14,7 +14,7 @@ use crate::printer::{self, models::JobData};
 use crate::{
     AppState, helpers,
     http::util::{
-        JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
+        JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans, is_unique_violation,
         models::{AccountEmbed, AccountPersonEmbed, GroupEmbed, ProductType, RoomEmbed},
     },
 };
@@ -429,27 +429,25 @@ pub async fn add_person(
         body.label, body.email, body.membership_end as PgDate, body.full_name, body.auth_id
     )
     .fetch_one(trans.deref_mut())
-    .await?;
+    .await
+    .map_err(|e| if is_unique_violation(&e) {
+        VialoError::AppError(StatusCode::CONFLICT, "email_conflict".into())
+    } else { e.into() })?;
 
     if body.contract.is_some() {
         let contract = body.contract.unwrap();
 
-        let find_room = sqlx::query!("SELECT id FROM res_rooms WHERE label = $1", contract.room)
-            .fetch_one(&data.db)
-            .await;
-
-        if find_room.is_err() {
-            return Err(VialoError::AppError(
-                StatusCode::BAD_REQUEST,
-                "unknown_room".into(),
-            ));
-        }
+        let room_id = sqlx::query!("SELECT id FROM res_rooms WHERE label = $1", contract.room)
+            .fetch_one(&mut *trans)
+            .await
+            .map_err(|_| VialoError::AppError(StatusCode::BAD_REQUEST, "unknown_room".into()))?
+            .id;
 
         sqlx::query!(
                     "INSERT INTO res_leases (tenant_id, lessor_id, room_id, begins, ends) VALUES ($1, $2, $3, $4, $5)",
                     created_user.id,
                     contract.lessor_id,
-                    find_room.unwrap().id,
+                    room_id,
                     contract.begins,
                     contract.ends
                 )
@@ -540,22 +538,17 @@ pub async fn put_person(
     .await?;
 
     if let Some(contract) = body.contract {
-        let find_room = sqlx::query!("SELECT id FROM res_rooms WHERE label = $1", contract.room)
-            .fetch_one(&data.db)
-            .await;
-
-        if find_room.is_err() {
-            return Err(VialoError::AppError(
-                StatusCode::BAD_REQUEST,
-                "unknown_room".into(),
-            ));
-        }
+        let room_id = sqlx::query!("SELECT id FROM res_rooms WHERE label = $1", contract.room)
+            .fetch_one(&mut *trans)
+            .await
+            .map_err(|_| VialoError::AppError(StatusCode::BAD_REQUEST, "unknown_room".into()))?
+            .id;
 
         sqlx::query!(
                     "INSERT INTO res_leases (tenant_id, lessor_id, room_id, begins, ends) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (tenant_id) DO UPDATE SET (lessor_id, room_id, begins, ends) = ($2, $3, $4, $5)",
                     updated_user.id,
                     contract.lessor_id,
-                    find_room.unwrap().id,
+                    room_id,
                     contract.begins,
                     contract.ends
                 )

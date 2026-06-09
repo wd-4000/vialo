@@ -12,6 +12,7 @@ pub struct ParamOptions {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CreateDeviceSchema {
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub label: String,
     pub mac: MacAddressWrapper,
     pub cred_id: Uuid,
@@ -19,6 +20,7 @@ pub struct CreateDeviceSchema {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UpdateDeviceSchema {
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
     pub label: Option<String>,
     pub mac: Option<MacAddressWrapper>,
     pub cred_id: Option<Uuid>,
@@ -63,12 +65,15 @@ pub struct UpdateRealmSchema {
 #[derive(Deserialize, ToSchema)]
 pub struct NmsLinkEntry {
     pub nms_connector_id: i32,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub nms_id: String,
 }
 
 #[derive(Deserialize, ToSchema)]
 pub struct PostOrPutNetworkSchema {
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub label: String,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_64")]
     pub icon: Option<String>,
     pub wired: bool,
     pub multi_device: bool,
@@ -78,8 +83,11 @@ pub struct PostOrPutNetworkSchema {
     pub gen_username: Option<i32>,
     pub gen_password: Option<i32>,
     pub active: bool,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_32")]
     pub ssid: Option<String>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
     pub tls_trust: Option<String>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
     pub outer_identity: Option<String>,
     pub nms_links: Option<Vec<NmsLinkEntry>>,
 }

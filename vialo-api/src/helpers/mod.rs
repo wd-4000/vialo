@@ -5,12 +5,13 @@ use std::path::PathBuf;
 use utoipa::ToSchema;
 
 pub mod encryption;
+pub mod bounded_string;
 mod i18n;
 mod patch_option;
 pub mod people;
 mod pg_date;
 mod pg_date_time;
-pub use {i18n::*, patch_option::*, pg_date::*, pg_date_time::*};
+pub use {bounded_string::*, i18n::*, patch_option::*, pg_date::*, pg_date_time::*};
 
 pub fn find_upward(filename: &str) -> Option<PathBuf> {
     let mut dir = std::env::current_dir().ok()?;

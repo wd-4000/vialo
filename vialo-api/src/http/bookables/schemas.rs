@@ -29,6 +29,16 @@ pub struct BookableSchema {
     pub expiry_refund_percent: Option<i16>,
 }
 
+fn validate_schema_fields(body: &BookableSchemaPostOrPut) -> Result<(), VialoError> {
+    if body.slot_price.is_some_and(|v| v < 0) {
+        return Err(VialoError::AppError(StatusCode::BAD_REQUEST, "slot_price must be >= 0".into()));
+    }
+    if body.expiry_refund_percent.is_some_and(|v| !(0..=100).contains(&v)) {
+        return Err(VialoError::AppError(StatusCode::BAD_REQUEST, "expiry_refund_percent must be between 0 and 100".into()));
+    }
+    Ok(())
+}
+
 #[utoipa::path(get, path = "/bookables/schemas", params(SearchableListOptions), responses((status = 200, description = "OK", body=Vec<BookableSchema>)))]
 pub async fn list(
     Query(opts): Query<SearchableListOptions>,
@@ -120,6 +130,7 @@ pub async fn delete(
 #[serde_as]
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct BookableSchemaPostOrPut {
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
     pub label: Option<String>,
     pub schedule: Vec<String>,
     pub asset_type_id: i32,
@@ -136,6 +147,7 @@ pub async fn post(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<BookableSchemaPostOrPut>,
 ) -> Result<impl IntoResponse, VialoError> {
+    validate_schema_fields(&body)?;
     require_asset_type_perm(
         Some(user.id),
         body.asset_type_id,
@@ -166,6 +178,7 @@ pub async fn put(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<BookableSchemaPostOrPut>,
 ) -> Result<impl IntoResponse, VialoError> {
+    validate_schema_fields(&body)?;
     require_asset_type_perm_by_schema(user.id, id, BookablePerm::Admin, &data.db).await?;
     require_asset_type_perm(
         Some(user.id),

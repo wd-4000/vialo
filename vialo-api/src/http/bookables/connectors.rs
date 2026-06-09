@@ -56,6 +56,7 @@ pub struct BookableConnectorWithOptionalPassword {
 
 #[derive(Deserialize, Debug, ToSchema)]
 pub struct BookableConnectorPatch {
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub endpoint: String,
     pub username: PatchOption<String>,
     pub password: PatchOption<String>,
@@ -63,8 +64,11 @@ pub struct BookableConnectorPatch {
 
 #[derive(Deserialize, Debug, ToSchema)]
 pub struct BookableConnectorPost {
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub endpoint: String,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
     pub username: Option<String>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
     pub password: Option<String>,
 }
 

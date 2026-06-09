@@ -56,6 +56,7 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/{id}/schema_assignments/{begins}",
             delete(schema_assignments::delete),
         )
+        .route("/{id}/schema_assignments", get(schema_assignments::list))
         .route_layer(middleware::from_fn_with_state(
             app_state.clone(),
             super::util::middleware::auth_required,
@@ -63,6 +64,5 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/", get(handlers::list_bookables))
         .route("/types", get(asset_types::list))
         .route("/{id}", get(handlers::get_bookable))
-        .route("/{id}/schema_assignments", get(schema_assignments::list))
         .route("/{id}/quick-unlock", post(handlers::quick_unlock))
 }

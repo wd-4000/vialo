@@ -152,7 +152,9 @@ pub async fn get_mobileconfig(
 
 #[derive(Deserialize, ToSchema)]
 pub struct PutCredentialSchema {
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
     pub username: Option<String>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
     pub password: Option<String>,
 }
 
