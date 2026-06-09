@@ -27,6 +27,7 @@ pub struct PostFilterOptions {
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreatePostSchema {
     pub board_id: i32,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_64")]
     pub icon: Option<String>,
     pub title: Option<HashMap<String, String>>,
     pub content: Option<HashMap<String, String>>,

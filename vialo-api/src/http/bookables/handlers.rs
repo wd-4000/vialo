@@ -8,7 +8,7 @@ use crate::http::util::{clamp_pagination, grab_authd_conn_user, grab_trans};
 use super::permissions::{BookablePerm, require_asset_type_perm};
 use crate::{
     helpers::grab_authd_conn_subsystem,
-    http::util::{JsonE, User, VialoError},
+    http::util::{JsonE, User, VialoError, is_unique_violation},
 };
 // use crate::ketoapi::subject::Ref;
 // use crate::ketoapi::{self, CheckRequest, Subject};
@@ -135,7 +135,9 @@ pub async fn quick_unlock(
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct PostBookableSchema {
     pub name: I18nMap,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_64")]
     pub icon: Option<String>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_128")]
     pub slug: Option<String>,
     pub connector: Option<i32>,
     pub connector_output_id: Option<i32>,
@@ -167,7 +169,10 @@ pub async fn post_bookable(
         body.connector_output_id,
     )
     .fetch_one(&mut *trans)
-    .await?;
+    .await
+    .map_err(|e| if is_unique_violation(&e) {
+        VialoError::AppError(StatusCode::CONFLICT, "slug_conflict".into())
+    } else { e.into() })?;
 
     trans.commit().await?;
     Ok((StatusCode::CREATED, Json(record)))
@@ -180,18 +185,19 @@ pub async fn put_bookable(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<PostBookableSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+    let mut trans = grab_trans(&mut conn).await?;
+
     let current_type_id = sqlx::query_scalar!(
-        "SELECT asset_type_id FROM bookable_assets WHERE id = $1",
+        "SELECT asset_type_id FROM bookable_assets WHERE id = $1 FOR UPDATE",
         id
     )
-    .fetch_one(&data.db)
+    .fetch_one(&mut *trans)
     .await?;
     require_asset_type_perm(Some(user.id), current_type_id, BookablePerm::Admin, &data.db).await?;
     if body.asset_type_id != current_type_id {
         require_asset_type_perm(Some(user.id), body.asset_type_id, BookablePerm::Admin, &data.db).await?;
     }
-    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
-    let mut trans = grab_trans(&mut conn).await?;
 
     let (name_langs, name_contents) =
         super::super::util::get_i18n_arg_arrays(Some(body.name.into()));
@@ -209,7 +215,10 @@ pub async fn put_bookable(
         id
     )
     .fetch_one(&mut *trans)
-    .await?;
+    .await
+    .map_err(|e| if is_unique_violation(&e) {
+        VialoError::AppError(StatusCode::CONFLICT, "slug_conflict".into())
+    } else { e.into() })?;
 
     trans.commit().await?;
 

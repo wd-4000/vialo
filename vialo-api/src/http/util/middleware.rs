@@ -93,8 +93,7 @@ pub async fn auth_middleware(
                                 2,
                                 false,
                             )
-                            .await
-                            .map_err(VialoError::Anyhow)?;
+                            .await;
 
                             // Do the same thing as the jsonnet transform in the Kratos config
                             // This is a bit messy but frankly shouldn't happen in prod anyway

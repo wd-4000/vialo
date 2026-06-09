@@ -88,6 +88,9 @@ pub async fn put_realm(
     JsonE(body): JsonE<UpdateRealmSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
+    if body.vlan.is_some_and(|v| !(1..=4094).contains(&v)) {
+        return Err(VialoError::AppError(StatusCode::BAD_REQUEST, "vlan must be between 1 and 4094".into()));
+    }
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     let result = sqlx::query!(

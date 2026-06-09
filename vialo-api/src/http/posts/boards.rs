@@ -5,7 +5,7 @@ use super::schemas::PostFilterOptions;
 use crate::helpers::{I18nMap, LangVariant};
 use crate::http::posts::models::BoardPostIdModel;
 use crate::http::util::models::GroupEmbed;
-use crate::http::util::{JsonE, User, VialoError, clamp_pagination, grab_trans};
+use crate::http::util::{JsonE, User, VialoError, clamp_pagination, grab_trans, is_unique_violation};
 use crate::permissions::check_manager_of_group;
 use crate::AppState;
 use axum::Extension;
@@ -37,7 +37,9 @@ pub enum BoardPerm {
 pub struct CreateBoardSchema {
     pub group_id: Uuid,
     pub label: I18nMap,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_128")]
     pub slug: String,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_64")]
     pub icon: Option<String>,
 
     pub default_post_visibility: PostVisibility,
@@ -279,7 +281,10 @@ pub async fn add_board(
         body.icon
     )
     .fetch_one(&mut *trans)
-    .await?;
+    .await
+    .map_err(|e| if is_unique_violation(&e) {
+        VialoError::AppError(StatusCode::CONFLICT, "slug_conflict".into())
+    } else { e.into() })?;
 
     let device_response = record;
     trans.commit().await?;
@@ -335,7 +340,10 @@ pub async fn put_board(
         body.icon,
     )
     .fetch_one(&mut *trans)
-    .await?;
+    .await
+    .map_err(|e| if is_unique_violation(&e) {
+        VialoError::AppError(StatusCode::CONFLICT, "slug_conflict".into())
+    } else { e.into() })?;
 
     let device_response = record;
     trans.commit().await?;

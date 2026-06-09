@@ -32,16 +32,23 @@ pub struct NmsConnectorModel {
 pub struct PostNmsConnectorSchema {
     #[serde(rename = "type")]
     pub r#type: NmsType,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub hostname: String,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_128")]
     pub site_id: Option<String>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_512")]
     pub api_key: Option<String>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
     pub username: Option<String>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
     pub password: Option<String>,
 }
 
 #[derive(Deserialize, ToSchema)]
 pub struct PutNmsConnectorSchema {
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub hostname: String,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_128")]
     pub site_id: Option<String>,
     pub api_key: PatchOption<String>,
     pub username: PatchOption<String>,

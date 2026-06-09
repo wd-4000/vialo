@@ -115,11 +115,20 @@ impl From<anyhow::Error> for VialoError {
 
 impl From<sqlx::Error> for VialoError {
     fn from(err: sqlx::Error) -> Self {
+        if let sqlx::Error::Database(ref db_err) = err {
+            if db_err.code().as_deref() == Some("23503") {
+                return Self::AppError(StatusCode::BAD_REQUEST, "invalid_reference".into());
+            }
+        }
         match err {
             sqlx::Error::RowNotFound => Self::NotFound(),
             _ => Self::Anyhow(err.into()),
         }
     }
+}
+
+pub fn is_unique_violation(err: &sqlx::Error) -> bool {
+    matches!(err, sqlx::Error::Database(e) if e.code().as_deref() == Some("23505"))
 }
 
 #[derive(Clone)]

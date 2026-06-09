@@ -187,7 +187,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
         .execute(&mut *trans)
         .await?;
         trans.commit().await?;
-        let _ = app_state
+        if let Err(_) = app_state
             .event_channels
             .expired_appointments_tx
             .send(ExpiredAppointmentMessage {
@@ -198,7 +198,22 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
                 asset_name: appointment.asset_name.unwrap_or_else(|| "Unknown".into()),
                 credits_refunded: appointment.credits * appointment.expiry_refund_percent as i32
                     / 100,
-            });
+            })
+        {
+            tracing::error!(
+                appointment_id = %appointment.id,
+                "expired_appointments channel has no receivers — expiry email will not be sent"
+            );
+            crate::health::add_health_event(
+                &app_state.db,
+                crate::http::history::models::Subsystem::Email,
+                "channel_no_receivers",
+                Some(serde_json::json!({"appointment_id": appointment.id})),
+                50,
+                false,
+            )
+            .await;
+        }
     }
 
     Ok(())

@@ -10,7 +10,7 @@ use crate::{
     http::{
         people::models::GroupGetModel,
         util::{
-            JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
+            JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans, is_unique_violation,
             models::{AccountPersonEmbed, RoomEmbed},
         },
     },
@@ -227,10 +227,12 @@ pub async fn add_account(
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreateGroupSchema {
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub label: String,
     #[serde_as(as = "NoneAsEmptyString")]
     #[schema(format = Email)]
     pub email: Option<String>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_64")]
     pub icon: Option<String>,
     pub public: bool,
     pub app_roles: Option<HashSet<AppRole>>,
@@ -254,7 +256,10 @@ pub async fn post_group(
         body.icon
     )
     .fetch_one(&mut *conn)
-    .await?;
+    .await
+    .map_err(|e| if is_unique_violation(&e) {
+        VialoError::AppError(StatusCode::CONFLICT, "email_conflict".into())
+    } else { e.into() })?;
 
     Ok(Json(new_group))
 }
@@ -296,7 +301,10 @@ pub async fn put_group(
         body.icon
     )
     .execute(&mut *trans)
-    .await?;
+    .await
+    .map_err(|e| if is_unique_violation(&e) {
+        VialoError::AppError(StatusCode::CONFLICT, "email_conflict".into())
+    } else { e.into() })?;
 
     // We want to change app roles
     if let Some(new_app_roles) = body.app_roles {

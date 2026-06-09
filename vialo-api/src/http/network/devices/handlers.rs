@@ -14,7 +14,7 @@ use crate::{
             models::{CredentialModelWithPassword, NetAuth, NetworkListModel},
         },
         util::{
-            JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
+            JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans, is_unique_violation,
             models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery, IdOrMeQuery},
         },
     },
@@ -236,7 +236,10 @@ pub async fn post_device(
               r#"INSERT INTO net_devices (label, mac, cred_id, last_updated) VALUES ($1, $2, $3, NOW()) RETURNING id, label, mac AS "mac: MacAddressWrapper", cred_id, last_updated, last_seen, hostname, realm_id"#,
        final_label, final_mac.map(|a| a.get_value()), final_cred.id)
           .fetch_one(&mut *trans)
-          .await?;
+          .await
+          .map_err(|e| if is_unique_violation(&e) {
+              VialoError::AppError(StatusCode::CONFLICT, "mac_conflict".into())
+          } else { e.into() })?;
 
     trans.commit().await?;
 

@@ -196,9 +196,12 @@ pub async fn book_slots(
     // Verify the slots and the client's expectations (if present)
     let mut sum_total = 0;
     for slot in &materialized_slots {
-        let expected_slot: &BookSlotSchemaSlot = &body.slots[slot.index.ok_or(
+        let idx: usize = slot.index.ok_or(
             VialoError::AppError(StatusCode::INTERNAL_SERVER_ERROR, "slot_info".to_string()),
-        )? as usize];
+        )? as usize;
+        let expected_slot: &BookSlotSchemaSlot = body.slots.get(idx).ok_or(
+            VialoError::AppError(StatusCode::BAD_REQUEST, "slot_index".to_string()),
+        )?;
         if let (Some(real_start), Some(real_end)) = (slot.begins, slot.ends) {
             if let Some(expected_end) = expected_slot.expected_end.map(|v| v.naive_local()) {
                 println!("{:?}", expected_slot.expected_start.naive_local());
@@ -244,8 +247,7 @@ pub async fn book_slots(
             10,
             false,
         )
-        .await
-        .map_err(VialoError::Anyhow)?;
+        .await;
 
         return Err(VialoError::AppError(
             StatusCode::BAD_REQUEST,

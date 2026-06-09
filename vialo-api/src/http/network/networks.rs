@@ -1,6 +1,6 @@
 use crate::{
     AppState,
-    http::util::{JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user},
+    http::util::{JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, is_unique_violation},
     permissions::{AppRole, check_app_role},
 };
 use std::sync::Arc;
@@ -132,7 +132,10 @@ pub async fn put_network(
         body.outer_identity,
     )
     .execute(&mut *conn)
-    .await?;
+    .await
+    .map_err(|e| if is_unique_violation(&e) {
+        VialoError::AppError(StatusCode::CONFLICT, "label_conflict".into())
+    } else { e.into() })?;
 
     if result.rows_affected() == 0 {
         return Err(VialoError::NotFound());
@@ -173,8 +176,7 @@ pub async fn delete_network(
 
     let rows_affected = sqlx::query!("DELETE FROM net_networks WHERE id = $1", id)
         .execute(&mut *conn)
-        .await
-        .unwrap()
+        .await?
         .rows_affected();
 
     if rows_affected == 0 {
@@ -212,7 +214,10 @@ pub async fn post_network(
         body.outer_identity,
     )
     .fetch_one(&mut *conn)
-    .await?;
+    .await
+    .map_err(|e| if is_unique_violation(&e) {
+        VialoError::AppError(StatusCode::CONFLICT, "label_conflict".into())
+    } else { e.into() })?;
 
     if let Some(links) = body.nms_links {
         for link in links {
