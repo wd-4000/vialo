@@ -34,8 +34,10 @@ pub struct HealthEvent {
     pub last_updated: Option<DateTime<Utc>>,
     pub subsystem: Option<Subsystem>,
     pub label: String,
+    pub dedup_key: Option<String>,
     pub data: Option<serde_json::Value>,
     pub badness: i32,
+    pub occurrences: i32,
     pub read: bool,
     pub resolved: bool,
 }
@@ -49,7 +51,7 @@ pub async fn get_health_events(
 
     let events = sqlx::query_as!(
         HealthEvent,
-        r#"SELECT id, created_at, last_updated, subsystem AS "subsystem: Subsystem", label, data, badness, read, resolved
+        r#"SELECT id, created_at, last_updated, subsystem AS "subsystem: Subsystem", label, dedup_key, data, badness, occurrences, read, resolved
         FROM health_events ORDER BY id DESC LIMIT $1 OFFSET $2"#,
         limit,
         offset

@@ -10,7 +10,7 @@ systemd-units = { enable = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
-default = ["printer", "ppsk"]
+default = ["printer", "ppsk", "email"]
 printer = []
 migrate = []
 email = []
@@ -67,6 +67,8 @@ chacha20poly1305 = { version = "0.10.1", features = ["std"] }
 hex = "0.4"
 secrecy = "0.10.3"
 ipnetwork = { version = "0.21.1", features = ["serde"] }
+governor = { version = "0.10.4", features = ["dashmap"] }
+dashmap = "6.2.1"
 #iana-time-zone = "0.1.63"
 
 [patch.crates-io]

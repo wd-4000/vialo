@@ -18,7 +18,7 @@ pub mod email;
 #[cfg(feature = "printer")]
 pub mod printer;
 
-use crate::{bookables::BookableChannel, config::Config};
+use crate::{bookables::BookableChannel, config::Config, http::rate_limit::RateLimiters};
 use sqlx::{Pool, Postgres};
 use tokio::sync::broadcast;
 
@@ -38,6 +38,7 @@ pub struct AppState {
     pub event_channels: EventChannels,
     pub config: Config,
     pub kratos_config: Option<KratosConfigs>,
+    pub rate_limiters: RateLimiters,
 }
 
 #[macro_export]

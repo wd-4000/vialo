@@ -1,8 +1,8 @@
 pub mod appointments;
-pub mod permissions;
 pub mod connectors;
 pub mod handlers;
 pub mod models;
+pub mod permissions;
 pub mod schema_assignments;
 pub mod schemas;
 pub mod slots;
@@ -17,9 +17,16 @@ use axum::{
     routing::{delete, get, post, put},
 };
 
-use crate::AppState;
+use crate::{AppState, http::rate_limit};
 
 pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
+    let booking_routes = Router::new()
+        .route("/slots/book", post(slots::book_slots))
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            rate_limit::credits,
+        ));
+
     Router::new()
         .route("/", post(handlers::post_bookable))
         .route("/types", post(asset_types::post))
@@ -49,7 +56,7 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/appointments/{id}/activate", post(appointments::activate))
         .route("/slots/taken", get(slots::taken_slots))
         .route("/slots/schemas", get(slots::slot_schemas))
-        .route("/slots/book", post(slots::book_slots))
+        .merge(booking_routes)
         .route("/{id}", put(handlers::put_bookable))
         .route("/{id}/schema_assignments", post(schema_assignments::post))
         .route(

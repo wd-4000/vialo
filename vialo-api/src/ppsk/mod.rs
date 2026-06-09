@@ -102,7 +102,7 @@ pub async fn main(
             let password = p.password.expose();
             if password.len() < 8 || password.len() > 63 {
                 error!("Invalid password length. Ignoring password for cred \"{}\".", p.id);
-                add_health_event(&mut *conn, Subsystem::Ppsk, "bad_password", Some(json!({"cred_id": p.id})), 2, false).await;
+                add_health_event(&mut *conn, Subsystem::Ppsk, "bad_password", Some(json!({"cred_id": p.id})), 2, false, None).await;
                 continue;
             }
             let networkconf_id = if let Some(unifi_vlan) = unifi_vlans.get(&p.vlan.into()) {
@@ -127,6 +127,7 @@ pub async fn main(
                             Some(json!({"network_id": net_id})),
                             50,
                             false,
+                            None,
                         )
                         .await;
                     } else {

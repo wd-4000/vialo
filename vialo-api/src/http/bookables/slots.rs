@@ -246,6 +246,7 @@ pub async fn book_slots(
             })),
             10,
             false,
+            None,
         )
         .await;
 

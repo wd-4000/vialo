@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, created_at, last_updated, subsystem AS \"subsystem: Subsystem\", label, data, badness, read, resolved\n        FROM health_events ORDER BY id DESC LIMIT $1 OFFSET $2",
+  "query": "SELECT id, created_at, last_updated, subsystem AS \"subsystem: Subsystem\", label, dedup_key, data, badness, occurrences, read, resolved\n        FROM health_events ORDER BY id DESC LIMIT $1 OFFSET $2",
   "describe": {
     "columns": [
       {
@@ -74,6 +74,17 @@
       },
       {
         "ordinal": 5,
+        "name": "dedup_key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "health_events",
+            "name": "dedup_key"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
         "name": "data",
         "type_info": "Jsonb",
         "origin": {
@@ -84,7 +95,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "badness",
         "type_info": "Int4",
         "origin": {
@@ -95,7 +106,18 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
+        "name": "occurrences",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "health_events",
+            "name": "occurrences"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
         "name": "read",
         "type_info": "Bool",
         "origin": {
@@ -106,7 +128,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 10,
         "name": "resolved",
         "type_info": "Bool",
         "origin": {
@@ -130,10 +152,12 @@
       true,
       false,
       true,
+      true,
+      false,
       false,
       false,
       false
     ]
   },
-  "hash": "6e0add40defbd07adc15de006ab7aee4d120ad53b3c90f3a0488cfb5030b9dcf"
+  "hash": "317da4c4016c21cccd24f24de6a47f6cea7e73e73aae6300073a647e2d45fe3e"
 }

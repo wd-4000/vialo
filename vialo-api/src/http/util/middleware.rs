@@ -92,6 +92,7 @@ pub async fn auth_middleware(
                                 Some(json!({"id": identity.id})),
                                 2,
                                 false,
+                                None,
                             )
                             .await;
 
