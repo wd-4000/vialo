@@ -160,6 +160,7 @@ async fn main() {
         },
         config,
         kratos_config,
+        rate_limiters: vialo_api::http::rate_limit::RateLimiters::new(),
     });
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO health_events (subsystem, data, label, badness, resolved) VALUES ($1,$2,$3,$4,$5)",
+  "query": "INSERT INTO health_events (subsystem, data, label, badness, resolved, last_updated, dedup_key)\n           VALUES ($1, $2, $3, $4, $5, NOW(), $6)\n           ON CONFLICT (subsystem, label, dedup_key) WHERE resolved = false\n           DO UPDATE SET last_updated = NOW(), data = EXCLUDED.data, occurrences = health_events.occurrences + 1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -23,10 +23,11 @@
         "Jsonb",
         "Text",
         "Int4",
-        "Bool"
+        "Bool",
+        "Text"
       ]
     },
     "nullable": []
   },
-  "hash": "fc55f8d1e0329aaab226f43174ab7d4e8a70a1f8ee08d6d4bf36d70707d46d41"
+  "hash": "8319d59964d3f88b80c0caf6f48fff660d04e66e3e4f1cd8bd2eb7757e03b521"
 }

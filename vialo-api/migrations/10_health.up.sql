@@ -4,8 +4,10 @@ CREATE TABLE health_events (
   last_updated timestamptz,
   subsystem subsystem_type,
   label text NOT NULL,
+  dedup_key text,
   data jsonb,
   badness int DEFAULT 0 NOT NULL,
+  occurrences int DEFAULT 1 NOT NULL,
   read boolean DEFAULT false NOT NULL,
   resolved boolean DEFAULT false NOT NULL
 );
@@ -19,3 +21,7 @@ CREATE INDEX idx_health_events_time_diff ON health_events ((last_updated - creat
 WHERE
   resolved = false
   AND read = false;
+
+-- Only one unresolved event per (subsystem, label, dedup_key).
+-- NULL dedup_key means no dedup — each insert creates a new row.
+CREATE UNIQUE INDEX idx_health_events_dedup ON health_events (subsystem, label, dedup_key) WHERE resolved = false;

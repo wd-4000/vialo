@@ -17,6 +17,7 @@ mod home;
 mod network;
 mod people;
 pub mod posts;
+pub mod rate_limit;
 pub mod util;
 
 use super::AppState;
@@ -87,11 +88,23 @@ pub async fn create_router(app_state: Arc<AppState>) -> Router {
         .nest("/home", home::create_router(app_state.clone()))
         .route_layer(middleware::from_fn_with_state(
             app_state.clone(),
+            rate_limit::authenticated,
+        ))
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            rate_limit::observe,
+        ))
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
             util::middleware::auth_middleware,
         ))
         .route("/config", get(config::get_config))
         .route("/etc/mail-recipients", get(etc::list_mail_recipients))
         // TODO expose openapi.json (Maybe) .route("/openapi.json", get(docs::openapi_json))
+        .layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            rate_limit::global,
+        ))
         .layer(
             TraceLayer::new_for_http()
                 // Create our own span for the request and include the matched path. The matched

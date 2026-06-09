@@ -211,6 +211,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
                 Some(serde_json::json!({"appointment_id": appointment.id})),
                 50,
                 false,
+                None,
             )
             .await;
         }

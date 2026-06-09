@@ -245,6 +245,7 @@ async fn notify_post_subscribers(
                     Some(serde_json::json!({"post_id": post_id, "recipient": person.email, "error": e.to_string()})),
                     5,
                     false,
+                    None,
                 )
                 .await;
             }
@@ -301,6 +302,7 @@ async fn notify_expired_appointment(
                 Some(serde_json::json!({"appointment_id": message.id, "recipient": message.email, "error": e.to_string()})),
                 20,
                 false,
+                None,
             )
             .await;
         }
@@ -352,6 +354,7 @@ pub async fn main(
                             Some(serde_json::json!({"missed": n, "channel": "posts"})),
                             10,
                             false,
+                            None,
                         )
                         .await;
                     }
@@ -379,6 +382,7 @@ pub async fn main(
                             Some(serde_json::json!({"missed": n, "channel": "expired_appointments"})),
                             30,
                             false,
+                            None,
                         )
                         .await;
                     }

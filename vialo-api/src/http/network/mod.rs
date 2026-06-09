@@ -1,4 +1,5 @@
 use crate::AppState;
+use crate::http::rate_limit;
 use crate::permissions::{AppRole, require_app_role};
 use std::sync::Arc;
 
@@ -49,38 +50,43 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             },
         ));
 
-    // Per-credential routes: ownership checked inside the handlers
-    let credential_routes = Router::new().nest(
-        "/credentials/{id}",
-        Router::new()
-            .route(
-                "/",
-                get(credentials::get_credential)
-                    .put(credentials::put_credential)
-                    .delete(credentials::delete_credential),
-            )
-            .route(
-                "/mobileconfig/{filename}",
-                get(credentials::get_mobileconfig),
-            ),
-    );
+    // Per-credential routes: ownership checked inside the handlers.
+    // POST /devices is here because CreatedDeviceResponse always includes a
+    // plaintext credential — it must share the tight credential rate limit.
+    let credential_routes = Router::new()
+        .nest(
+            "/credentials/{id}",
+            Router::new()
+                .route(
+                    "/",
+                    get(credentials::get_credential)
+                        .put(credentials::put_credential)
+                        .delete(credentials::delete_credential),
+                )
+                .route(
+                    "/mobileconfig/{filename}",
+                    get(credentials::get_mobileconfig),
+                ),
+        )
+        .route(
+            "/devices/{id}/overview",
+            get(devices::handlers::get_device_overview),
+        )
+        .route("/devices", post(devices::handlers::post_device))
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            rate_limit::credential,
+        ));
 
     // Realm read: ownership checked inside the handler
     let realm_read_routes = Router::new().route("/realms/{id}", get(realms::get_realm));
 
     // Device routes: ownership checked inside the handlers
     let device_routes = Router::new()
-        .route(
-            "/devices",
-            post(devices::handlers::post_device).get(devices::handlers::list_devices),
-        )
+        .route("/devices", get(devices::handlers::list_devices))
         .route(
             "/devices/{id}",
             patch(devices::handlers::update_device).delete(devices::handlers::delete_device),
-        )
-        .route(
-            "/devices/{id}/overview",
-            get(devices::handlers::get_device_overview),
         );
 
     Router::new()

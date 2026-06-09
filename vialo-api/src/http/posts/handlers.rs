@@ -196,6 +196,7 @@ pub async fn add_post(
             Some(serde_json::json!({"post_id": record.id})),
             20,
             false,
+            None,
         )
         .await;
     }
