@@ -360,6 +360,27 @@ pub async fn main(
                     }
                     Err(error) => {
                         error!("Error running task {:?}: {}", task, error);
+                        let dedup_key = match &task {
+                            JobData::Refresh {} => "refresh",
+                            JobData::FullSync {} => "full_sync",
+                            JobData::CreateAccount { .. } => "create_account",
+                            JobData::UpdateAccountLimit { .. } => "update_limit",
+                            JobData::DeleteAccount { .. } => "delete_account",
+                        };
+                        let error_json = error
+                            .downcast_ref::<PrinterRequestError>()
+                            .map(|e| serde_json::to_value(e).unwrap_or_default())
+                            .unwrap_or_else(|| json!(format!("{error}")));
+                        add_health_event(
+                            &mut *conn,
+                            Subsystem::Printer,
+                            "task_error",
+                            Some(json!({"task": task, "error": error_json})),
+                            50,
+                            false,
+                            Some(dedup_key),
+                        )
+                        .await;
                         JobStatus::Error
                     }
                 };
