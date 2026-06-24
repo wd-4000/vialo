@@ -230,6 +230,12 @@ execute FUNCTION table_log_trigger ('text', 'product');
 create or replace procedure ddl_create_audit_trigger_on_all_tables () language plpgsql as $$
 declare
   _sql varchar;
+  -- Tables excluded from audit logging
+  _excluded_tables text[] := ARRAY[
+    'table_log',
+    'net_ip_assignments',
+    'subsystem_jobs'
+  ];
 begin
   for _sql in select concat (
       'create trigger tg_table_log after insert or update or delete on ',
@@ -248,7 +254,7 @@ begin
       t.table_schema not in ('pg_catalog', 'information_schema') and
       t.table_schema not like 'pg_toast%' and
       t.table_name not like '_sqlx%' and
-      t.table_name != 'table_log'
+      t.table_name != ALL(_excluded_tables)
 
 
   loop
