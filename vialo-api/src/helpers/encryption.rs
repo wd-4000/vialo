@@ -1,6 +1,6 @@
 use chacha20poly1305::{
-    Key, XChaCha20Poly1305,
-    aead::{Aead, AeadCore, KeyInit, OsRng},
+    Key, XChaCha20Poly1305, XNonce,
+    aead::{Aead, Generate, KeyInit},
 };
 use secrecy::{ExposeSecret, SecretBox};
 use serde::{Deserialize, Serialize};
@@ -29,9 +29,9 @@ pub fn encrypt<T: Serialize>(value: &T) -> Result<Vec<u8>, anyhow::Error> {
 }
 
 fn encrypt_raw(plaintext: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
-    let nonce: [u8; 24] = XChaCha20Poly1305::generate_nonce(&mut OsRng).into();
+    let nonce = XNonce::generate();
     let mut out = nonce.to_vec();
-    out.extend_from_slice(&get_cipher().encrypt(&nonce.into(), plaintext)?);
+    out.extend_from_slice(&get_cipher().encrypt(&nonce, plaintext)?);
     Ok(out)
 }
 
