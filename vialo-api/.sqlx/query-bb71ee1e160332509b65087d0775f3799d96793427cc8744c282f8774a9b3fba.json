@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT\n                   bd.id as \"id!\",\n                   bd.asset_type_id as \"asset_type_id!\",\n                   bd.status as \"status!: BookableStatus\",\n                   begins,\n                   ends as \"ends: PgDateTime\"\n               FROM\n                bookable_asset_status bd WHERE id = $1;",
+  "query": "SELECT\n                id as \"id!\",\n                asset_type_id as \"asset_type_id!\",\n                status as \"status!: BookableStatus\",\n                begins,\n                ends as \"ends: PgDateTime\"\n               FROM bookable_asset_status WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -85,5 +85,5 @@
       true
     ]
   },
-  "hash": "8788dc9c25a04254adf9d1193abd07b81fd1d405b7c33121bc47d5afad695833"
+  "hash": "bb71ee1e160332509b65087d0775f3799d96793427cc8744c282f8774a9b3fba"
 }

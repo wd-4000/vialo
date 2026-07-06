@@ -104,28 +104,7 @@ pub async fn quick_unlock(
                 (ends - begins).num_seconds().unsigned_abs() + 1,
             ))
             .await;
-            if let Ok(record_2) = query_as!(
-                BookableAssetStatus,
-                r#"
-                SELECT
-                   bd.id as "id!",
-                   bd.asset_type_id as "asset_type_id!",
-                   bd.status as "status!: BookableStatus",
-                   begins,
-                   ends as "ends: PgDateTime"
-               FROM
-                bookable_asset_status bd WHERE id = $1;"#,
-                id
-            )
-            .fetch_one(&mut *conn)
-            .await
-            {
-                evil_data
-                    .event_channels
-                    .bookables
-                    .broadcast(record.asset_type_id, record.id, record_2)
-                    .await;
-            }
+            crate::bookables::fetch_and_broadcast_status(&evil_data, [id]).await;
         }
     });
 

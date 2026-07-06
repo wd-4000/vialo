@@ -3,7 +3,7 @@ pub use channel::BookableChannel;
 
 use crate::helpers::{PgDateTime, encryption::Encrypted};
 use crate::http::bookables::connectors::BookableConnectorWithPassword;
-use crate::http::bookables::models::BookableStatus;
+use crate::http::bookables::models::{BookableAssetStatus, BookableStatus};
 use crate::http::util::grab_trans;
 use crate::{AppState, helpers::grab_authd_conn_subsystem};
 use netio::models::OutputPost;
@@ -102,7 +102,7 @@ pub async fn auto_activate_appointments(app_state: &AppState) -> Result<(), anyh
         .await
         .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
-    query!(
+    let activated = query!(
         "UPDATE bookable_appointments ba
     SET activated = NOW()
     WHERE ba.activated IS NULL
@@ -118,10 +118,16 @@ pub async fn auto_activate_appointments(app_state: &AppState) -> Result<(), anyh
         ORDER BY bsa.begins DESC
         LIMIT 1
     )
+    RETURNING ba.asset_id
 "
     )
-    .execute(&mut *conn)
+    .fetch_all(&mut *conn)
     .await?;
+
+    if !activated.is_empty() {
+        let asset_ids: Vec<i32> = activated.iter().map(|r| r.asset_id).collect();
+        fetch_and_broadcast_status(app_state, asset_ids).await;
+    }
 
     Ok(())
 }
@@ -189,6 +195,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
             .await?;
         }
         trans.commit().await?;
+        fetch_and_broadcast_status(app_state, [appointment.asset_id]).await;
         if let Err(_) =
             app_state
                 .event_channels
@@ -308,4 +315,34 @@ pub async fn main(
         };
     }
     Ok(())
+}
+
+/// Query the current status of each bookable asset and broadcast to all WS subscribers.
+pub async fn fetch_and_broadcast_status(
+    state: &AppState,
+    asset_ids: impl IntoIterator<Item = i32>,
+) {
+    for asset_id in asset_ids {
+        let record = query_as!(
+            BookableAssetStatus,
+            r#"SELECT
+                id as "id!",
+                asset_type_id as "asset_type_id!",
+                status as "status!: BookableStatus",
+                begins,
+                ends as "ends: PgDateTime"
+               FROM bookable_asset_status WHERE id = $1"#,
+            asset_id,
+        )
+        .fetch_one(&state.db)
+        .await;
+
+        if let Ok(record) = record {
+            state
+                .event_channels
+                .bookables
+                .broadcast(record.asset_type_id, record.id, record)
+                .await;
+        }
+    }
 }
