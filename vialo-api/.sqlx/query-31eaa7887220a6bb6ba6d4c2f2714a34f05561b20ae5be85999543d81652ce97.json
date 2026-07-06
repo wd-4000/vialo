@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n          ba.id,\n          ba.asset_id,\n          ba.transaction_id,\n          ba.account_id,\n          lower(ba.during) AS begins,\n          coalesce(upper(ba.during), '+infinity'::timestamp) AS \"ends!: PgDateTime\",\n          ba.cancelled_at,\n          ba.activated,\n          coalesce(cl.credits, 0) as credits,\n          cl.from_account,\n          ba.maintenance,\n          b.asset_type_id,\n          COALESCE(p.refund_percent, 0) AS current_refund_percent\n        FROM bookable_appointments ba\n        JOIN bookable_assets b ON b.id = ba.asset_id\n        LEFT JOIN credit_ledger cl ON cl.id = ba.transaction_id\n        JOIN LATERAL (\n          SELECT DISTINCT ON (asset_id) schema_id, begins\n          FROM bookable_schema_assignments\n          WHERE asset_id = ba.asset_id\n            AND begins <= lower(ba.during)\n          ORDER BY asset_id, begins DESC\n        ) bsa ON true\n        LEFT JOIN LATERAL (\n          SELECT refund_percent\n          FROM bookable_schema_cancellation_policy\n          WHERE schema_id = bsa.schema_id\n            AND min_notice <= (lower(ba.during) - now())\n          ORDER BY min_notice DESC\n          LIMIT 1\n        ) p ON true\n        WHERE ba.id = $1\n        FOR UPDATE OF ba;",
+  "query": "SELECT\n          ba.id,\n          ba.asset_id,\n          ba.transaction_id,\n          ba.account_id,\n          lower(ba.during) AS begins,\n          coalesce(upper(ba.during), '+infinity'::timestamptz) AS \"ends!: PgDateTime\",\n          ba.cancelled_at,\n          ba.activated,\n          coalesce(cl.credits, 0) as credits,\n          cl.from_account,\n          ba.maintenance,\n          b.asset_type_id,\n          COALESCE(p.refund_percent, 0) AS current_refund_percent\n        FROM bookable_appointments ba\n        JOIN bookable_assets b ON b.id = ba.asset_id\n        LEFT JOIN credit_ledger cl ON cl.id = ba.transaction_id\n        JOIN LATERAL (\n          SELECT DISTINCT ON (asset_id) schema_id, begins\n          FROM bookable_schema_assignments\n          WHERE asset_id = ba.asset_id\n            AND begins <= lower(ba.during)\n          ORDER BY asset_id, begins DESC\n        ) bsa ON true\n        LEFT JOIN LATERAL (\n          SELECT refund_percent\n          FROM bookable_schema_cancellation_policy\n          WHERE schema_id = bsa.schema_id\n            AND min_notice <= (lower(ba.during) - now())\n          ORDER BY min_notice DESC\n          LIMIT 1\n        ) p ON true\n        WHERE ba.id = $1\n        FOR UPDATE OF ba;",
   "describe": {
     "columns": [
       {
@@ -50,13 +50,13 @@
       {
         "ordinal": 4,
         "name": "begins",
-        "type_info": "Timestamp",
+        "type_info": "Timestamptz",
         "origin": "Expression"
       },
       {
         "ordinal": 5,
         "name": "ends!: PgDateTime",
-        "type_info": "Timestamp",
+        "type_info": "Timestamptz",
         "origin": "Expression"
       },
       {
@@ -148,5 +148,5 @@
       null
     ]
   },
-  "hash": "66fe476e1cf2a385f2671b05515fea95b0ea1e1d5a431b097f40046d156c0dd8"
+  "hash": "31eaa7887220a6bb6ba6d4c2f2714a34f05561b20ae5be85999543d81652ce97"
 }

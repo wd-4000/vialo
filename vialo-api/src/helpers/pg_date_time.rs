@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::openapi::{ObjectBuilder, OneOfBuilder, RefOr, Schema, SchemaFormat, KnownFormat, schema::{SchemaType, Type}};
 use sqlx::{
@@ -14,7 +14,7 @@ use sqlx::{
 pub enum PgDateTime {
     Infinity,
     NegativeInfinity,
-    DateTime(NaiveDateTime),
+    DateTime(DateTime<Utc>),
 }
 
 impl utoipa::PartialSchema for PgDateTime {
@@ -53,7 +53,7 @@ impl utoipa::ToSchema for PgDateTime {
 
 impl sqlx::Type<sqlx::Postgres> for PgDateTime {
     fn type_info() -> sqlx::postgres::PgTypeInfo {
-        <NaiveDateTime as sqlx::Type<sqlx::Postgres>>::type_info()
+        <DateTime<Utc> as sqlx::Type<sqlx::Postgres>>::type_info()
     }
 }
 
@@ -70,7 +70,7 @@ impl<'r> sqlx::Decode<'r, sqlx::Postgres> for PgDateTime {
             sqlx::postgres::PgValueFormat::Text => match value.as_str()? {
                 "infinity" => Ok(PgDateTime::Infinity),
                 "-infinity" => Ok(PgDateTime::NegativeInfinity),
-                _ => NaiveDateTime::decode(value).map(PgDateTime::DateTime),
+                _ => DateTime::<Utc>::decode(value).map(PgDateTime::DateTime),
             },
             sqlx::postgres::PgValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
@@ -81,7 +81,7 @@ impl<'r> sqlx::Decode<'r, sqlx::Postgres> for PgDateTime {
                     b"\x80\x00\x00\x00" | b"\x80\x00\x00\x00\x00\x00\x00\x00" => {
                         Ok(PgDateTime::NegativeInfinity)
                     }
-                    _ => NaiveDateTime::decode(value).map(PgDateTime::DateTime),
+                    _ => DateTime::<Utc>::decode(value).map(PgDateTime::DateTime),
                 }
             }
         }
@@ -101,9 +101,9 @@ impl<'r> Encode<'r, sqlx::Postgres> for PgDateTime {
             PgDateTime::NegativeInfinity => {
                 buf.extend(b"\x80\x00\x00\x00\x00\x00\x00\x00");
             }
-            PgDateTime::DateTime(naive_date) => {
-                // Delegate the encoding to the NaiveDateTime type and handle potential errors
-                <NaiveDateTime as Encode<sqlx::Postgres>>::encode_by_ref(naive_date, buf)?;
+            PgDateTime::DateTime(dt) => {
+                // Delegate the encoding to the DateTime<Utc> type and handle potential errors
+                <DateTime<Utc> as Encode<sqlx::Postgres>>::encode_by_ref(dt, buf)?;
             }
         }
         Ok(IsNull::No)

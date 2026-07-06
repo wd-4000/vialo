@@ -27,7 +27,7 @@ CREATE TABLE bookable_assets (
   slug citext UNIQUE,
   icon citext,
   asset_type_id int NOT NULL REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
-  quick_unlock tsrange,
+  quick_unlock tstzrange,
   connector int REFERENCES bookable_connectors,
   connector_output_id int
 );
@@ -74,7 +74,7 @@ CREATE TABLE bookable_appointments (
   asset_id int NOT NULL REFERENCES bookable_assets (id),
   transaction_id uuid REFERENCES credit_ledger (id),
   account_id uuid NOT NULL REFERENCES accounts (id), -- No cascade here, we want to make sure appointments are refunded appropriately.
-  during tsrange NOT NULL,
+  during tstzrange NOT NULL,
   activated timestamptz,
   cancelled_at timestamptz,
   cancellation_reason bookable_appointment_cancellation_reason,
@@ -117,7 +117,7 @@ SELECT
   CASE
     WHEN COALESCE(x.during, y.during) IS NOT NULL THEN COALESCE(
       upper(COALESCE(x.during, y.during)),
-      'infinity'::timestamp
+      'infinity'::timestamptz
     )
   END as ends,
   lower(COALESCE(x.during, y.during)) as begins
@@ -127,7 +127,7 @@ FROM
     SELECT
       ba.quick_unlock AS during,
       'quick_unlock'::bookable_status_type as status
-  ) x ON ba.quick_unlock @> now()::timestamp
+  ) x ON ba.quick_unlock @> now()
   LEFT JOIN LATERAL (
     SELECT
       apa.during as during,
@@ -153,13 +153,13 @@ FROM
       JOIN bookable_schemas bs ON bs.id = bsa.schema_id
     WHERE
       apa.asset_id = ba.id
-      AND apa.during @> now()::timestamp
+      AND apa.during @> now()
       AND apa.cancelled_at IS NULL
     LIMIT
       1
   ) y ON y.asset_id = ba.id;
 
-CREATE OR REPLACE FUNCTION slots_from_schedule (schedule time[], reference_date DATE) RETURNS table (id int, range tsrange) LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION slots_from_schedule (schedule time[], reference_date DATE) RETURNS table (id int, range tstzrange) LANGUAGE plpgsql AS $$
     DECLARE
     prel time;
     el time;
@@ -169,9 +169,9 @@ CREATE OR REPLACE FUNCTION slots_from_schedule (schedule time[], reference_date 
         LOOP
             IF prel IS NOT NULL THEN
 
-                RETURN QUERY SELECT i as id, tsrange(
-                    (reference_date + prel)::timestamp,
-                    (reference_date + el)::timestamp,
+                RETURN QUERY SELECT i as id, tstzrange(
+                    (reference_date + prel)::timestamptz,
+                    (reference_date + el)::timestamptz,
                     '[)'
                 ) as range;
                 i:= i+ 1;
@@ -229,7 +229,7 @@ CREATE OR REPLACE FUNCTION get_taken_slots (
                 '1 day'::interval
             ) AS j
         ) AS j_series_data,
-        LATERAL (SELECT ARRAY(select distinct u.id from (SELECT * FROM slots_from_schedule((SELECT schedule FROM bookable_schemas WHERE id = sq.schema_id), j_series_data.j::date)) u WHERE (SELECT range_agg(ba.during) FROM bookable_appointments ba WHERE ba.asset_id = sq.asset_id AND ba.during && tsrange(j_series_data.j::date + '00:00'::time, j_series_data.j::date + '23:59'::time, '[]')) && u.range) as g) as f WHERE cardinality(f.g) > 0
+        LATERAL (SELECT ARRAY(select distinct u.id from (SELECT * FROM slots_from_schedule((SELECT schedule FROM bookable_schemas WHERE id = sq.schema_id), j_series_data.j::date)) u WHERE (SELECT range_agg(ba.during) FROM bookable_appointments ba WHERE ba.asset_id = sq.asset_id AND ba.during && tstzrange(j_series_data.j::date + '00:00'::time, j_series_data.j::date + '23:59'::time, '[]')) && u.range) as g) as f WHERE cardinality(f.g) > 0
         GROUP BY j_series_data.j::date, sq.schema_id);
     end;
     $$;

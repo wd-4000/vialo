@@ -7,7 +7,7 @@ use crate::http::util::{grab_authd_conn_user, grab_trans};
 use crate::{AppState, health, http::history::models::Subsystem, impl_jsonb_embed};
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use chrono::{DateTime, Local, NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{query, query_as, query_scalar};
@@ -86,13 +86,9 @@ pub async fn slot_schemas(
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
 
-    let asset_types = opts
-        .asset_type_id
-        .filter(|v| !v.is_empty());
+    let asset_types = opts.asset_type_id.filter(|v| !v.is_empty());
 
-    let asset_ids = opts
-        .asset_id
-        .filter(|v| !v.is_empty());
+    let asset_ids = opts.asset_id.filter(|v| !v.is_empty());
     let assets = conditional_query_as!(
         BookableAssetTranslated,
         r#"SELECT
@@ -150,8 +146,8 @@ pub async fn slot_schemas(
 pub struct BookSlotSchemaSlot {
     pub asset_id: i32,
     pub slot_index: u16,
-    pub expected_start: DateTime<Local>,
-    pub expected_end: Option<DateTime<Local>>,
+    pub expected_start: DateTime<Utc>,
+    pub expected_end: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -160,14 +156,14 @@ pub struct BookSlotSchema {
     pub slots: Vec<BookSlotSchemaSlot>,
 }
 
-#[derive(Deserialize, Serialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct MaterializedSlots {
     pub schema_id: i32,
     pub index: Option<i64>,
     #[schema(format = DateTime)]
-    pub begins: Option<NaiveDateTime>,
+    pub begins: Option<DateTime<Utc>>,
     #[schema(format = DateTime)]
-    pub ends: Option<NaiveDateTime>,
+    pub ends: Option<DateTime<Utc>>,
     pub asset_id: Option<i32>,
     pub price: Option<i32>,
 }
@@ -181,33 +177,33 @@ pub async fn book_slots(
     // Check book permission on every asset being booked
     let asset_ids: Vec<i32> = body.slots.iter().map(|s| s.asset_id).collect();
     for asset_id in &asset_ids {
-        require_asset_type_perm_by_asset(user.id, *asset_id, BookablePerm::Book, &data.db)
-            .await?;
+        require_asset_type_perm_by_asset(user.id, *asset_id, BookablePerm::Book, &data.db).await?;
     }
 
     // Materialize the slots (Give them concrete start and end points)
-    let materialized_slots = query_as!(MaterializedSlots, r#"SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index, ((j_v->>'expected_start')::date + bs.schedule[(j_v->>'slot_index')::int+1]) as begins, ((j_v->>'expected_start')::date + bs.schedule[(j_v->>'slot_index')::int+2]) as ends, bs.slot_price as price, (j_v->>'asset_id')::int as asset_id
+    let materialized_slots = query_as!(MaterializedSlots, r#"SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index, ((j_v->>'expected_start')::date + bs.schedule[(j_v->>'slot_index')::int+1])::timestamptz as begins, ((j_v->>'expected_start')::date + bs.schedule[(j_v->>'slot_index')::int+2])::timestamptz as ends, bs.slot_price as price, (j_v->>'asset_id')::int as asset_id
         FROM bookable_schema_assignments bsa
         JOIN jsonb_array_elements($1) WITH ORDINALITY AS j(j_v, j_i) ON bsa.begins <= (j_v->>'expected_start')::date AND bsa.asset_id = (j_v->>'asset_id')::int
         JOIN bookable_schemas bs ON bsa.schema_id = bs.id
         ORDER BY j_i, bsa.begins DESC;"#, json!(body.slots)).fetch_all(&data.db)
         .await?;
 
+    tracing::info!("materialized_slots: {:?}", materialized_slots);
+
     // Verify the slots and the client's expectations (if present)
     let mut sum_total = 0;
     for slot in &materialized_slots {
-        let idx: usize = slot.index.ok_or(
-            VialoError::AppError(StatusCode::INTERNAL_SERVER_ERROR, "slot_info".to_string()),
-        )? as usize;
+        let idx: usize = slot.index.ok_or(VialoError::AppError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "slot_info".to_string(),
+        ))? as usize;
         let expected_slot: &BookSlotSchemaSlot = body.slots.get(idx).ok_or(
             VialoError::AppError(StatusCode::BAD_REQUEST, "slot_index".to_string()),
         )?;
         if let (Some(real_start), Some(real_end)) = (slot.begins, slot.ends) {
-            if let Some(expected_end) = expected_slot.expected_end.map(|v| v.naive_local()) {
-                println!("{:?}", expected_slot.expected_start.naive_local());
-                println!("{:?}", real_start);
-                if expected_slot.expected_start.naive_local() != real_start
-                    || expected_end != real_end
+            if let Some(expected_end) = expected_slot.expected_end {
+                if expected_slot.expected_start.to_utc() != real_start
+                    || expected_end.to_utc() != real_end
                 {
                     return Err(VialoError::AppError(
                         StatusCode::BAD_REQUEST,
@@ -258,37 +254,42 @@ pub async fn book_slots(
 
     let mut trans = grab_trans(&mut conn).await?;
 
-    // The materialized slots seem to be right.
-    query!(
-        "INSERT INTO credit_ledger (
-            from_account, credits, created_at
-            )
-            SELECT
-                $1,
-                (j->>'price')::int,
-                NOW()
-            FROM jsonb_array_elements($2) AS j RETURNING id;",
-        user.id,
-        json!(materialized_slots)
+    // Check balance
+    let balance = query_scalar!(
+        "SELECT credit_balance FROM accounts_people WHERE id = $1 FOR UPDATE",
+        user.id
     )
-    .fetch_all(&mut *trans)
+    .fetch_one(&mut *trans)
     .await?;
 
+    if balance < sum_total {
+        return Err(VialoError::AppError(
+            StatusCode::PAYMENT_REQUIRED,
+            "insufficient_credits".into(),
+        ));
+    }
+
+    // The materialized slots seem to be right. Let's insert everything.
     let slot_insert_result = query!(
-        "INSERT INTO bookable_appointments (
-        asset_id,
-        account_id,
-        during
+        r#"WITH input AS MATERIALIZED (
+            SELECT j AS slot, gen_random_uuid() AS tx_id
+            FROM jsonb_array_elements($2) AS j
+        ),
+        ins_ledger AS (
+            INSERT INTO credit_ledger (id, product, from_account, credits, created_at)
+            SELECT tx_id, 'bookable', $1, (slot->>'price')::int, NOW()
+            FROM input
         )
-        SELECT
-            (j->>'asset_id')::int,
-            $1,
-            tsrange((j->>'begins')::timestamp, (j->>'ends')::timestamp, '[)')
-        FROM jsonb_array_elements($2) AS j;",
+        INSERT INTO bookable_appointments (asset_id, account_id, during, transaction_id)
+        SELECT (slot->>'asset_id')::int,
+               $1,
+               tstzrange((slot->>'begins')::timestamptz, (slot->>'ends')::timestamptz, '[)'),
+               tx_id
+        FROM input;"#,
         user.id,
         json!(materialized_slots),
     )
-    .fetch_all(&mut *trans)
+    .execute(&mut *trans)
     .await;
 
     if let Err(insert_error) = slot_insert_result {

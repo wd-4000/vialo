@@ -8,9 +8,9 @@ use super::{
 use crate::{
     AppState,
     http::util::{
-            JsonE, MaybeJsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
-            models::{AccountEmbed, IdOrAllQuery, ProductEmbed, ProductType},
-        },
+        JsonE, MaybeJsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
+        models::{AccountEmbed, IdOrAllQuery, ProductEmbed, ProductType},
+    },
     permissions::{AppRole, check_app_role},
 };
 use axum::{
@@ -72,7 +72,7 @@ pub async fn get(
         r#"SELECT cl.id,
         CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
         CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
-         cl.credits, cl.label, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, jsonb_build_object('type', cl.product, 'id', ba.id) AS "product: ProductEmbed"
+         cl.credits, cl.label, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, CASE WHEN ba.id IS NOT NULL THEN jsonb_build_object('type', cl.product, 'id', ba.id) ELSE NULL END AS "product: ProductEmbed"
         FROM credit_ledger cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
         LEFT JOIN accounts_people ac_to ON to_account = ac_to.id

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "update bookable_appointments set activated = NOW() FROM bookable_appointments bap JOIN bookable_assets ba ON bap.asset_id = ba.id WHERE bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as \"id!\", ba.asset_type_id as \"asset_type_id!\", 'active'::bookable_status_type as \"status!: BookableStatus\",\n        lower(bap.during) as begins,\n        coalesce(upper(bap.during), '+infinity'::timestamp) as \"ends!: PgDateTime\";",
+  "query": "update bookable_appointments bap set activated = NOW() FROM bookable_assets ba WHERE bap.asset_id = ba.id AND bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as \"id!\", ba.asset_type_id as \"asset_type_id!\", 'active'::bookable_status_type as \"status!: BookableStatus\",\n        lower(bap.during) as begins,\n        coalesce(upper(bap.during), 'infinity'::timestamptz) as \"ends!: PgDateTime\";",
   "describe": {
     "columns": [
       {
@@ -47,13 +47,13 @@
       {
         "ordinal": 3,
         "name": "begins",
-        "type_info": "Timestamp",
+        "type_info": "Timestamptz",
         "origin": "Expression"
       },
       {
         "ordinal": 4,
         "name": "ends!: PgDateTime",
-        "type_info": "Timestamp",
+        "type_info": "Timestamptz",
         "origin": "Expression"
       }
     ],
@@ -71,5 +71,5 @@
       null
     ]
   },
-  "hash": "9a7fd5e649d8aacfd49f9c85d7261cd6184b24560e9ce87ef41e756268111b9c"
+  "hash": "5452c6c0648111e25be141c1ffda57b2932b9d91a316533696baa499b7888071"
 }

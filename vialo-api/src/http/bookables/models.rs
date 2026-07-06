@@ -1,5 +1,5 @@
 use crate::helpers::{I18nMap, PgDateTime};
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::types::JsonValue;
 use utoipa::ToSchema;
@@ -21,7 +21,7 @@ pub struct BookableAssetStatus {
     pub id: i32,
     pub asset_type_id: i32,
     pub status: BookableStatus,
-    pub begins: Option<NaiveDateTime>,
+    pub begins: Option<DateTime<Utc>>,
     pub ends: Option<PgDateTime>,
 }
 
@@ -33,7 +33,7 @@ pub struct BookableAssetTranslatedWithStatus {
     pub asset_type_id: i32,
     pub status: BookableStatus,
     #[schema(format = DateTime)]
-    pub begins: Option<NaiveDateTime>,
+    pub begins: Option<DateTime<Utc>>,
     pub ends: Option<PgDateTime>,
 }
 
