@@ -4,8 +4,8 @@ use super::models::{
     BoardPostIdModel, BookableAssetStatus, BookableAssetTranslatedAllLanguages,
     BookableAssetTranslatedWithStatus, BookableStatus,
 };
-use crate::http::util::{clamp_pagination, grab_authd_conn_user, grab_trans};
 use super::permissions::{BookablePerm, require_asset_type_perm};
+use crate::http::util::{clamp_pagination, grab_authd_conn_user, grab_trans};
 use crate::{
     helpers::grab_authd_conn_subsystem,
     http::util::{JsonE, User, VialoError, is_unique_violation},
@@ -88,16 +88,15 @@ pub async fn quick_unlock(
         grab_authd_conn_subsystem(&data.db, "guest").await?
     };
 
-    info!("auth");
-    let record = query_as!(BookableAssetStatus, r#"update bookable_assets set quick_unlock = tsrange(LOCALTIMESTAMP, LOCALTIMESTAMP + '1 minute', '[]') WHERE id = $1 AND (NOT (quick_unlock @> now()::timestamp) OR quick_unlock IS NULL) RETURNING $1 as "id!", asset_type_id as "asset_type_id!", 'quick_unlock'::bookable_status_type as "status!: BookableStatus",
-    LOCALTIMESTAMP as begins,
-   (LOCALTIMESTAMP + '1 minute') as "ends: PgDateTime";"#, id).fetch_one(&mut *conn).await?;
-    info!("qry");
+    let record = query_as!(BookableAssetStatus, r#"update bookable_assets set quick_unlock = tstzrange(now(), now() + '1 minute', '[]') WHERE id = $1 AND (NOT (quick_unlock @> now()) OR quick_unlock IS NULL) RETURNING $1 as "id!", asset_type_id as "asset_type_id!", 'quick_unlock'::bookable_status_type as "status!: BookableStatus",
+    now() as begins,
+   (now() + '1 minute') as "ends: PgDateTime";"#, id).fetch_one(&mut *conn).await?;
 
     let evil_data = data.clone();
     tokio::spawn(async move {
         evil_data
-            .event_channels.bookables
+            .event_channels
+            .bookables
             .broadcast(record.asset_type_id, record.id, record.clone())
             .await;
         if let (Some(begins), Some(PgDateTime::DateTime(ends))) = (record.begins, record.ends) {
@@ -122,7 +121,8 @@ pub async fn quick_unlock(
             .await
             {
                 evil_data
-                    .event_channels.bookables
+                    .event_channels
+                    .bookables
                     .broadcast(record.asset_type_id, record.id, record_2)
                     .await;
             }
@@ -150,7 +150,13 @@ pub async fn post_bookable(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<PostBookableSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
-    require_asset_type_perm(Some(user.id), body.asset_type_id, BookablePerm::Admin, &data.db).await?;
+    require_asset_type_perm(
+        Some(user.id),
+        body.asset_type_id,
+        BookablePerm::Admin,
+        &data.db,
+    )
+    .await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
@@ -194,9 +200,21 @@ pub async fn put_bookable(
     )
     .fetch_one(&mut *trans)
     .await?;
-    require_asset_type_perm(Some(user.id), current_type_id, BookablePerm::Admin, &data.db).await?;
+    require_asset_type_perm(
+        Some(user.id),
+        current_type_id,
+        BookablePerm::Admin,
+        &data.db,
+    )
+    .await?;
     if body.asset_type_id != current_type_id {
-        require_asset_type_perm(Some(user.id), body.asset_type_id, BookablePerm::Admin, &data.db).await?;
+        require_asset_type_perm(
+            Some(user.id),
+            body.asset_type_id,
+            BookablePerm::Admin,
+            &data.db,
+        )
+        .await?;
     }
 
     let (name_langs, name_contents) =

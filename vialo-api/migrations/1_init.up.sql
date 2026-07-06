@@ -83,16 +83,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-create trigger tg_account_class before insert
-or
-update
-or delete on accounts_people for each row
+create trigger tg_account_class
+before insert or update or delete on accounts_people for each row
 execute FUNCTION enforce_account_class ();
 
-create trigger tg_account_class before insert
-or
-update
-or delete on account_groups for each row
+create trigger tg_account_class
+before insert or update or delete on account_groups for each row
 execute FUNCTION enforce_account_class ();
 
 CREATE TYPE app_role AS ENUM(
@@ -351,7 +347,7 @@ CREATE TABLE credit_ledger (
   last_updated TIMESTAMPTZ,
   label text,
   refund_of uuid REFERENCES credit_ledger (id),
-  CHECK (credits > 0),
+  CHECK (credits >= 0),
   CHECK (
     NOT (
       from_account IS NULL
@@ -411,8 +407,8 @@ CREATE TRIGGER tg_materialize_transaction
 AFTER INSERT ON credit_ledger FOR EACH ROW
 EXECUTE FUNCTION materialize_transaction ();
 
-CREATE TRIGGER tg_prevent_credit_ledger_update BEFORE
-UPDATE ON credit_ledger FOR EACH ROW
+CREATE TRIGGER tg_prevent_credit_ledger_update
+BEFORE UPDATE ON credit_ledger FOR EACH ROW
 EXECUTE FUNCTION prevent_credit_ledger_update ();
 
 CREATE TRIGGER tg_set_refund_status

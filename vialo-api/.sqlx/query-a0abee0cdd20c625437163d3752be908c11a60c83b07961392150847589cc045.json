@@ -41,7 +41,7 @@
       {
         "ordinal": 2,
         "name": "begins",
-        "type_info": "Timestamp",
+        "type_info": "Timestamptz",
         "origin": {
           "Table": {
             "table": "bookable_asset_status",
@@ -52,7 +52,7 @@
       {
         "ordinal": 3,
         "name": "ends: PgDateTime",
-        "type_info": "Timestamp",
+        "type_info": "Timestamptz",
         "origin": {
           "Table": {
             "table": "bookable_asset_status",

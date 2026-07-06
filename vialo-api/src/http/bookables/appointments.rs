@@ -8,12 +8,13 @@ use crate::http::util::{
 use crate::permissions::{AppRole, check_app_role};
 // use crate::ketoapi::subject::Ref;
 // use crate::ketoapi::{self, CheckRequest, Subject};
-use crate::AppState;
+use crate::{AppState, health};
 use crate::bookables::CancellationReason;
+use crate::http::history::models::Subsystem;
 use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as};
 use sqlx_conditional_queries::conditional_query_as;
@@ -27,10 +28,10 @@ pub struct BookableAppointmentFilterOptions {
     pub lang: Option<Vec<String>>,
     pub page: Option<i64>,
     pub limit: Option<i64>,
-    pub from: Option<NaiveDateTime>,
+    pub from: Option<DateTime<Utc>>,
     #[serde(default)]
     pub account_id: IdOrMeOrAllQuery,
-    pub to: Option<NaiveDateTime>,
+    pub to: Option<DateTime<Utc>>,
     pub search: Option<String>,
 }
 
@@ -40,7 +41,7 @@ pub struct BookableAppointmentType {
     pub asset_id: i32,
     pub transaction_id: Option<Uuid>,
     pub account: Option<AccountEmbed>,
-    pub begins: Option<NaiveDateTime>,
+    pub begins: Option<DateTime<Utc>>,
     pub ends: PgDateTime,
     pub cancelled_at: Option<DateTime<Utc>>,
     pub cancellation_reason: Option<CancellationReason>,
@@ -59,9 +60,9 @@ pub async fn activate(
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
-    let bookable_record = query_as!(BookableAssetStatus, r#"update bookable_appointments set activated = NOW() FROM bookable_appointments bap JOIN bookable_assets ba ON bap.asset_id = ba.id WHERE bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as "id!", ba.asset_type_id as "asset_type_id!", 'active'::bookable_status_type as "status!: BookableStatus",
+    let bookable_record = query_as!(BookableAssetStatus, r#"update bookable_appointments bap set activated = NOW() FROM bookable_assets ba WHERE bap.asset_id = ba.id AND bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as "id!", ba.asset_type_id as "asset_type_id!", 'active'::bookable_status_type as "status!: BookableStatus",
         lower(bap.during) as begins,
-        coalesce(upper(bap.during), '+infinity'::timestamp) as "ends!: PgDateTime";"#, id, user.id).fetch_one(&mut *conn).await?;
+        coalesce(upper(bap.during), 'infinity'::timestamptz) as "ends!: PgDateTime";"#, id, user.id).fetch_one(&mut *conn).await?;
 
     let evil_data = data.clone();
     tokio::spawn(async move {
@@ -137,7 +138,7 @@ pub async fn delete_appointment(
           ba.transaction_id,
           ba.account_id,
           lower(ba.during) AS begins,
-          coalesce(upper(ba.during), '+infinity'::timestamp) AS "ends!: PgDateTime",
+          coalesce(upper(ba.during), '+infinity'::timestamptz) AS "ends!: PgDateTime",
           ba.cancelled_at,
           ba.activated,
           coalesce(cl.credits, 0) as credits,
@@ -184,6 +185,37 @@ pub async fn delete_appointment(
         ));
     }
 
+    if let Some(expected) = body.expected_credits {
+        let actual_credits = appointment.credits.unwrap_or(0);
+        if actual_credits != expected {
+            tracing::error!(
+                "refund_expected_credits: expected {} got {}",
+                expected,
+                actual_credits
+            );
+
+            health::add_health_event(
+                &data.db,
+                Subsystem::App,
+                "refund_expected_credits",
+                Some(serde_json::json!({
+                    "expected": expected,
+                    "actual": actual_credits,
+                    "appointment_id": id,
+                })),
+                10,
+                false,
+                None,
+            )
+            .await;
+
+            return Err(VialoError::AppError(
+                StatusCode::CONFLICT,
+                "expected_credits".to_string(),
+            ));
+        }
+    }
+
     let result = sqlx::query!(
         "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = $2 WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",
         appointment.id,
@@ -198,13 +230,15 @@ pub async fn delete_appointment(
         ));
     }
 
-    if body.process_refund {
+    let refund_credits = appointment.credits.unwrap_or(0)
+        * appointment.current_refund_percent.unwrap_or(0)
+        / 100;
+    if body.process_refund && refund_credits > 0 {
         query!(
             "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
             appointment.from_account,
             appointment.transaction_id,
-            appointment.credits.unwrap_or(0) * appointment.current_refund_percent.unwrap_or(0)
-                / 100
+            refund_credits
         )
         .execute(&mut *trans)
         .await?;
@@ -252,7 +286,7 @@ pub async fn list(
             ba.transaction_id,
             {#account_info}
             lower(ba.during) as begins,
-            coalesce(upper(ba.during), '+infinity'::timestamp) as "ends!: PgDateTime",
+            coalesce(upper(ba.during), '+infinity'::timestamptz) as "ends!: PgDateTime",
             ba.cancelled_at,
             ba.cancellation_reason as "cancellation_reason: CancellationReason",
             ba.activated,
@@ -268,7 +302,7 @@ pub async fn list(
                 IdOrAllQuery::Id(account) => "AND account_id = {account}",
             },
             #from = match (opts.from) {
-                Some(from) => "AND ba.during @> {from}::timestamp ",
+                Some(from) => "AND ba.during @> {from}::timestamptz ",
                 None => ""
             },
             #to = match (opts.to) {

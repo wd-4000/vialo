@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH input AS MATERIALIZED (\n            SELECT j AS slot, gen_random_uuid() AS tx_id\n            FROM jsonb_array_elements($2) AS j\n        ),\n        ins_ledger AS (\n            INSERT INTO credit_ledger (id, product, from_account, credits, created_at)\n            SELECT tx_id, 'bookable', $1, (slot->>'price')::int, NOW()\n            FROM input\n        )\n        INSERT INTO bookable_appointments (asset_id, account_id, during, transaction_id)\n        SELECT (slot->>'asset_id')::int,\n               $1,\n               tstzrange((slot->>'begins')::timestamptz, (slot->>'ends')::timestamptz, '[)'),\n               tx_id\n        FROM input;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7b8f6fb0a45349411b6ae89323402f517604e710798e0362a85d874528be4df0"
+}

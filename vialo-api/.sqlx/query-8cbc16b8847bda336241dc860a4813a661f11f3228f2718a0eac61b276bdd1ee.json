@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT credit_balance FROM accounts_people WHERE id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "credit_balance",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "credit_balance"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8cbc16b8847bda336241dc860a4813a661f11f3228f2718a0eac61b276bdd1ee"
+}

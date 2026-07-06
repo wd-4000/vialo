@@ -105,21 +105,19 @@ pub async fn auto_activate_appointments(app_state: &AppState) -> Result<(), anyh
     query!(
         "UPDATE bookable_appointments ba
     SET activated = NOW()
-    FROM (
-        SELECT DISTINCT ON (bsa.asset_id)
-            bsa.asset_id,
-            bs.activation_grace_period
-        FROM bookable_schema_assignments bsa
-        JOIN bookable_schemas bs ON bs.id = bsa.schema_id
-        WHERE bsa.begins <= now()
-        ORDER BY bsa.asset_id, bsa.begins DESC
-    ) cs
-    WHERE cs.asset_id = ba.asset_id
-    AND cs.activation_grace_period IS NULL
-    AND ba.activated IS NULL
+    WHERE ba.activated IS NULL
     AND ba.cancelled_at IS NULL
     AND ba.maintenance = false
     AND lower(ba.during) <= now()
+    AND (
+        SELECT bs.activation_grace_period IS NULL
+        FROM bookable_schema_assignments bsa
+        JOIN bookable_schemas bs ON bs.id = bsa.schema_id
+        WHERE bsa.asset_id = ba.asset_id
+          AND bsa.begins <= lower(ba.during)
+        ORDER BY bsa.begins DESC
+        LIMIT 1
+    )
 "
     )
     .execute(&mut *conn)
@@ -150,16 +148,17 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
     ap.email as "email!",
     get_i18n_string(bast.name_i18n, $1) as "asset_name?"
     FROM bookable_appointments ba
-    JOIN (
+    CROSS JOIN LATERAL (
         SELECT DISTINCT ON (bsa.asset_id)
             bsa.asset_id,
             bs.activation_grace_period,
             bs.expiry_refund_percent
         FROM bookable_schema_assignments bsa
         JOIN bookable_schemas bs ON bs.id = bsa.schema_id
-        WHERE bsa.begins <= now()
+        WHERE bsa.asset_id = ba.asset_id
+          AND bsa.begins <= lower(ba.during)
         ORDER BY bsa.asset_id, bsa.begins DESC
-    ) cs ON cs.asset_id = ba.asset_id
+    ) cs
     JOIN credit_ledger cl ON ba.transaction_id = cl.id
     JOIN accounts_people ap ON ap.id = ba.account_id
     JOIN bookable_assets bast ON bast.id = ba.asset_id
@@ -178,27 +177,32 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
             "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = 'expired' WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",
             appointment.id,
         ).execute(&mut *trans).await?;
-        query!(
-            "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
-            appointment.from_account,
-            appointment.transaction_id,
-            appointment.credits * appointment.expiry_refund_percent as i32 / 100
-        )
-        .execute(&mut *trans)
-        .await?;
+        let refund_credits = appointment.credits * appointment.expiry_refund_percent as i32 / 100;
+        if refund_credits > 0 {
+            query!(
+                "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
+                appointment.from_account,
+                appointment.transaction_id,
+                refund_credits
+            )
+            .execute(&mut *trans)
+            .await?;
+        }
         trans.commit().await?;
-        if let Err(_) = app_state
-            .event_channels
-            .expired_appointments_tx
-            .send(ExpiredAppointmentMessage {
-                id: appointment.id,
-                account_id: appointment.account_id,
-                full_name: appointment.full_name,
-                email: appointment.email,
-                asset_name: appointment.asset_name.unwrap_or_else(|| "Unknown".into()),
-                credits_refunded: appointment.credits * appointment.expiry_refund_percent as i32
-                    / 100,
-            })
+        if let Err(_) =
+            app_state
+                .event_channels
+                .expired_appointments_tx
+                .send(ExpiredAppointmentMessage {
+                    id: appointment.id,
+                    account_id: appointment.account_id,
+                    full_name: appointment.full_name,
+                    email: appointment.email,
+                    asset_name: appointment.asset_name.unwrap_or_else(|| "Unknown".into()),
+                    credits_refunded: appointment.credits
+                        * appointment.expiry_refund_percent as i32
+                        / 100,
+                })
         {
             tracing::error!(
                 appointment_id = %appointment.id,
@@ -226,7 +230,7 @@ async fn next_wakeup(app_state: &AppState) -> tokio::time::Instant {
     let result = query_scalar!(
         r#"SELECT MIN(
             CASE
-                WHEN lower(ba.during) > now()::timestamp THEN lower(ba.during) -- not yet started
+                WHEN lower(ba.during) > now() THEN lower(ba.during) -- not yet started
                 ELSE lower(ba.during) + cs.activation_grace_period -- expired
             END
         )::timestamptz
@@ -250,11 +254,11 @@ async fn next_wakeup(app_state: &AppState) -> tokio::time::Instant {
 
         -- and begins or expires in the future
         AND (
-            lower(ba.during) > now()::timestamp
+            lower(ba.during) > now()
             OR (
                 cs.activation_grace_period IS NOT NULL
                 AND cs.expiry_refund_percent IS NOT NULL
-                AND lower(ba.during) + cs.activation_grace_period > now()::timestamp
+                AND lower(ba.during) + cs.activation_grace_period > now()
             )
         )"#
     )

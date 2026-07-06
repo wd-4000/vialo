@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamp) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true AND account_id = $1 AND ba.during @> $2::timestamp  AND UPPER(ba.during) <= $3  ORDER BY during LIMIT $4 OFFSET $5",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true AND account_id = $1   ORDER BY during LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -45,13 +45,13 @@
       {
         "ordinal": 4,
         "name": "begins",
-        "type_info": "Timestamp",
+        "type_info": "Timestamptz",
         "origin": "Expression"
       },
       {
         "ordinal": 5,
         "name": "ends!: PgDateTime",
-        "type_info": "Timestamp",
+        "type_info": "Timestamptz",
         "origin": "Expression"
       },
       {
@@ -113,8 +113,6 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Timestamp",
-        "Timestamp",
         "Int8",
         "Int8"
       ]
@@ -132,5 +130,5 @@
       false
     ]
   },
-  "hash": "cad0f96f05f6a17b9887569f129698593ac088342eb90eb16a457858780d6242"
+  "hash": "23bb19880f9f789c8dc296b451eb42354d69abada954848ef6f837a3ece06464"
 }

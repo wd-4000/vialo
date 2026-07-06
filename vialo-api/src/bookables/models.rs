@@ -1,5 +1,5 @@
 use crate::{helpers::PgDateTime, http::bookables::models::BookableStatus};
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -7,7 +7,7 @@ use utoipa::ToSchema;
 pub struct BookableAssetStatusWithConnector {
     pub id: i32,
     pub status: BookableStatus,
-    pub begins: Option<NaiveDateTime>,
+    pub begins: Option<DateTime<Utc>>,
     pub ends: Option<PgDateTime>,
     pub connector: i32,
     pub connector_output_id: i32,
