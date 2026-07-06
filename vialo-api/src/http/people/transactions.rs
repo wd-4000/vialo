@@ -137,21 +137,24 @@ pub async fn undo(
     let mut trans = grab_trans(&mut conn).await?;
 
     // Check for an associated product. If there is one, figure out what to do
-    if let Some(product_id) = sqlx::query_scalar!(
-        "SELECT id FROM bookable_appointments WHERE transaction_id = $1 LIMIT 1",
+    let product = sqlx::query!(
+        "SELECT id, asset_id FROM bookable_appointments WHERE transaction_id = $1 LIMIT 1",
         id
     )
     .fetch_optional(&mut *trans)
-    .await?
-    {
+    .await?;
+
+    let mut cancelled_asset_id: Option<i32> = None;
+    if let Some(product) = product {
         match body.and_then(|b| b.cancel_associated_product) {
             Some(true) => {
                 sqlx::query!(
                     "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = 'admin' WHERE id = $1",
-                    product_id
+                    product.id
                 )
                 .execute(&mut *trans)
                 .await?;
+                cancelled_asset_id = Some(product.asset_id);
             }
             Some(false) => {}
             None => {
@@ -172,6 +175,13 @@ pub async fn undo(
     .await?;
 
     trans.commit().await?;
+
+    if let Some(asset_id) = cancelled_asset_id {
+        let evil_data = data.clone();
+        tokio::spawn(async move {
+            crate::bookables::fetch_and_broadcast_status(&evil_data, [asset_id]).await;
+        });
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }

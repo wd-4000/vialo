@@ -307,5 +307,22 @@ pub async fn book_slots(
 
     trans.commit().await?;
 
+    // Broadcast updated status (only for slots that start now i.e. change status immediately)
+    {
+        let now = Utc::now();
+        let asset_ids: std::collections::BTreeSet<i32> = body
+            .slots
+            .iter()
+            .filter(|s| s.expected_start <= now)
+            .map(|s| s.asset_id)
+            .collect();
+        if !asset_ids.is_empty() {
+            let evil_data = data.clone();
+            tokio::spawn(async move {
+                crate::bookables::fetch_and_broadcast_status(&evil_data, asset_ids).await;
+            });
+        }
+    }
+
     Ok((StatusCode::OK, Json(materialized_slots)))
 }

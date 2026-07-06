@@ -1,10 +1,11 @@
-use futures::future::join_all;
+use futures::future::BoxFuture;
 use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::sync::{Mutex, Weak};
-use std::{collections::HashMap, hash::Hash, sync::Arc};
-use tokio::sync::{Notify, RwLock, mpsc::Sender};
+use std::hash::Hash;
+use std::sync::{Arc, Mutex, OnceLock, Weak};
+use tokio::sync::Notify;
+use uuid::Uuid;
 
 #[derive(Serialize)]
 pub struct EventEnvelope<K, V> {
@@ -14,24 +15,13 @@ pub struct EventEnvelope<K, V> {
     pub data: V,
 }
 
-struct Subscribers<K, V> {
-    typed: Vec<Sender<Arc<EventEnvelope<K, V>>>>,
-    string: Vec<Sender<Arc<String>>>,
-}
+type AuthCallback<K> =
+    Arc<dyn Fn(K, Vec<Option<Uuid>>) -> BoxFuture<'static, HashSet<Option<Uuid>>> + Send + Sync>;
 
-impl<K, V> Default for Subscribers<K, V> {
-    fn default() -> Self {
-        Subscribers {
-            typed: Vec::new(),
-            string: Vec::new(),
-        }
-    }
-}
-
-pub struct EventChannel<K, V> {
-    pub name: String,
-    subscribers: Arc<RwLock<HashMap<K, Subscribers<K, V>>>>,
-    wildcard_subscribers: Arc<RwLock<Subscribers<K, V>>>,
+struct Subscriber<K> {
+    account_id: Option<Uuid>,
+    slot: Weak<Mutex<HashMap<K, Arc<String>>>>,
+    notify: Weak<Notify>,
 }
 
 /// broadcast channel that delivers the latest value per coalescing key to each subscriber.
@@ -40,10 +30,11 @@ pub struct EventChannel<K, V> {
 /// value broadcast under that key. `coalesce_key` (asset id), used to make sure that
 /// in the event of backpressure the most recent value for each asset is delivered
 pub struct StatusChannel<K, V> {
-    pub name: String,
-    subscribers: Arc<RwLock<HashMap<K, Vec<(Weak<Mutex<HashMap<K, Arc<String>>>>, Weak<Notify>)>>>>,
-    wildcard_notifiers: Arc<RwLock<Vec<Weak<Notify>>>>,
-    _phantom: PhantomData<V>,
+    name: String,
+    subscribers: tokio::sync::RwLock<HashMap<K, Vec<Subscriber<K>>>>,
+    wildcard_notifiers: tokio::sync::RwLock<Vec<Weak<Notify>>>,
+    auth_filter: OnceLock<AuthCallback<K>>,
+    _phantom: std::marker::PhantomData<V>,
 }
 
 impl<K: Hash + Eq + Clone + Debug + Serialize + Send + Sync + 'static, V: Serialize>
@@ -52,15 +43,27 @@ impl<K: Hash + Eq + Clone + Debug + Serialize + Send + Sync + 'static, V: Serial
     pub fn new(name: String) -> Self {
         StatusChannel {
             name,
-            subscribers: Arc::new(RwLock::new(HashMap::new())),
-            wildcard_notifiers: Arc::new(RwLock::new(Vec::new())),
-            _phantom: PhantomData,
+            subscribers: tokio::sync::RwLock::new(HashMap::new()),
+            wildcard_notifiers: tokio::sync::RwLock::new(Vec::new()),
+            auth_filter: OnceLock::new(),
+            _phantom: std::marker::PhantomData,
         }
+    }
+
+    /// Install an authorization filter. Must be called before any broadcast.
+    /// `callback` receives (routing_key, subscriber account_ids) and returns
+    /// the set of account_ids that are still authorized.
+    pub fn set_auth_filter(&self, callback: AuthCallback<K>) {
+        assert!(
+            self.auth_filter.set(callback).is_ok(),
+            "set_auth_filter called more than once"
+        );
     }
 
     pub async fn subscribe(
         &self,
         key: K,
+        account_id: Option<Uuid>,
         slot: Arc<Mutex<HashMap<K, Arc<String>>>>,
         notify: Arc<Notify>,
     ) {
@@ -69,7 +72,11 @@ impl<K: Hash + Eq + Clone + Debug + Serialize + Send + Sync + 'static, V: Serial
             .await
             .entry(key)
             .or_default()
-            .push((Arc::downgrade(&slot), Arc::downgrade(&notify)));
+            .push(Subscriber {
+                account_id,
+                slot: Arc::downgrade(&slot),
+                notify: Arc::downgrade(&notify),
+            });
     }
 
     pub async fn subscribe_notify(&self) -> Arc<Notify> {
@@ -89,158 +96,62 @@ impl<K: Hash + Eq + Clone + Debug + Serialize + Send + Sync + 'static, V: Serial
         };
         let json = Arc::new(serde_json::to_string(&envelope).unwrap_or_default());
 
+        // collect account_ids under read lock, then run filter outside lock
+        let authorized = {
+            let subs = self.subscribers.read().await;
+            let Some(list) = subs.get(&routing_key) else {
+                // Still notify wildcard listeners even with no keyed subscribers
+                self.notify_wildcard().await;
+                return;
+            };
+
+            if let Some(filter) = self.auth_filter.get() {
+                let account_ids: Vec<Option<Uuid>> = list.iter().map(|s| s.account_id).collect();
+                // drop read lock before running the async filter
+                drop(subs);
+                Some(filter(routing_key.clone(), account_ids).await)
+            } else {
+                drop(subs);
+                None
+            }
+        };
+
+        // prune unauthorized, deliver to remaining
         {
             let mut subs = self.subscribers.write().await;
             if let Some(list) = subs.get_mut(&routing_key) {
-                list.retain(|entry| {
-                    let (weak_slot, weak_notify) = entry;
-                    match (weak_slot.upgrade(), weak_notify.upgrade()) {
-                        (Some(slot), Some(notify)) => {
-                            slot.lock()
-                                .unwrap()
-                                .insert(coalesce_key.clone(), Arc::clone(&json));
-                            notify.notify_one();
-                            true
-                        }
-                        _ => false,
+                if let Some(ref authorized) = authorized {
+                    list.retain(|sub| authorized.contains(&sub.account_id));
+                }
+
+                list.retain(|sub| match (sub.slot.upgrade(), sub.notify.upgrade()) {
+                    (Some(slot), Some(notify)) => {
+                        slot.lock()
+                            .unwrap()
+                            .insert(coalesce_key.clone(), Arc::clone(&json));
+                        notify.notify_one();
+                        true
                     }
+                    _ => false,
                 });
+
                 if list.is_empty() {
                     subs.remove(&routing_key);
                 }
             }
         }
 
-        {
-            let mut notifiers = self.wildcard_notifiers.write().await;
-            notifiers.retain(|weak| match weak.upgrade() {
-                Some(notify) => {
-                    notify.notify_one();
-                    true
-                }
-                None => false,
-            });
-        }
+        self.notify_wildcard().await;
     }
-}
 
-impl<K: Hash + std::cmp::Eq + Send + std::marker::Sync + Debug + Serialize + Clone, V: Serialize>
-    EventChannel<K, V>
-{
-    pub fn new(name: String) -> Self {
-        EventChannel {
-            name,
-            subscribers: Arc::new(RwLock::new(HashMap::new())),
-            wildcard_subscribers: Arc::new(RwLock::new(Subscribers::default())),
-        }
-    }
-    pub async fn subscribe_wildcard(&self, sender: Sender<Arc<EventEnvelope<K, V>>>) {
-        self.wildcard_subscribers.write().await.typed.push(sender);
-    }
-    pub async fn subscribe(&self, key: K, sender: Sender<Arc<EventEnvelope<K, V>>>) {
-        self.subscribers
-            .write()
-            .await
-            .entry(key)
-            .or_default()
-            .typed
-            .push(sender);
-    }
-    pub async fn subscribe_string(&self, key: K, sender: Sender<Arc<String>>) {
-        self.subscribers
-            .write()
-            .await
-            .entry(key)
-            .or_default()
-            .string
-            .push(sender);
-    }
-    pub async fn subscribe_wildcard_string(&self, sender: Sender<Arc<String>>) {
-        self.wildcard_subscribers.write().await.string.push(sender);
-    }
-    pub async fn broadcast(&self, key: K, value: V) {
-        let (string_senders, typed_senders) = {
-            let subs = self.subscribers.read().await;
-            let wildcard_subs = self.wildcard_subscribers.read().await;
-
-            let string_senders: Vec<_> = wildcard_subs
-                .string
-                .iter()
-                .chain(
-                    subs.get(&key)
-                        .map(|s| s.string.iter())
-                        .into_iter()
-                        .flatten(),
-                )
-                .cloned()
-                .collect();
-            let typed_senders: Vec<_> = wildcard_subs
-                .typed
-                .iter()
-                .chain(subs.get(&key).map(|s| s.typed.iter()).into_iter().flatten())
-                .cloned()
-                .collect();
-
-            (string_senders, typed_senders)
-        };
-
-        if string_senders.is_empty() && typed_senders.is_empty() {
-            return;
-        }
-
-        let envelope = EventEnvelope {
-            __vlo_channel: self.name.clone(),
-            __vlo_id: key.clone(),
-            data: value,
-        };
-
-        let json_string = if !string_senders.is_empty() {
-            Some(Arc::new(
-                serde_json::to_string(&envelope).unwrap_or_default(),
-            ))
-        } else {
-            None
-        };
-
-        let mut any_dead = false;
-
-        if !typed_senders.is_empty() {
-            let envelope = Arc::new(envelope);
-            let results = join_all(
-                typed_senders
-                    .iter()
-                    .map(|sender| sender.send(Arc::clone(&envelope))),
-            )
-            .await;
-            any_dead |= results.iter().any(|r| r.is_err());
-        }
-
-        if let Some(json_string) = json_string {
-            let results = join_all(
-                string_senders
-                    .iter()
-                    .map(|sender| sender.send(Arc::clone(&json_string))),
-            )
-            .await;
-            any_dead |= results.iter().any(|r| r.is_err());
-        }
-
-        if any_dead {
-            {
-                let mut subs = self.subscribers.write().await;
-                if let Some(entry) = subs.get_mut(&key) {
-                    entry.string.retain(|tx| !tx.is_closed());
-                    entry.typed.retain(|tx| !tx.is_closed());
-                    if entry.string.is_empty() && entry.typed.is_empty() {
-                        subs.remove(&key);
-                    }
-                }
+    async fn notify_wildcard(&self) {
+        let mut notifiers = self.wildcard_notifiers.write().await;
+        notifiers.retain(|weak| match weak.upgrade() {
+            Some(notify) => {
+                notify.notify_one();
+                true
             }
-            {
-                let mut wildcard = self.wildcard_subscribers.write().await;
-                wildcard.string.retain(|tx| !tx.is_closed());
-                wildcard.typed.retain(|tx| !tx.is_closed());
-            }
-        }
+            None => false,
+        });
     }
 }

@@ -8,9 +8,9 @@ use crate::http::util::{
 use crate::permissions::{AppRole, check_app_role};
 // use crate::ketoapi::subject::Ref;
 // use crate::ketoapi::{self, CheckRequest, Subject};
-use crate::{AppState, health};
 use crate::bookables::CancellationReason;
 use crate::http::history::models::Subsystem;
+use crate::{AppState, health};
 use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
@@ -230,9 +230,8 @@ pub async fn delete_appointment(
         ));
     }
 
-    let refund_credits = appointment.credits.unwrap_or(0)
-        * appointment.current_refund_percent.unwrap_or(0)
-        / 100;
+    let refund_credits =
+        appointment.credits.unwrap_or(0) * appointment.current_refund_percent.unwrap_or(0) / 100;
     if body.process_refund && refund_credits > 0 {
         query!(
             "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
@@ -246,14 +245,12 @@ pub async fn delete_appointment(
 
     trans.commit().await?;
 
-    // Broadcast that there might be a change
-    // let evil_data = data.clone();
-    // tokio::spawn(async move {
-    //     evil_data
-    //         .event_channels.bookables
-    //         .broadcast(appointment.asset_type_id, appointment.asset_id)
-    //         .await;
-    // });
+    // Broadcast the updated status so WS clients see the cancellation immediately
+    let asset_id = appointment.asset_id;
+    let evil_data = data.clone();
+    tokio::spawn(async move {
+        crate::bookables::fetch_and_broadcast_status(&evil_data, [asset_id]).await;
+    });
 
     Ok(StatusCode::NO_CONTENT)
 }
