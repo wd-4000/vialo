@@ -281,7 +281,7 @@ pub async fn main(
                                 let ledger_credit_sum = sqlx::query!(
                                 r#"UPDATE credit_ledger SET status = 'done' WHERE from_account = $1 AND status = 'pending' AND (product = 'printer_bw' OR product = 'printer_color') RETURNING credits;"#,
                                 user.id
-                            ).fetch_all(&mut *trans).await?.into_iter().map(|l| l.credits).sum::<i32>();
+                            ).fetch_all(&mut *trans).await?.into_iter().filter_map(|l| l.credits).sum::<i32>();
 
                                 if printer_credit_sum != ledger_credit_sum {
                                     warn!(

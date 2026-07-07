@@ -254,7 +254,7 @@ pub async fn book_slots(
 
     let mut trans = grab_trans(&mut conn).await?;
 
-    // Check balance
+    // Check balance (NULL means unlimited credits)
     let balance = query_scalar!(
         "SELECT credit_balance FROM accounts_people WHERE id = $1 FOR UPDATE",
         user.id
@@ -262,7 +262,7 @@ pub async fn book_slots(
     .fetch_one(&mut *trans)
     .await?;
 
-    if balance < sum_total {
+    if balance.is_some_and(|b| b < sum_total) {
         return Err(VialoError::AppError(
             StatusCode::PAYMENT_REQUIRED,
             "insufficient_credits".into(),

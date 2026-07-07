@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO credit_ledger (entry_type, from_account, credits, label) VALUES ('unlimited_enabled', $1, $2, 'Credits set to unlimited')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ef6bbcf92a9483a5171eb5c2021bd10eab0c80d1e75049237d282cea405a174b"
+}

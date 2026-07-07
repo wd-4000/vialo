@@ -141,15 +141,26 @@ pub enum TransactionStatus {
     Refunded,
 }
 
+#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
+#[sqlx(type_name = "ledger_entry_type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum LedgerEntryType {
+    Transfer,
+    UnlimitedEnabled,
+    UnlimitedDisabled,
+}
+
 #[derive(Serialize, Debug, ToSchema)]
 pub struct PersonalTransactionModel {
     pub id: Uuid,
     pub to_account: Option<AccountEmbed>,
     pub from_account: Option<AccountEmbed>,
     pub product: Option<ProductType>,
-    pub credits: i32,
+    pub credits: Option<i32>,
     pub status: TransactionStatus,
     pub refund_of: Option<Uuid>,
+    pub entry_type: LedgerEntryType,
+    pub label: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -161,9 +172,10 @@ pub struct PersonalTransactionModelWithProductDetails {
     pub from_account: Option<AccountEmbed>,
     pub product: Option<ProductEmbed>,
     pub label: Option<String>,
-    pub credits: i32,
+    pub credits: Option<i32>,
     pub status: TransactionStatus,
     pub refund_of: Option<Uuid>,
+    pub entry_type: LedgerEntryType,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
 }

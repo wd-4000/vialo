@@ -27,7 +27,7 @@ CREATE TABLE accounts_people (
   membership_end date not null, -- Association membership end. Expired = No access.
   full_name text,
   manually_suspended boolean not null default false, -- True = No access to any syiervices.
-  credit_balance int NOT NULL DEFAULT 0 -- Automatically updated, enabled by default!!
+  credit_balance int DEFAULT 0 -- NULL = unlimited credits
 );
 
 CREATE INDEX account_auth_idx ON accounts_people (auth_id);
@@ -331,6 +331,12 @@ $$;
 ---
 CREATE TYPE product_type AS ENUM('printer_color', 'printer_bw', 'bookable');
 
+CREATE TYPE ledger_entry_type AS ENUM(
+  'transfer',
+  'unlimited_enabled',
+  'unlimited_disabled'
+);
+
 ---
 --- Credits
 ---
@@ -340,14 +346,22 @@ CREATE TABLE credit_ledger (
   id uuid PRIMARY KEY default gen_random_uuid(),
   from_account uuid REFERENCES accounts_people (id) ON DELETE CASCADE,
   to_account uuid REFERENCES accounts_people (id) ON DELETE CASCADE,
-  credits int NOT NULL,
+  credits int,
   status transaction_status NOT NULL DEFAULT 'done',
   product product_type,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   last_updated TIMESTAMPTZ,
   label text,
   refund_of uuid REFERENCES credit_ledger (id),
-  CHECK (credits >= 0),
+  entry_type ledger_entry_type NOT NULL DEFAULT 'transfer',
+  CHECK (
+    (
+      entry_type = 'transfer'
+      AND credits IS NOT NULL
+      AND credits >= 0
+    )
+    OR (entry_type != 'transfer')
+  ),
   CHECK (
     NOT (
       from_account IS NULL
@@ -365,8 +379,20 @@ CREATE INDEX credit_ledger_to_idx ON credit_ledger (to_account);
 -- Update credits column in accounts table on transaction.
 CREATE OR REPLACE FUNCTION materialize_transaction () RETURNS TRIGGER AS $$
 BEGIN
-    UPDATE accounts_people SET credit_balance = credit_balance - NEW.credits WHERE id = NEW.from_account;
-    UPDATE accounts_people SET credit_balance = credit_balance + NEW.credits WHERE id = NEW.to_account;
+    IF NEW.entry_type = 'transfer' THEN
+        UPDATE accounts_people SET credit_balance = credit_balance - NEW.credits WHERE id = NEW.from_account AND credit_balance IS NOT NULL;
+        UPDATE accounts_people SET credit_balance = credit_balance + NEW.credits WHERE id = NEW.to_account AND credit_balance IS NOT NULL;
+    ELSIF NEW.entry_type = 'unlimited_enabled' THEN
+        UPDATE accounts_people SET credit_balance = NULL WHERE id = NEW.from_account;
+    ELSIF NEW.entry_type = 'unlimited_disabled' THEN
+        -- Restore pre-unlimited credit balance
+        UPDATE accounts_people SET credit_balance = COALESCE((
+            SELECT credits FROM credit_ledger
+            WHERE from_account = NEW.to_account
+              AND entry_type = 'unlimited_enabled'
+            ORDER BY created_at DESC LIMIT 1
+        ), 0) WHERE id = NEW.to_account;
+    END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -380,6 +406,7 @@ BEGIN
         OR NEW.created_at IS DISTINCT FROM OLD.created_at
         OR NEW.label IS DISTINCT FROM OLD.label
         OR NEW.refund_of IS DISTINCT FROM OLD.refund_of
+        OR NEW.entry_type IS DISTINCT FROM OLD.entry_type
     THEN
         RAISE EXCEPTION 'Only the "status" column may be changed in the credit ledger';
     END IF;
