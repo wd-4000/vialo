@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT cl.id,\n        CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS \"from_account: AccountEmbed\",\n        CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS \"to_account: AccountEmbed\",\n         cl.credits, cl.label, cl.created_at, cl.last_updated, cl.status as \"status: TransactionStatus\", cl.refund_of, CASE WHEN ba.id IS NOT NULL THEN jsonb_build_object('type', cl.product, 'id', ba.id) ELSE NULL END AS \"product: ProductEmbed\"\n        FROM credit_ledger cl\n        LEFT JOIN accounts_people ac_from ON from_account = ac_from.id\n        LEFT JOIN accounts_people ac_to ON to_account = ac_to.id\n        LEFT JOIN bookable_appointments ba ON ba.transaction_id = cl.id\n        WHERE cl.id = $1 AND (cl.from_account = $2 OR cl.to_account = $2)",
+  "query": "SELECT cl.id,\n        CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS \"from_account: AccountEmbed\",\n        CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS \"to_account: AccountEmbed\",\n         cl.credits, cl.label, cl.created_at, cl.last_updated, cl.status as \"status: TransactionStatus\", cl.refund_of, CASE WHEN ba.id IS NOT NULL THEN jsonb_build_object('type', cl.product, 'id', ba.id) ELSE NULL END AS \"product: ProductEmbed\", cl.entry_type as \"entry_type: LedgerEntryType\"\n        FROM credit_ledger cl\n        LEFT JOIN accounts_people ac_from ON from_account = ac_from.id\n        LEFT JOIN accounts_people ac_to ON to_account = ac_to.id\n        LEFT JOIN bookable_appointments ba ON ba.transaction_id = cl.id\n        WHERE cl.id = $1 AND (cl.from_account = $2 OR cl.to_account = $2)",
   "describe": {
     "columns": [
       {
@@ -108,6 +108,28 @@
         "name": "product: ProductEmbed",
         "type_info": "Jsonb",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "entry_type: LedgerEntryType",
+        "type_info": {
+          "Custom": {
+            "name": "ledger_entry_type",
+            "kind": {
+              "Enum": [
+                "transfer",
+                "unlimited_enabled",
+                "unlimited_disabled"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "credit_ledger",
+            "name": "entry_type"
+          }
+        }
       }
     ],
     "parameters": {
@@ -120,14 +142,15 @@
       false,
       null,
       null,
-      false,
+      true,
       true,
       false,
       true,
       false,
       true,
-      null
+      null,
+      false
     ]
   },
-  "hash": "cd2e72df66d22712139118a176a339969148c8095e6822cc8af439330056827e"
+  "hash": "c00f1a0a45d742f77d7037d73ccded826feeea0482469fb2a7253ef3ead63eb4"
 }

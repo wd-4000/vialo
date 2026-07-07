@@ -1,9 +1,9 @@
 use super::{
     models::{
         AccountModel, AccountModelForOverview, CreatePersonResponse, CurrentRoomOccupantsViewModel,
-        GroupStubListModelWithRole, LeaseModelWithEmbeddedSublease, PeopleLookupModel,
-        PersonOverviewModel, PersonOverviewNetworkModel, PersonalTransactionModel,
-        TransactionStatus,
+        GroupStubListModelWithRole, LeaseModelWithEmbeddedSublease, LedgerEntryType,
+        PeopleLookupModel, PersonOverviewModel, PersonOverviewNetworkModel,
+        PersonalTransactionModel, TransactionStatus,
     },
     schemas::{CreateUserSchema, UserFilterOptions},
 };
@@ -14,7 +14,8 @@ use crate::printer::{self, models::JobData};
 use crate::{
     AppState, helpers,
     http::util::{
-        JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans, is_unique_violation,
+        JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
+        is_unique_violation,
         models::{AccountEmbed, AccountPersonEmbed, GroupEmbed, ProductType, RoomEmbed},
     },
 };
@@ -36,7 +37,7 @@ use rand::{
 };
 use serde::Serialize;
 use serde_json::json;
-use sqlx::{prelude::FromRow, query};
+use sqlx::{prelude::FromRow, query, query_scalar};
 use sqlx_conditional_queries::conditional_query_as;
 use std::{ops::DerefMut, sync::Arc};
 use tokio::try_join;
@@ -383,7 +384,7 @@ pub async fn get_person_overview(
             r#"SELECT cl.id,
             CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
             CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
-             credits, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.product as "product: ProductType", cl.refund_of
+             credits, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.product as "product: ProductType", cl.refund_of, cl.label, cl.entry_type as "entry_type: LedgerEntryType"
             FROM credit_ledger cl
             LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
             LEFT JOIN accounts_people ac_to ON to_account = ac_to.id
@@ -396,21 +397,18 @@ pub async fn get_person_overview(
     sqlx::query_scalar!("select count(*) from net_devices nd JOIN net_cred nc on nd.cred_id = nc.id WHERE nc.account_id = $1", id).fetch_one(&data.db)
     );
 
-    match q {
-        Ok((user, groups, contract, transactions, fetch_realms, device_count)) => {
-            Ok(Json(PersonOverviewModel {
-                account: user,
-                groups,
-                contract,
-                transactions,
-                network: PersonOverviewNetworkModel {
-                    realms: fetch_realms,
-                    devices: device_count.unwrap_or(0),
-                },
-            }))
-        }
-        Err(_) => Err(VialoError::NotFound()),
-    }
+    let (user, groups, contract, transactions, fetch_realms, device_count) = q?;
+
+    Ok(Json(PersonOverviewModel {
+        account: user,
+        groups,
+        contract,
+        transactions,
+        network: PersonOverviewNetworkModel {
+            realms: fetch_realms,
+            devices: device_count.unwrap_or(0),
+        },
+    }))
 }
 
 #[utoipa::path(post, path = "/people", request_body=CreateUserSchema, responses((status = 201, description = "Created", body=CreatePersonResponse)))]
@@ -604,7 +602,7 @@ pub async fn delete_person(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Sets credits to 0 if it was null.
+/// Toggles unlimited credits
 #[utoipa::path(post, path = "/people/{id}/credits", responses((status = 204, description = "Enabled")))]
 pub async fn enable_credits(
     Path(id): Path<Uuid>,
@@ -614,15 +612,36 @@ pub async fn enable_credits(
     check_app_role(user.clone(), AppRole::CreditManager, &data.db).await?;
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
-    let result = query!(
-        "UPDATE accounts_people SET credit_balance = 0 WHERE id = $1 AND credit_balance IS NULL",
+
+    // Check the person exists
+    let balance = query_scalar!(
+        "SELECT credit_balance FROM accounts_people WHERE id = $1",
         id
     )
-    .execute(&mut *conn)
+    .fetch_optional(&mut *conn)
     .await?;
 
-    if result.rows_affected() == 0 {
-        return Err(VialoError::NotFound());
+    match balance {
+        None => return Err(VialoError::NotFound()),
+        Some(Some(frozen)) => {
+            // Currently limited → go unlimited; freeze the current balance
+            query!(
+                "INSERT INTO credit_ledger (entry_type, from_account, credits, label) VALUES ('unlimited_enabled', $1, $2, 'Credits set to unlimited')",
+                id,
+                frozen,
+            )
+            .execute(&mut *conn)
+            .await?;
+        }
+        Some(None) => {
+            // Currently unlimited → go limited (trigger restores frozen balance)
+            query!(
+                "INSERT INTO credit_ledger (entry_type, to_account) VALUES ('unlimited_disabled', $1)",
+                id
+            )
+            .execute(&mut *conn)
+            .await?;
+        }
     }
 
     Ok(StatusCode::NO_CONTENT)
@@ -630,7 +649,7 @@ pub async fn enable_credits(
 
 #[derive(Serialize, ToSchema)]
 pub struct CreditBalanceResponse {
-    pub credit_balance: i32,
+    pub credit_balance: Option<i32>,
 }
 
 #[utoipa::path(get, path = "/people/{id}/credits", responses((status = 200, description = "OK", body=CreditBalanceResponse)))]

@@ -1,6 +1,7 @@
 use super::{
     models::{
-        PersonalTransactionModel, PersonalTransactionModelWithProductDetails, TransactionStatus,
+        LedgerEntryType, PersonalTransactionModel, PersonalTransactionModelWithProductDetails,
+        TransactionStatus,
     },
     schemas::TransactionFilterOptions,
 };
@@ -43,7 +44,7 @@ pub async fn list(
         r#"SELECT cl.id,
         CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
         CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
-         credits, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, cl.product as "product: ProductType"
+         credits, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, cl.product as "product: ProductType", cl.label, cl.entry_type as "entry_type: LedgerEntryType"
         FROM credit_ledger cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
         LEFT JOIN accounts_people ac_to ON to_account = ac_to.id
@@ -72,7 +73,7 @@ pub async fn get(
         r#"SELECT cl.id,
         CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
         CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
-         cl.credits, cl.label, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, CASE WHEN ba.id IS NOT NULL THEN jsonb_build_object('type', cl.product, 'id', ba.id) ELSE NULL END AS "product: ProductEmbed"
+         cl.credits, cl.label, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, CASE WHEN ba.id IS NOT NULL THEN jsonb_build_object('type', cl.product, 'id', ba.id) ELSE NULL END AS "product: ProductEmbed", cl.entry_type as "entry_type: LedgerEntryType"
         FROM credit_ledger cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
         LEFT JOIN accounts_people ac_to ON to_account = ac_to.id

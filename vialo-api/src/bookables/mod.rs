@@ -183,7 +183,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
             "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = 'expired' WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",
             appointment.id,
         ).execute(&mut *trans).await?;
-        let refund_credits = appointment.credits * appointment.expiry_refund_percent as i32 / 100;
+        let refund_credits = appointment.credits.unwrap_or(0) * appointment.expiry_refund_percent as i32 / 100;
         if refund_credits > 0 {
             query!(
                 "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
@@ -206,7 +206,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
                     full_name: appointment.full_name,
                     email: appointment.email,
                     asset_name: appointment.asset_name.unwrap_or_else(|| "Unknown".into()),
-                    credits_refunded: appointment.credits
+                    credits_refunded: appointment.credits.unwrap_or(0)
                         * appointment.expiry_refund_percent as i32
                         / 100,
                 })
