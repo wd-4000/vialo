@@ -104,7 +104,7 @@ fn to_title_case(s: &str) -> String {
         .join(" ")
 }
 
-#[utoipauto(paths = "./src/http")]
+#[utoipauto(paths = "./src/http, ./src/hooks")]
 #[derive(OpenApi)]
 #[openapi(
     modifiers(&FixTheseUglyTagsNow),

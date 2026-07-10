@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO net_devices (cred_id, mac) VALUES ($1, $2)\n                     ON CONFLICT (mac)\n                     DO UPDATE SET (cred_id, mac, hostname) = ($1, $2, NULL)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Macaddr"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7100d177c1d0f6517af6ba2731abe5a49ea34fae2780c41d63c26cb497bde50b"
+}

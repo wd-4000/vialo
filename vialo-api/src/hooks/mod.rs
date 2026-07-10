@@ -13,6 +13,8 @@ use crate::helpers::{self, grab_authd_conn_subsystem, people::IdentityModel};
 use crate::http::util::{JsonE, VialoError};
 use axum::{extract::State, http::StatusCode, response::IntoResponse};
 
+pub mod radius;
+
 pub async fn update_identity(
     State(data): State<Arc<AppState>>,
     JsonE(body): JsonE<IdentityModel>,
@@ -31,6 +33,7 @@ use super::AppState;
 pub async fn create_router(app_state: Arc<AppState>) -> Router {
     Router::new()
         .route("/hooks/update_identity", post(update_identity))
+        .route("/radius/auth/{network_id}", post(radius::auth))
         .layer(
             TraceLayer::new_for_http()
                 // Create our own span for the request and include the matched path. The matched
