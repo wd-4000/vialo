@@ -1,6 +1,6 @@
-use std::collections::{HashMap, HashSet};
-
+use super::models::PostVisibility;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use utoipa::{IntoParams, ToSchema};
 
 #[derive(Deserialize, Debug, PartialEq, Eq, Hash, ToSchema)]
@@ -27,7 +27,7 @@ pub struct PostFilterOptions {
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreatePostSchema {
     pub board_id: i32,
-    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_64")]
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_64", default)]
     pub icon: Option<String>,
     pub title: Option<HashMap<String, String>>,
     pub content: Option<HashMap<String, String>>,
@@ -35,4 +35,5 @@ pub struct CreatePostSchema {
     pub pinned_until: Option<chrono::DateTime<chrono::Utc>>,
     pub event_from: Option<chrono::DateTime<chrono::Utc>>,
     pub event_to: Option<chrono::DateTime<chrono::Utc>>,
+    pub visibility: PostVisibility,
 }

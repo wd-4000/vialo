@@ -1,0 +1,102 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n                bd.id,\n                bd.slug,\n                bd.icon,\n                get_i18n_string(bd.label, $1) AS label,\n                CASE\n                    WHEN bd.group_id IS NOT NULL THEN jsonb_build_object(\n                        'id', bd.group_id,\n                        'label', ag.label\n                    )\n                    ELSE NULL\n                END AS \"group: GroupEmbed\",\n                bd.default_post_visibility AS \"default_post_visibility: PostVisibility\"\n            FROM\n                boards bd LEFT JOIN account_groups ag ON bd.group_id = ag.id\n            WHERE account_board_perm_exists($2, bd.id, 'view')\n            LIMIT $3 OFFSET $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "boards",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "slug",
+        "type_info": {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "boards",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "icon",
+        "type_info": {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "boards",
+            "name": "icon"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "label",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "group: GroupEmbed",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "default_post_visibility: PostVisibility",
+        "type_info": {
+          "Custom": {
+            "name": "post_visibility",
+            "kind": {
+              "Enum": [
+                "public",
+                "logged_in",
+                "board"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "boards",
+            "name": "default_post_visibility"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null,
+      null,
+      false
+    ]
+  },
+  "hash": "d8256633d8451cfc48ba14a9c49ab246afaa1de6b11ddafbf5b78afd8f6bf266"
+}
