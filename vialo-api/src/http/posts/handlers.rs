@@ -3,7 +3,7 @@ use super::{
     boards::BoardPerm,
     models::{
         BoardPostIdModel, BoardPostModelTranslated, BoardPostModelTranslatedAllLanguages,
-        BoardPostModelTranslatedWithPinnedOn,
+        BoardPostModelTranslatedWithPinnedOn, PostVisibility,
     },
     schemas::{CreatePostSchema, PostContentFormat, PostFilterOptions},
 };
@@ -12,7 +12,9 @@ use pulldown_cmark::{Parser, html};
 
 use crate::AppState;
 use crate::helpers::LangVariant;
-use crate::http::util::{JsonE, User, VialoError, clamp_pagination, get_i18n_arg_arrays, grab_trans};
+use crate::http::util::{
+    JsonE, User, VialoError, clamp_pagination, get_i18n_arg_arrays, grab_trans,
+};
 use axum::Extension;
 use axum::{
     Json,
@@ -180,15 +182,18 @@ pub async fn add_post(
     .await?;
 
     let record = sqlx::query_as!(BoardPostIdModel,
-        "INSERT INTO board_posts (account_id, board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8, $9, $10) RETURNING id",
-       user.id, body.board_id, body.icon, processed_i18n_fields.get("title"), processed_i18n_fields.get("content"), processed_i18n_fields.get("location"), body.event_from, body.event_to, processed_i18n_fields.get("content_html"), processed_i18n_fields.get("content_plain")
+        "INSERT INTO board_posts (account_id, board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain, visibility) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8, $9, $10, $11) RETURNING id",
+        user.id, body.board_id, body.icon, processed_i18n_fields.get("title"), processed_i18n_fields.get("content"), processed_i18n_fields.get("location"), body.event_from, body.event_to, processed_i18n_fields.get("content_html"), processed_i18n_fields.get("content_plain"), body.visibility as PostVisibility
     )
     .fetch_one(&mut *trans)
     .await?;
 
     trans.commit().await?;
     if data.event_channels.posts_tx.send(record.id).is_err() {
-        tracing::error!(post_id = record.id, "posts channel has no receivers — post email notifications will not be sent");
+        tracing::error!(
+            post_id = record.id,
+            "posts channel has no receivers — post email notifications will not be sent"
+        );
         crate::health::add_health_event(
             &data.db,
             crate::http::history::models::Subsystem::Email,

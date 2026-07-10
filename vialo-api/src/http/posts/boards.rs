@@ -78,7 +78,18 @@ pub struct BoardModelTranslatedAllLanguages {
     pub slug: String,
 }
 
-#[utoipa::path(get, path = "/posts/boards", params(PostFilterOptions), responses((status = 200, description = "OK", body=Vec<BoardModelTranslatedEmbeddedGroup>)))]
+#[derive(Serialize, ToSchema)]
+pub struct BoardModelTranslatedAllLanguagesEmbeddedGroup {
+    pub id: i32,
+    pub icon: Option<String>,
+    #[schema(value_type = Option<I18nMap>)]
+    pub label: Option<JsonValue>,
+    pub slug: Option<String>,
+    pub group: Option<GroupEmbed>,
+    pub default_post_visibility: PostVisibility,
+}
+
+#[utoipa::path(get, path = "/posts/boards", params(PostFilterOptions), responses((status = 200, description = "OK", body=LangVariant<Vec<BoardModelTranslatedAllLanguagesEmbeddedGroup>, Vec<BoardModelTranslatedEmbeddedGroup>>)))]
 pub async fn list_boards(
     Query(opts): Query<PostFilterOptions>,
     Extension(user): Extension<User>,
@@ -89,34 +100,59 @@ pub async fn list_boards(
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
 
-    let boards = query_as!(
-        BoardModelTranslatedEmbeddedGroup,
-        r#"SELECT
-            bd.id,
-            bd.slug,
-            bd.icon,
-            get_i18n_string(bd.label, $1) AS label,
-            CASE
-                WHEN bd.group_id IS NOT NULL THEN jsonb_build_object(
-                    'id', bd.group_id,
-                    'label', ag.label
-                )
-                ELSE NULL
-            END AS "group: GroupEmbed",
-            bd.default_post_visibility AS "default_post_visibility: PostVisibility"
-        FROM
-            boards bd LEFT JOIN account_groups ag ON bd.group_id = ag.id
-        WHERE account_board_perm_exists($4, bd.id, 'view')
-        LIMIT $2 OFFSET $3"#,
-        &langs,
-        limit as i64,
-        offset as i64,
-        user.id,
-    )
-    .fetch_all(&data.db)
-    .await?;
+    if langs == ["all"] {
+        let uid = user.id;
+        let boards = conditional_query_as!(
+            BoardModelTranslatedAllLanguagesEmbeddedGroup,
+            r#"SELECT
+                bd.id,
+                bd.slug,
+                bd.icon,
+                get_i18n_all_string_translations(bd.label) AS label,
+                CASE
+                    WHEN bd.group_id IS NOT NULL THEN jsonb_build_object(
+                        'id', bd.group_id,
+                        'label', ag.label
+                    )
+                    ELSE NULL
+                END AS "group: GroupEmbed",
+                bd.default_post_visibility AS "default_post_visibility: PostVisibility"
+            FROM
+                boards bd LEFT JOIN account_groups ag ON bd.group_id = ag.id
+            WHERE account_board_perm_exists({uid}, bd.id, 'view')
+            LIMIT {limit} OFFSET {offset}"#,
+        )
+        .fetch_all(&data.db)
+        .await?;
 
-    Ok((StatusCode::OK, Json(boards)))
+        Ok(Json(LangVariant::AllLangs(boards)))
+    } else {
+        let uid = user.id;
+        let boards = conditional_query_as!(
+            BoardModelTranslatedEmbeddedGroup,
+            r#"SELECT
+                bd.id,
+                bd.slug,
+                bd.icon,
+                get_i18n_string(bd.label, {langs:Vec<String>}) AS label,
+                CASE
+                    WHEN bd.group_id IS NOT NULL THEN jsonb_build_object(
+                        'id', bd.group_id,
+                        'label', ag.label
+                    )
+                    ELSE NULL
+                END AS "group: GroupEmbed",
+                bd.default_post_visibility AS "default_post_visibility: PostVisibility"
+            FROM
+                boards bd LEFT JOIN account_groups ag ON bd.group_id = ag.id
+            WHERE account_board_perm_exists({uid}, bd.id, 'view')
+            LIMIT {limit} OFFSET {offset}"#,
+        )
+        .fetch_all(&data.db)
+        .await?;
+
+        Ok(Json(LangVariant::Localized(boards)))
+    }
 }
 
 #[utoipa::path(get, path = "/posts/boards/{id}", params(PostFilterOptions), responses((status = 200, description = "OK", body=LangVariant<BoardModelTranslatedAllLanguages, BoardModelTranslated>)))]
