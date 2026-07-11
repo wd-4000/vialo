@@ -1,11 +1,53 @@
 [Unit]
 Description=API service for Vialo
+Documentation=https://github.com/wd-4000/vialo
+After=network-online.target postgresql.service
+Wants=network-online.target
 
 [Service]
+Type=exec
 ExecStart=/usr/bin/vialo-api
+EnvironmentFile=-/etc/vialo/api.env
+Restart=on-failure
+RestartSec=5s
+
+# HTTP API server — no privileged ports, no netlink, no raw sockets.
+DynamicUser=yes
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+
+# AF_INET/AF_INET6: HTTP listen + Postgres + Kratos + SMTP + printers + proxy.
+# AF_UNIX: local Postgres sockets, DNS resolver, Kratos.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# The entire OS is read-only; ConfigurationDirectory/LogsDirectory are the
+# exceptions (systemd bind-mounts them writable even under ProtectSystem=strict).
+ProtectSystem=strict
 ConfigurationDirectory=vialo
 LogsDirectory=vialo-api
+ProtectHome=yes
 PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+UMask=0077
+
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=multi-user.target
