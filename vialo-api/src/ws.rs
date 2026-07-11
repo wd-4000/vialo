@@ -61,9 +61,12 @@ async fn ws_handler(
     ws: WebSocketUpgrade,
     user_agent: Option<TypedHeader<headers::UserAgent>>,
     State(state): State<Arc<AppState>>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    addr: Option<Extension<ConnectInfo<SocketAddr>>>,
     Extension(user): Extension<Option<User>>,
 ) -> impl IntoResponse {
+    let addr = addr
+        .map(|Extension(c)| c.0)
+        .unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 0)));
     let user_agent = if let Some(TypedHeader(user_agent)) = user_agent {
         user_agent.to_string()
     } else {

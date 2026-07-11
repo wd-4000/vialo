@@ -1,0 +1,14 @@
+[Unit]
+Description=Vialo API sockets
+Documentation=https://github.com/oih/oihd
+
+[Socket]
+ListenStream=/run/vialo-api/public.sock
+ListenStream=/run/vialo-api/hooks.sock
+FileDescriptorName=public
+FileDescriptorName=hooks
+SocketMode=0660
+RuntimeDirectory=vialo-api
+
+[Install]
+WantedBy=sockets.target

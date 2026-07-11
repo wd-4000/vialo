@@ -5,6 +5,25 @@ use sqlx::{Postgres, Transaction};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+fn build_kratos_http_client(kratos_url: &str) -> (reqwest::Client, String) {
+    if kratos_url.starts_with("unix://") {
+        #[cfg(unix)]
+        {
+            let socket_path = kratos_url.strip_prefix("unix://").unwrap();
+            let client = reqwest::Client::builder()
+                .unix_socket(socket_path)
+                .build()
+                .expect("Failed to build Unix socket HTTP client for Kratos");
+            return (client, "http://localhost".to_string());
+        }
+        #[cfg(not(unix))]
+        {
+            panic!("Kratos URL configured as unix:// but this platform does not support Unix sockets");
+        }
+    }
+    (reqwest::Client::new(), kratos_url.to_string())
+}
+
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct IdentityModel {
     pub id: Uuid,
@@ -21,11 +40,12 @@ pub async fn delete_identity(id: Uuid, trans: &mut Transaction<'_, Postgres>) ->
         .await?;
 
     if let Ok(kratos_url) = std::env::var("ORY_KRATOS_ADMIN_URL") {
-        let delete_url = Url::parse(&kratos_url)?
+        let (client, base_url) = build_kratos_http_client(&kratos_url);
+        let delete_url = Url::parse(&base_url)?
             .join("admin/identities/")?
             .join(&id.to_string())?;
 
-        let kratos_response = reqwest::Client::new().delete(delete_url).send().await?;
+        let kratos_response = client.delete(delete_url).send().await?;
 
         kratos_response.error_for_status()?;
     }
