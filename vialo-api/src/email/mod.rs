@@ -3,6 +3,7 @@ use icu::locale::locale;
 use lettre::{
     Message, SmtpTransport, Transport,
     message::{Mailbox, MultiPart},
+    transport::sendmail::SendmailTransport,
 };
 use serde::Serialize;
 use std::{env, sync::Arc};
@@ -17,6 +18,26 @@ use crate::{
 use custom_headers::*;
 use date::get_event_timespan;
 use tracing::{debug, error, warn};
+
+enum MailTransport {
+    Smtp(SmtpTransport),
+    Sendmail(SendmailTransport),
+}
+
+impl MailTransport {
+    fn send(&self, message: &Message) -> Result<(), anyhow::Error> {
+        match self {
+            Self::Smtp(t) => t
+                .send(message)
+                .map(|_| ())
+                .map_err(|e| anyhow::anyhow!("SMTP: {e}")),
+            Self::Sendmail(t) => {
+                t.send(message)
+                    .map_err(|e| anyhow::anyhow!("sendmail: {e}"))
+            }
+        }
+    }
+}
 
 #[derive(Serialize)]
 struct EmailGroupInfo<'a> {
@@ -159,7 +180,7 @@ async fn form_email<'a>(
 
 async fn notify_post_subscribers(
     app_state: &AppState,
-    mailer: &SmtpTransport,
+    mailer: &MailTransport,
     post_id: i32,
     locale: &Yaml,
     locale_plain: &Yaml,
@@ -257,7 +278,7 @@ async fn notify_post_subscribers(
 
 async fn notify_expired_appointment(
     app_state: &AppState,
-    mailer: &SmtpTransport,
+    mailer: &MailTransport,
     message: &crate::bookables::ExpiredAppointmentMessage,
     locale: &Yaml,
     locale_plain: &Yaml,
@@ -315,10 +336,14 @@ pub async fn main(
     app_state: Arc<AppState>,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), anyhow::Error> {
-    let mailer =
-        SmtpTransport::from_url(&env::var("EMAIL_URL").expect("No SMTP URL provided!"))?.build();
-
-    mailer.test_connection()?;
+    let email_url = env::var("EMAIL_URL").expect("No SMTP URL provided!");
+    let mailer = if email_url.starts_with("sendmail://") {
+        MailTransport::Sendmail(SendmailTransport::new())
+    } else {
+        let transport = SmtpTransport::from_url(&email_url)?.build();
+        transport.test_connection()?;
+        MailTransport::Smtp(transport)
+    };
 
     let locale = YamlLoader::load_from_str(include_str!("langs/en.yaml"))?;
     let locale_plain = YamlLoader::load_from_str(include_str!("langs/en_plain.yaml"))?;

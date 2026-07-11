@@ -22,7 +22,7 @@ where
 
 pub async fn main(
     db_pool: PgPool,
-    _app_state: Arc<AppState>,
+    app_state: Arc<AppState>,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), anyhow::Error> {
     loop {
@@ -70,6 +70,7 @@ pub async fn main(
                     credentials.hostname,
                     credentials.api_key.expose(),
                     credentials.site_id,
+                    &app_state.config.proxy,
                 )?;
 
                 let unifi_vlans: HashMap<i64, _> = session

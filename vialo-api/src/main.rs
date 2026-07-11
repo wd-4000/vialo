@@ -8,6 +8,7 @@ use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::net::{TcpListener, UnixListener};
 use tokio::sync::broadcast;
 use tokio::sync::watch;
 use tower_http::cors::CorsLayer;
@@ -21,8 +22,116 @@ use vialo_api::{
     http::util::grab_trans,
 };
 
+#[cfg(unix)]
+use std::os::unix::io::FromRawFd;
+
 #[cfg(feature = "migrate")]
 use sqlx::migrate;
+
+enum Listener {
+    Tcp(TcpListener),
+    Unix(UnixListener),
+}
+
+#[cfg(unix)]
+fn try_socket_activation() -> Option<(Listener, Listener)> {
+    let pid: u32 = std::process::id();
+    let listen_pid: u32 = std::env::var("LISTEN_PID").ok()?.parse().ok()?;
+    if listen_pid != pid {
+        return None;
+    }
+
+    let nfds: usize = std::env::var("LISTEN_FDS").ok()?.parse().ok()?;
+    if nfds < 2 {
+        return None;
+    }
+
+    let fdnames = std::env::var("LISTEN_FDNAMES").unwrap_or_default();
+    let names: Vec<&str> = fdnames.split(':').collect();
+
+    let mut public: Option<Listener> = None;
+    let mut hooks: Option<Listener> = None;
+
+    for (i, name) in names.iter().enumerate() {
+        if i >= nfds {
+            break;
+        }
+        let fd = 3 + i as i32;
+        match *name {
+            "public" => {
+                let std_l = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
+                let _ = std_l.set_nonblocking(true);
+                public = Some(Listener::Unix(
+                    tokio::net::UnixListener::from_std(std_l).unwrap(),
+                ));
+            }
+            "hooks" => {
+                let std_l = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
+                let _ = std_l.set_nonblocking(true);
+                hooks = Some(Listener::Unix(
+                    tokio::net::UnixListener::from_std(std_l).unwrap(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    // Prevent child processes from inheriting these env vars.
+    unsafe {
+        std::env::remove_var("LISTEN_FDS");
+        std::env::remove_var("LISTEN_PID");
+        std::env::remove_var("LISTEN_FDNAMES");
+    }
+
+    match (public, hooks) {
+        (Some(p), Some(h)) => Some((p, h)),
+        _ => None,
+    }
+}
+
+async fn bind_listener(addr: &str) -> Listener {
+    if addr.starts_with('/') {
+        let path = std::path::Path::new(addr);
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::remove_file(addr);
+        Listener::Unix(UnixListener::bind(addr).expect("Couldn't bind to Unix socket!"))
+    } else if addr.starts_with('@') {
+        Listener::Unix(UnixListener::bind(addr).expect("Couldn't bind to abstract Unix socket!"))
+    } else {
+        Listener::Tcp(
+            TcpListener::bind(addr)
+                .await
+                .expect("Couldn't bind to TCP port!"),
+        )
+    }
+}
+
+async fn serve_api(
+    listener: Listener,
+    app: axum::Router,
+    mut shutdown_rx: watch::Receiver<bool>,
+) {
+    match listener {
+        Listener::Tcp(l) => {
+            axum::serve(l, app.into_make_service_with_connect_info::<SocketAddr>())
+                .with_graceful_shutdown(async move {
+                    while shutdown_rx.changed().await.is_ok() && !*shutdown_rx.borrow() {}
+                })
+                .await
+                .expect("TCP serve failed");
+        }
+        Listener::Unix(l) => {
+            axum::serve(l, app.into_make_service())
+                .with_graceful_shutdown(async move {
+                    while shutdown_rx.changed().await.is_ok() && !*shutdown_rx.borrow() {}
+                })
+                .await
+                .expect("Unix serve failed");
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -347,13 +456,23 @@ async fn main() {
         }
     }
 
-    let listener = tokio::net::TcpListener::bind(&asp.config.public.listen)
-        .await
-        .expect("Couldn't bind to public API port!");
-
-    let hook_listener = tokio::net::TcpListener::bind(&asp.config.hooks.listen)
-        .await
-        .expect("Couldn't bind to hooks API port!");
+    let (public_listener, hooks_listener) = {
+        #[cfg(unix)]
+        if let Some((p, h)) = try_socket_activation() {
+            info!("Received listeners from systemd socket activation.");
+            (p, h)
+        } else {
+            let p = bind_listener(&asp.config.public.listen).await;
+            let h = bind_listener(&asp.config.hooks.listen).await;
+            (p, h)
+        }
+        #[cfg(not(unix))]
+        {
+            let p = bind_listener(&asp.config.public.listen).await;
+            let h = bind_listener(&asp.config.hooks.listen).await;
+            (p, h)
+        }
+    };
 
     if let AuthConfig::Mock { uuid, email } = &asp.config.auth {
         if !(sqlx::query_scalar!(
@@ -426,14 +545,14 @@ async fn main() {
     let app = vialo_api::http::create_router(asp.clone()).await;
     let hook_app = vialo_api::hooks::create_router(asp.clone()).await;
     let ws = vialo_api::ws::main(asp.clone());
-    let mut public_api_shutdown = shutdown_rx.clone();
-    let mut hook_api_shutdown = shutdown_rx.clone();
+    let public_api_shutdown = shutdown_rx.clone();
+    let hook_api_shutdown = shutdown_rx.clone();
 
     info!("Serving.");
 
     let _ = tokio::join!(
-        axum::serve(
-            listener,
+        serve_api(
+            public_listener,
             app.merge(ws)
                 .layer(
                     CorsLayer::new()
@@ -454,33 +573,10 @@ async fn main() {
                         ])
                         .allow_credentials(true)
                         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
-                )
-                .into_make_service_with_connect_info::<SocketAddr>()
-        )
-        .with_graceful_shutdown(async move {
-            if *public_api_shutdown.borrow() {
-                return;
-            }
-            while public_api_shutdown.changed().await.is_ok() {
-                if *public_api_shutdown.borrow() {
-                    break;
-                }
-            }
-        }),
-        axum::serve(
-            hook_listener,
-            hook_app.into_make_service_with_connect_info::<SocketAddr>()
-        )
-        .with_graceful_shutdown(async move {
-            if *hook_api_shutdown.borrow() {
-                return;
-            }
-            while hook_api_shutdown.changed().await.is_ok() {
-                if *hook_api_shutdown.borrow() {
-                    break;
-                }
-            }
-        }),
+                ),
+            public_api_shutdown,
+        ),
+        serve_api(hooks_listener, hook_app, hook_api_shutdown),
         printer_subsystem_task,
         ppsk_subsystem_task,
         email_subsystem_task,

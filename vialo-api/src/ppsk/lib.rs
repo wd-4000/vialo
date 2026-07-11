@@ -17,16 +17,33 @@ impl UniFiApi {
         hostname: impl Into<String>,
         api_key: impl Into<String>,
         site_id: impl Into<String>,
+        proxy_url: &Option<String>,
     ) -> Result<Self, anyhow::Error> {
-        let client = Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()
-            .context("Failed to create HTTP client")?;
+        let hostname: String = hostname.into();
+        let mut builder = Client::builder().danger_accept_invalid_certs(true);
+
+        if hostname.starts_with("unix://") {
+            #[cfg(unix)]
+            {
+                let socket_path = hostname.strip_prefix("unix://").unwrap();
+                builder = builder.unix_socket(socket_path);
+            }
+            #[cfg(not(unix))]
+            {
+                return Err(anyhow!(
+                    "Unix socket URL configured for UniFi but this platform does not support Unix sockets"
+                ));
+            }
+        } else if let Some(proxy) = proxy_url {
+            builder = builder.proxy(reqwest::Proxy::all(proxy)?);
+        }
+
+        let client = builder.build().context("Failed to create HTTP client")?;
 
         Ok(Self {
             api_key: api_key.into(),
             site_id: site_id.into(),
-            hostname: hostname.into(),
+            hostname,
             client,
         })
     }
