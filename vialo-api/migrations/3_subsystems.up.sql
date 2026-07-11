@@ -7,7 +7,8 @@ CREATE TYPE subsystem_type AS ENUM(
   'printer',
   'ppsk',
   'email',
-  'sysop'
+  'sysop',
+  'dhcp'
 );
 
 CREATE TYPE job_status AS ENUM('pending', 'processing', 'done', 'error');

@@ -1,0 +1,11 @@
+# Debian + systemd, booted as PID 1 (privileged) so we can both
+#   * statically check the unit: systemd-analyze verify / security
+#   * smoke-run it:              systemctl start vialo-dhcp  (see test/smoke.sh)
+# iproute2 gives `ss` for the bind assertion; libssl3/ca-certificates cover the
+# binary's runtime deps.
+FROM debian:stable-slim
+RUN apt-get update -qq && apt-get install -y -qq \
+        systemd iproute2 libssl3 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace/vialo/vialo-dhcp
+CMD ["sleep", "infinity"]
