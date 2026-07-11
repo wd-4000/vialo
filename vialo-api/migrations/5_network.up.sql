@@ -124,52 +124,6 @@ CREATE TABLE net_ip_assignments (
   expires timestamptz -- Lease expiration date and time
 );
 
-CREATE OR REPLACE FUNCTION radius_dhcp (r_mac macaddr, r_vlan int) RETURNS TABLE (ipv4_addr inet, ipv4_subnet cidr) LANGUAGE plpgsql AS $$
-DECLARE
-    f_realm_id uuid;
-    f_ipv4_subnet cidr;
-    f_device_id uuid;
-    f_ipv4_addr inet;
-    -- TODO
-    -- f_auto_add boolean;
-    -- f_cred_id uuid;
-BEGIN
-    -- Check whether the device has been registered
-    SELECT ndi.realm_id, ndi.id, nr.ipv4_subnet INTO f_realm_id, f_device_id, f_ipv4_subnet FROM net_device_info ndi JOIN net_realms nr ON nr.id = ndi.realm_id
-        WHERE ndi.mac = r_mac AND nr.vlan = r_vlan;
-
-    -- TODO: No? Maybe auto-add it?
-    IF f_realm_id IS NULL OR f_device_id IS NULL THEN
-        -- SELECT auto_add_via_dhcp INTO f_auto_add FROM net_networks WHERE id = r_network_id;
-        -- IF f_auto_add THEN
-        --     SELECT id INTO f_cred_id FROM net_cred WHERE network_id = r_network_id AND LIMIT 1;
-
-        --     INSERT INTO net_devices (cred_id, network_id, mac) VALUES (f_cred_id, r_network_id, r_mac) ON CONFLICT (mac)
-        --     DO UPDATE SET (cred_id, network_id, mac, hostname, label) = (f_cred_id, r_network_id, r_mac, NULL,NULL);
-        -- ELSE
-            RAISE EXCEPTION 'unknown_device';
-        -- END IF;
-    END IF;
-
-    -- Check if we actually already have an IP for this device
-    SELECT nia.ipv4_addr INTO f_ipv4_addr FROM net_ip_assignments nia WHERE nia.realm_id = f_realm_id AND nia.device_id = f_device_id LIMIT 1;
-
-    -- Or find a new one, I guess
-    IF f_ipv4_addr IS NULL THEN
-        SELECT nia.ipv4_addr INTO f_ipv4_addr FROM net_ip_assignments nia WHERE (nia.device_id IS NULL OR nia.expires <= NOW()) AND nia.realm_id = f_realm_id;
-    END IF;
-
-    IF f_ipv4_addr IS NULL THEN
-        RAISE EXCEPTION 'pool_full';
-    END IF;
-
-    UPDATE net_ip_assignments nia SET (device_id, expires) = (f_device_id, NOW()+'3 hours') WHERE nia.ipv4_addr = f_ipv4_addr;
-    UPDATE net_devices SET last_seen = NOW() WHERE id = f_device_id;
-
-    RETURN QUERY SELECT f_ipv4_addr AS ipv4_addr, f_ipv4_subnet AS ipv4_subnet;
-END;
-$$;
-
 CREATE OR REPLACE FUNCTION expand_cidr (p_cidr cidr, p_exclude inet[]) RETURNS inet[] LANGUAGE plpgsql AS $$
 DECLARE
     r inet[];

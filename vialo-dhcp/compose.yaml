@@ -1,0 +1,47 @@
+services:
+  build:
+    build: .
+    working_dir: /workspace/vialo
+    command: sleep infinity
+    stop_grace_period: 1s
+    volumes:
+      - ../..:/workspace
+      - cargo-cache:/root/.cargo/registry
+      - cargo-target:/workspace/vialo/target
+    environment:
+      - DATABASE_URL=postgresql://fuck:motherfucker@postgres:5432/vialo?schema=public
+    networks:
+      - oihd_default
+
+  # Debian booting systemd as PID 1, for validating and smoke-running the unit:
+  #   docker compose exec systemd systemd-analyze verify ...   (static checks)
+  #   ./test/smoke.sh                                          (boot the real unit)
+  # Privileged + host cgroup namespace are what let systemd run inside the container.
+  systemd:
+    build:
+      context: .
+      dockerfile: Dockerfile.systemd
+    privileged: true
+    cgroup: host
+    command: /lib/systemd/systemd
+    stop_signal: SIGRTMIN+3
+    stop_grace_period: 5s
+    working_dir: /workspace/vialo/vialo-dhcp
+    tmpfs:
+      - /run
+      - /run/lock
+    volumes:
+      - ../..:/workspace
+      - cargo-target:/workspace/vialo/target:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup
+    networks:
+      - oihd_default
+
+volumes:
+  cargo-cache:
+  cargo-target:
+
+networks:
+  oihd_default:
+    external: true
+    name: oihd_default

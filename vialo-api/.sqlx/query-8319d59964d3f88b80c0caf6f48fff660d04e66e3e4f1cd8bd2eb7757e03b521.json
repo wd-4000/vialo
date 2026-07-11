@@ -15,7 +15,8 @@
                 "printer",
                 "ppsk",
                 "email",
-                "sysop"
+                "sysop",
+                "dhcp"
               ]
             }
           }

@@ -1,0 +1,56 @@
+[Unit]
+Description=Vialo DHCP server
+Documentation=https://github.com/wd-4000/vialo
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/vialo-dhcp
+EnvironmentFile=-/etc/vialo/dhcp.env
+Restart=on-failure
+RestartSec=5s
+
+# Least capability for a DHCP daemon
+# CAP_NET_BIND_SERVICE: bind UDP/67. CAP_NET_RAW: SO_BINDTODEVICE when a single
+# interface is pinned (dora-core server/mod.rs). Nothing else is required.
+DynamicUser=yes
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW
+NoNewPrivileges=yes
+
+# AF_INET/AF_INET6: DHCP + Postgres. AF_NETLINK: rtnetlink VLAN lookup + iface
+# enumeration. AF_UNIX: local Postgres sockets / resolver. (No AF_PACKET needed.)
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+# Only listening bind() is UDP/67; outbound Postgres connect() and netlink are unaffected.
+SocketBindAllow=ipv4:udp:67
+SocketBindDeny=any
+
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+UMask=0077
+
+# --- Syscall filter ---
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
