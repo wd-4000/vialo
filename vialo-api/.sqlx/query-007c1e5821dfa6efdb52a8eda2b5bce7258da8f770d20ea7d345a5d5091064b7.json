@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH cancelled AS (\n                        UPDATE bookable_appointments\n                        SET cancelled_at = now(), cancellation_reason = 'admin'\n                        WHERE lower(during)::date >= $1\n                          AND cancelled_at IS NULL\n                          AND activated IS NULL\n                          AND asset_id = $2\n                        RETURNING id, transaction_id\n                    )\n                    INSERT INTO credit_ledger (to_account, refund_of, credits)\n                    SELECT cl.from_account, cancelled.transaction_id, cl.credits\n                    FROM cancelled\n                    JOIN credit_ledger cl ON cl.id = cancelled.transaction_id\n                    WHERE cl.from_account IS NOT NULL AND cl.credits > 0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Date",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "007c1e5821dfa6efdb52a8eda2b5bce7258da8f770d20ea7d345a5d5091064b7"
+}

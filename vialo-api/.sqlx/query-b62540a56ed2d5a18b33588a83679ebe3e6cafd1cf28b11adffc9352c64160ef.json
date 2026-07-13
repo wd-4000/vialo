@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE bookable_schemas SET (label, schedule, asset_type_id, slot_price, activation_grace_period, expiry_refund_percent) = ($1, $2::time[], $3, $4, $5, $6) WHERE id = $7\n        RETURNING\n        id,\n        label,\n        schedule::text[] as \"schedule!\",\n        asset_type_id,\n        slot_price,\n        EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period,\n        expiry_refund_percent",
+  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,\n            bs.expiry_refund_percent,\n            bs.requires_activation\n        FROM\n            bookable_schemas bs\n        WHERE account_bookable_perm_exists($1, bs.asset_type_id, 'view'::bookable_perm) AND\n        TRUE\n        LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -69,17 +69,24 @@
             "name": "expiry_refund_percent"
           }
         }
+      },
+      {
+        "ordinal": 7,
+        "name": "requires_activation",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "bookable_schemas",
+            "name": "requires_activation"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "TimeArray",
-        "Int4",
-        "Int4",
-        "Interval",
-        "Int2",
-        "Int4"
+        "Uuid",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -89,8 +96,9 @@
       false,
       false,
       null,
-      true
+      true,
+      false
     ]
   },
-  "hash": "4e2f02986bafc7f759dcbd200654ee7aa72d22e7139cbdb42dec6b3de7441770"
+  "hash": "b62540a56ed2d5a18b33588a83679ebe3e6cafd1cf28b11adffc9352c64160ef"
 }

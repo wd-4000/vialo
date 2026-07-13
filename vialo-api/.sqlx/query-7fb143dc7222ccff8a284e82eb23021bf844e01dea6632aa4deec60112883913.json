@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,\n            bs.expiry_refund_percent\n        FROM\n            bookable_schemas bs\n        WHERE account_bookable_perm_exists($1, bs.asset_type_id, 'view'::bookable_perm) AND\n        label ILIKE '%' || $2 || '%'\n        LIMIT $3 OFFSET $4",
+  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,\n            bs.expiry_refund_percent,\n            bs.requires_activation\n        FROM\n            bookable_schemas bs\n        WHERE account_bookable_perm_exists($1, bs.asset_type_id, 'view'::bookable_perm) AND\n        label ILIKE '%' || $2 || '%'\n        LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -69,6 +69,17 @@
             "name": "expiry_refund_percent"
           }
         }
+      },
+      {
+        "ordinal": 7,
+        "name": "requires_activation",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "bookable_schemas",
+            "name": "requires_activation"
+          }
+        }
       }
     ],
     "parameters": {
@@ -86,8 +97,9 @@
       false,
       false,
       null,
-      true
+      true,
+      false
     ]
   },
-  "hash": "da3b2ce9ee980273a097b178bf108c3c866526f6f7c1af2cdb0fe6422e634e4b"
+  "hash": "7fb143dc7222ccff8a284e82eb23021bf844e01dea6632aa4deec60112883913"
 }

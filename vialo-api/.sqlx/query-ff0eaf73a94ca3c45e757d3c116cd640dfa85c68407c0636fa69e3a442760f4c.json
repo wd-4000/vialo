@@ -5,7 +5,7 @@
     "columns": [],
     "parameters": {
       "Left": [
-        "Timestamptz",
+        "Date",
         "Int4",
         "Int4"
       ]

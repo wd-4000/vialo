@@ -109,8 +109,8 @@ pub async fn auto_activate_appointments(app_state: &AppState) -> Result<(), anyh
     AND ba.cancelled_at IS NULL
     AND ba.maintenance = false
     AND lower(ba.during) <= now()
-    AND (
-        SELECT bs.activation_grace_period IS NULL
+    AND NOT (
+        SELECT bs.requires_activation
         FROM bookable_schema_assignments bsa
         JOIN bookable_schemas bs ON bs.id = bsa.schema_id
         WHERE bsa.asset_id = ba.asset_id
@@ -138,7 +138,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
         .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
     // Expire appointments.
-    // Not activated, not canceled, not maintenance, and grace period passed
+    // Requires activation, not activated, not canceled, not maintenance, and grace period passed
     let expired_appointments = query!(
         r#"SELECT ba.id,
     ba.asset_id,
@@ -158,7 +158,8 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
         SELECT DISTINCT ON (bsa.asset_id)
             bsa.asset_id,
             bs.activation_grace_period,
-            bs.expiry_refund_percent
+            bs.expiry_refund_percent,
+            bs.requires_activation
         FROM bookable_schema_assignments bsa
         JOIN bookable_schemas bs ON bs.id = bsa.schema_id
         WHERE bsa.asset_id = ba.asset_id
@@ -168,7 +169,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
     JOIN credit_ledger cl ON ba.transaction_id = cl.id
     JOIN accounts_people ap ON ap.id = ba.account_id
     JOIN bookable_assets bast ON bast.id = ba.asset_id
-    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.expiry_refund_percent IS NOT NULL AND lower(ba.during) + cs.activation_grace_period <= NOW()"#,
+    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.requires_activation AND cs.expiry_refund_percent IS NOT NULL AND lower(ba.during) + cs.activation_grace_period <= NOW()"#,
         &["en".into(), "de".into()],
     )
     .fetch_all(&app_state.db)
@@ -183,7 +184,8 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
             "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = 'expired' WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",
             appointment.id,
         ).execute(&mut *trans).await?;
-        let refund_credits = appointment.credits.unwrap_or(0) * appointment.expiry_refund_percent as i32 / 100;
+        let refund_credits =
+            appointment.credits.unwrap_or(0) * appointment.expiry_refund_percent as i32 / 100;
         if refund_credits > 0 {
             query!(
                 "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
@@ -248,7 +250,8 @@ async fn next_wakeup(app_state: &AppState) -> tokio::time::Instant {
             SELECT DISTINCT ON (bsa.asset_id)
                 bsa.asset_id,
                 bs.activation_grace_period,
-                bs.expiry_refund_percent
+                bs.expiry_refund_percent,
+                bs.requires_activation
             FROM bookable_schema_assignments bsa
             JOIN bookable_schemas bs ON bs.id = bsa.schema_id
             WHERE bsa.begins <= now()
@@ -263,7 +266,8 @@ async fn next_wakeup(app_state: &AppState) -> tokio::time::Instant {
         AND (
             lower(ba.during) > now()
             OR (
-                cs.activation_grace_period IS NOT NULL
+                cs.requires_activation
+                AND cs.activation_grace_period IS NOT NULL
                 AND cs.expiry_refund_percent IS NOT NULL
                 AND lower(ba.during) + cs.activation_grace_period > now()
             )

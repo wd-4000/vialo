@@ -25,17 +25,37 @@ pub struct BookableSchema {
     pub schedule: Vec<String>,
     pub asset_type_id: i32,
     pub slot_price: Option<i32>,
+    pub requires_activation: bool,
     pub activation_grace_period: Option<i64>,
     pub expiry_refund_percent: Option<i16>,
 }
 
 fn validate_schema_fields(body: &BookableSchemaPostOrPut) -> Result<(), VialoError> {
     if body.slot_price.is_some_and(|v| v < 0) {
-        return Err(VialoError::AppError(StatusCode::BAD_REQUEST, "slot_price must be >= 0".into()));
+        return Err(VialoError::AppError(
+            StatusCode::BAD_REQUEST,
+            "slot_price must be >= 0".into(),
+        ));
     }
-    if body.expiry_refund_percent.is_some_and(|v| !(0..=100).contains(&v)) {
-        return Err(VialoError::AppError(StatusCode::BAD_REQUEST, "expiry_refund_percent must be between 0 and 100".into()));
+    if body.requires_activation {
+        if body
+            .expiry_refund_percent
+            .is_some_and(|v| !(0..=100).contains(&v))
+        {
+            return Err(VialoError::AppError(
+                StatusCode::BAD_REQUEST,
+                "expiry_refund_percent must be between 0 and 100".into(),
+            ));
+        }
+    } else {
+        if body.activation_grace_period.is_some() || body.expiry_refund_percent.is_some() {
+            return Err(VialoError::AppError(
+                StatusCode::BAD_REQUEST,
+                "activation_grace_period or expiry_refund_percent must not be set when requires_activation is false".into(),
+            ));
+        }
     }
+
     Ok(())
 }
 
@@ -57,7 +77,8 @@ pub async fn list(
             bs.asset_type_id,
             bs.slot_price,
             EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,
-            bs.expiry_refund_percent
+            bs.expiry_refund_percent,
+            bs.requires_activation
         FROM
             bookable_schemas bs
         WHERE account_bookable_perm_exists({user_id_o}, bs.asset_type_id, 'view'::bookable_perm) AND
@@ -91,7 +112,8 @@ pub async fn get(
             bs.asset_type_id,
             bs.slot_price,
             EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,
-            bs.expiry_refund_percent
+            bs.expiry_refund_percent,
+            bs.requires_activation
         FROM
             bookable_schemas bs
         WHERE bs.id = $1
@@ -139,6 +161,7 @@ pub struct BookableSchemaPostOrPut {
     #[schema(value_type = Option<i64>)]
     pub activation_grace_period: Option<TimeDelta>,
     pub expiry_refund_percent: Option<i16>,
+    pub requires_activation: bool,
 }
 
 #[utoipa::path(post, path = "/bookables/schemas", request_body = BookableSchemaPostOrPut, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
@@ -160,10 +183,11 @@ pub async fn post(
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
-        "INSERT INTO bookable_schemas (label, schedule, asset_type_id, slot_price, activation_grace_period, expiry_refund_percent) VALUES ($1, $2::time[], $3, $4, $5, $6) RETURNING id",
+        "INSERT INTO bookable_schemas (label, schedule, asset_type_id, slot_price, activation_grace_period, expiry_refund_percent, requires_activation) VALUES ($1, $2::time[], $3, $4, $5, $6, $7) RETURNING id",
         body.label, body.schedule as Vec<String>, body.asset_type_id, body.slot_price, body.activation_grace_period.map(PgInterval::try_from)
           .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?,
-        body.expiry_refund_percent
+        body.expiry_refund_percent,
+        body.requires_activation,
     )
     .fetch_one(&mut *conn)
     .await?;
@@ -216,7 +240,7 @@ pub async fn put(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let record = sqlx::query_as!(
         BookableSchema,
-        r#"UPDATE bookable_schemas SET (label, schedule, asset_type_id, slot_price, activation_grace_period, expiry_refund_percent) = ($1, $2::time[], $3, $4, $5, $6) WHERE id = $7
+        r#"UPDATE bookable_schemas SET (label, schedule, asset_type_id, slot_price, activation_grace_period, expiry_refund_percent, requires_activation) = ($1, $2::time[], $3, $4, $5, $6, $7) WHERE id = $8
         RETURNING
         id,
         label,
@@ -224,9 +248,11 @@ pub async fn put(
         asset_type_id,
         slot_price,
         EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period,
-        expiry_refund_percent"#,
+        expiry_refund_percent,
+        requires_activation
+        "#,
         body.label, body.schedule as Vec<String>, body.asset_type_id, body.slot_price, body.activation_grace_period.map(PgInterval::try_from)
-          .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?, body.expiry_refund_percent, id
+          .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?, body.expiry_refund_percent, body.requires_activation, id
     )
     .fetch_one(&mut *conn)
     .await?;

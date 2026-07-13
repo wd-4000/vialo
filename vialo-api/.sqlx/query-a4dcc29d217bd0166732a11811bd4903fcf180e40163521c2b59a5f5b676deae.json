@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT ba.id,\n    ba.asset_id,\n    ba.account_id,\n    ba.transaction_id,\n    cl.from_account,\n    cl.credits,\n    ba.cancelled_at,\n    ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n    ba.activated,\n    cs.expiry_refund_percent as \"expiry_refund_percent!\",\n    ap.full_name,\n    ap.email as \"email!\",\n    get_i18n_string(bast.name_i18n, $1) as \"asset_name?\"\n    FROM bookable_appointments ba\n    CROSS JOIN LATERAL (\n        SELECT DISTINCT ON (bsa.asset_id)\n            bsa.asset_id,\n            bs.activation_grace_period,\n            bs.expiry_refund_percent\n        FROM bookable_schema_assignments bsa\n        JOIN bookable_schemas bs ON bs.id = bsa.schema_id\n        WHERE bsa.asset_id = ba.asset_id\n          AND bsa.begins <= lower(ba.during)\n        ORDER BY bsa.asset_id, bsa.begins DESC\n    ) cs\n    JOIN credit_ledger cl ON ba.transaction_id = cl.id\n    JOIN accounts_people ap ON ap.id = ba.account_id\n    JOIN bookable_assets bast ON bast.id = ba.asset_id\n    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.expiry_refund_percent IS NOT NULL AND lower(ba.during) + cs.activation_grace_period <= NOW()",
+  "query": "SELECT ba.id,\n    ba.asset_id,\n    ba.account_id,\n    ba.transaction_id,\n    cl.from_account,\n    cl.credits,\n    ba.cancelled_at,\n    ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n    ba.activated,\n    cs.expiry_refund_percent as \"expiry_refund_percent!\",\n    ap.full_name,\n    ap.email as \"email!\",\n    get_i18n_string(bast.name_i18n, $1) as \"asset_name?\"\n    FROM bookable_appointments ba\n    CROSS JOIN LATERAL (\n        SELECT DISTINCT ON (bsa.asset_id)\n            bsa.asset_id,\n            bs.activation_grace_period,\n            bs.expiry_refund_percent,\n            bs.requires_activation\n        FROM bookable_schema_assignments bsa\n        JOIN bookable_schemas bs ON bs.id = bsa.schema_id\n        WHERE bsa.asset_id = ba.asset_id\n          AND bsa.begins <= lower(ba.during)\n        ORDER BY bsa.asset_id, bsa.begins DESC\n    ) cs\n    JOIN credit_ledger cl ON ba.transaction_id = cl.id\n    JOIN accounts_people ap ON ap.id = ba.account_id\n    JOIN bookable_assets bast ON bast.id = ba.asset_id\n    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.requires_activation AND cs.expiry_refund_percent IS NOT NULL AND lower(ba.during) + cs.activation_grace_period <= NOW()",
   "describe": {
     "columns": [
       {
@@ -179,5 +179,5 @@
       null
     ]
   },
-  "hash": "67215794352c4fab52aeaa09f2b5fa63376972c34e58207ff1f2f98f1caf7eb6"
+  "hash": "a4dcc29d217bd0166732a11811bd4903fcf180e40163521c2b59a5f5b676deae"
 }
