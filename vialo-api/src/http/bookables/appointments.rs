@@ -1,15 +1,13 @@
 use super::models::{BookableAssetStatus, BookableStatus};
 use super::permissions::{BookablePerm, require_asset_type_perm};
+use crate::bookables::CancellationReason;
 use crate::helpers::PgDateTime;
+use crate::http::history::models::Subsystem;
 use crate::http::util::models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery};
 use crate::http::util::{
     JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
 };
 use crate::permissions::{AppRole, check_app_role};
-// use crate::ketoapi::subject::Ref;
-// use crate::ketoapi::{self, CheckRequest, Subject};
-use crate::bookables::CancellationReason;
-use crate::http::history::models::Subsystem;
 use crate::{AppState, health};
 use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
@@ -127,7 +125,7 @@ pub async fn delete_appointment(
     };
 
     // Open transaction and re-read with FOR UPDATE so the read, state check,
-    // update, and refund are all atomic — prevents double-refund races.
+    // update, and refund are all atomic to prevent double-refund races.
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
@@ -189,7 +187,7 @@ pub async fn delete_appointment(
         let actual_credits = appointment.credits.unwrap_or(0);
         if actual_credits != expected {
             tracing::error!(
-                "refund_expected_credits: expected {} got {}",
+                "expected_credits: expected {} got {}",
                 expected,
                 actual_credits
             );
@@ -197,7 +195,7 @@ pub async fn delete_appointment(
             health::add_health_event(
                 &data.db,
                 Subsystem::App,
-                "refund_expected_credits",
+                "expected_credits",
                 Some(serde_json::json!({
                     "expected": expected,
                     "actual": actual_credits,

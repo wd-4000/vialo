@@ -32,15 +32,22 @@ CREATE TABLE bookable_assets (
   connector_output_id int
 );
 
+-- activation modes:
+-- requires_activation=false activation_grace_period=NULL expiry_refund_percent=NULL - auto-activate
+-- requires_activation=true activation_grace_period=NULL expiry_refund_percent=NULL - manual activation, no expiry
+-- requires_activation=true activation_grace_period=(some amount of time) expiry_refund_percent=(some number) - manual activation, with expiry
 CREATE TABLE bookable_schemas (
   id int PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   label text,
   schedule time[] NOT NULL,
   asset_type_id int NOT NULL REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
   slot_price int NOT NULL,
+  requires_activation boolean NOT NULL DEFAULT false,
   activation_grace_period interval,
   expiry_refund_percent smallint CHECK (expiry_refund_percent BETWEEN 0 AND 100),
-  CHECK ((activation_grace_period IS NULL) = (expiry_refund_percent IS NULL)) -- one doesn't make sense without the other
+  CHECK ((activation_grace_period IS NULL) = (expiry_refund_percent IS NULL) -- one doesn't make sense without the other
+           AND NOT (NOT requires_activation AND expiry_refund_percent IS NOT NULL)
+  )
 );
 
 CREATE TABLE bookable_schema_cancellation_policy (
@@ -51,7 +58,7 @@ CREATE TABLE bookable_schema_cancellation_policy (
 );
 
 CREATE TABLE bookable_schema_assignments (
-  begins timestamptz NOT NULL,
+  begins date NOT NULL,
   asset_id int NOT NULL REFERENCES bookable_assets (id) ON DELETE CASCADE,
   schema_id int NOT NULL REFERENCES bookable_schemas (id) ON DELETE CASCADE,
   PRIMARY KEY (begins, asset_id)
@@ -135,7 +142,7 @@ FROM
       CASE
         WHEN apa.maintenance THEN 'maintenance'::bookable_status_type
         WHEN apa.activated IS NOT NULL
-        OR bs.activation_grace_period IS NULL THEN 'active'::bookable_status_type
+        OR NOT bs.requires_activation THEN 'active'::bookable_status_type
         ELSE 'waiting'::bookable_status_type
       END AS status
     FROM

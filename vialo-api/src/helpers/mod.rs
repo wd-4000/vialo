@@ -4,8 +4,8 @@ use sqlx::{PgPool, Postgres, pool::PoolConnection};
 use std::path::PathBuf;
 use utoipa::ToSchema;
 
-pub mod encryption;
 pub mod bounded_string;
+pub mod encryption;
 mod i18n;
 mod patch_option;
 pub mod people;

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index, ((j_v->>'expected_start')::date + bs.schedule[(j_v->>'slot_index')::int+1])::timestamptz as begins, ((j_v->>'expected_start')::date + bs.schedule[(j_v->>'slot_index')::int+2])::timestamptz as ends, bs.slot_price as price, (j_v->>'asset_id')::int as asset_id\n        FROM bookable_schema_assignments bsa\n        JOIN jsonb_array_elements($1) WITH ORDINALITY AS j(j_v, j_i) ON bsa.begins <= (j_v->>'expected_start')::date AND bsa.asset_id = (j_v->>'asset_id')::int\n        JOIN bookable_schemas bs ON bsa.schema_id = bs.id\n        ORDER BY j_i, bsa.begins DESC;",
+  "query": "SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index, (((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date + bs.schedule[(j_v->>'slot_index')::int+1])::timestamptz as begins, (((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date + bs.schedule[(j_v->>'slot_index')::int+2])::timestamptz as ends, bs.slot_price as price, (j_v->>'asset_id')::int as asset_id\n        FROM bookable_schema_assignments bsa\n        JOIN jsonb_array_elements($1) WITH ORDINALITY AS j(j_v, j_i) ON bsa.begins <= ((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date AND bsa.asset_id = (j_v->>'asset_id')::int\n        JOIN bookable_schemas bs ON bsa.schema_id = bs.id\n        ORDER BY j_i, bsa.begins DESC;",
   "describe": {
     "columns": [
       {
@@ -64,5 +64,5 @@
       null
     ]
   },
-  "hash": "cb2fb22355634dd68fc9bc54b1118918c4f8dda0320d4a96f79e8bb576639031"
+  "hash": "5c55a6cb8d69cfd28cfb635ae6fa9cc6b61d76fb9c8531dc14fcd9ab93bdc607"
 }

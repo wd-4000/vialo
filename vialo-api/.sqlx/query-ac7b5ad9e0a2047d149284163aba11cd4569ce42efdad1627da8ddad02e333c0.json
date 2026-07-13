@@ -1,12 +1,12 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            begins,\n            schema_id\n        FROM\n            bookable_schema_assignments\n        WHERE asset_id = $1\n            LIMIT $2 OFFSET $3",
+  "query": "SELECT begins, schema_id, label\n        FROM bookable_schema_assignments bsa\n        JOIN bookable_schemas bs ON bs.id = bsa.schema_id\n        WHERE asset_id = $1\n        ORDER BY begins\n        LIMIT $2 OFFSET $3 ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
         "name": "begins",
-        "type_info": "Timestamptz",
+        "type_info": "Date",
         "origin": {
           "Table": {
             "table": "bookable_schema_assignments",
@@ -24,6 +24,17 @@
             "name": "schema_id"
           }
         }
+      },
+      {
+        "ordinal": 2,
+        "name": "label",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bookable_schemas",
+            "name": "label"
+          }
+        }
       }
     ],
     "parameters": {
@@ -35,8 +46,9 @@
     },
     "nullable": [
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "1df3b647fe0ec73a1c2a577d85802a65be189c3af353d6f5c766d4b579dfc75d"
+  "hash": "ac7b5ad9e0a2047d149284163aba11cd4569ce42efdad1627da8ddad02e333c0"
 }

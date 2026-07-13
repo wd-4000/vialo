@@ -50,7 +50,7 @@ pub async fn taken_slots(
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, ToSchema)]
 pub struct Transition {
     pub schema_id: i32,
-    pub begins: DateTime<Utc>,
+    pub begins: NaiveDate,
     pub schedule: Vec<NaiveTime>,
     pub slot_price: i32,
 }
@@ -115,9 +115,10 @@ pub async fn slot_schemas(
 
     let page_query = query_as!(
         SchemaPages,
-        r#"SELECT coalesce(transitions, ARRAY[]::jsonb[]) as "transitions!: Vec<Transition>", coalesce(ARRAY_AGG(asset_id), ARRAY[]::integer[]) as "assets!" FROM (SELECT ARRAY_AGG(jsonb_build_object('schema_id', bsa.schema_id, 'begins', bsa.begins, 'schedule', bs.schedule, 'slot_price', slot_price) ORDER BY bsa.begins) as transitions, bsa.asset_id FROM bookable_schema_assignments bsa JOIN bookable_schemas bs ON bs.id = bsa.schema_id WHERE bsa.asset_id = ANY($1) AND bsa.begins <= $2::date group by bsa.asset_id) group by transitions;"#,
+        r#"SELECT coalesce(transitions, ARRAY[]::jsonb[]) as "transitions!: Vec<Transition>", coalesce(ARRAY_AGG(asset_id), ARRAY[]::integer[]) as "assets!" FROM (SELECT ARRAY_AGG(jsonb_build_object('schema_id', bsa.schema_id, 'begins', bsa.begins, 'schedule', bs.schedule, 'slot_price', slot_price) ORDER BY bsa.begins) as transitions, bsa.asset_id FROM bookable_schema_assignments bsa JOIN bookable_schemas bs ON bs.id = bsa.schema_id WHERE bsa.asset_id = ANY($1) AND bsa.begins <= $2 AND (bsa.begins > $3 OR bsa.begins = (SELECT MAX(begins) FROM bookable_schema_assignments WHERE asset_id = bsa.asset_id AND begins <= $3)) group by bsa.asset_id) group by transitions;"#,
         &asset_ids,
-        opts.to
+        opts.to,
+        opts.from
     )
     .fetch_all(&data.db);
 
@@ -181,9 +182,9 @@ pub async fn book_slots(
     }
 
     // Materialize the slots (Give them concrete start and end points)
-    let materialized_slots = query_as!(MaterializedSlots, r#"SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index, ((j_v->>'expected_start')::date + bs.schedule[(j_v->>'slot_index')::int+1])::timestamptz as begins, ((j_v->>'expected_start')::date + bs.schedule[(j_v->>'slot_index')::int+2])::timestamptz as ends, bs.slot_price as price, (j_v->>'asset_id')::int as asset_id
+    let materialized_slots = query_as!(MaterializedSlots, r#"SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index, (((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date + bs.schedule[(j_v->>'slot_index')::int+1])::timestamptz as begins, (((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date + bs.schedule[(j_v->>'slot_index')::int+2])::timestamptz as ends, bs.slot_price as price, (j_v->>'asset_id')::int as asset_id
         FROM bookable_schema_assignments bsa
-        JOIN jsonb_array_elements($1) WITH ORDINALITY AS j(j_v, j_i) ON bsa.begins <= (j_v->>'expected_start')::date AND bsa.asset_id = (j_v->>'asset_id')::int
+        JOIN jsonb_array_elements($1) WITH ORDINALITY AS j(j_v, j_i) ON bsa.begins <= ((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date AND bsa.asset_id = (j_v->>'asset_id')::int
         JOIN bookable_schemas bs ON bsa.schema_id = bs.id
         ORDER BY j_i, bsa.begins DESC;"#, json!(body.slots)).fetch_all(&data.db)
         .await?;
@@ -202,9 +203,14 @@ pub async fn book_slots(
         )?;
         if let (Some(real_start), Some(real_end)) = (slot.begins, slot.ends) {
             if let Some(expected_end) = expected_slot.expected_end {
-                if expected_slot.expected_start.to_utc() != real_start
-                    || expected_end.to_utc() != real_end
-                {
+                if expected_slot.expected_start != real_start || expected_end != real_end {
+                    tracing::debug!(
+                        "expected_start: {:?}, real_start: {:?}, expected_end: {:?}, real_end: {:?}",
+                        expected_slot.expected_start,
+                        real_start,
+                        expected_end,
+                        real_end
+                    );
                     return Err(VialoError::AppError(
                         StatusCode::BAD_REQUEST,
                         "slot_expectation".to_string(),
