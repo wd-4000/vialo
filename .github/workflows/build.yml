@@ -5,10 +5,14 @@ on:
     branches: ["main"]
     paths:
       - "vialo-api/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
   pull_request:
     branches: ["main"]
     paths:
       - "vialo-api/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}/vialo-api
@@ -68,7 +72,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
-          context: ./vialo-api
+          context: . # (rust workspace root)
           file: ./vialo-api/Dockerfile.ci
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -102,7 +106,7 @@ jobs:
         if: matrix.platform == 'linux/amd64'
         uses: docker/build-push-action@v6
         with:
-          context: ./vialo-api
+          context: .
           file: ./vialo-api/Dockerfile.ci
           target: openapi
           outputs: type=local,dest=./openapi-out

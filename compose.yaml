@@ -43,8 +43,9 @@ services:
   vialo-api:
     stop_grace_period: 30s
     build:
-      context: ./vialo-api
-      dockerfile: Dockerfile
+      # Workspace root, so the build sees the workspace Cargo.lock
+      context: .
+      dockerfile: vialo-api/Dockerfile
       args:
         PROFILE: dev # set to "release" for production
     restart: unless-stopped

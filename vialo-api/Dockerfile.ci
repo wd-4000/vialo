@@ -7,7 +7,7 @@ FROM rust:1.97-alpine AS chef
 
 RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static cargo-chef
 
-WORKDIR /usr/src/vialo-api
+WORKDIR /usr/src/vialo
 
 # I Do Not Care
 ENV RUSTFLAGS=-Awarnings
@@ -21,19 +21,19 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS builder
 ARG PROFILE=release
 
-# Build dependencies only. This layer stays cached until Cargo.toml/Cargo.lock
-# change. Env and flags must match the real build below, or cargo rebuilds
-# everything anyway.
-COPY --from=planner /usr/src/vialo-api/recipe.json recipe.json
-RUN cargo chef cook --profile $PROFILE --features migrate --recipe-path recipe.json
+# Build only vialo-api's dependencies. This layer stays cached until the
+# manifests/lockfile change. Env and flags must match the real build below,
+# or cargo rebuilds everything anyway.
+COPY --from=planner /usr/src/vialo/recipe.json recipe.json
+RUN cargo chef cook --profile $PROFILE --features migrate -p vialo-api --recipe-path recipe.json
 
 COPY . .
 
-# Build it for real. Profile/feature flags must match the cook step above or
-# cargo recompiles all the deps anyway. --bin keeps openapi-spec out of this
-# stage so image builds (notably the arm64 leg) don't pay for compiling it.
+# Build it for real. --bin keeps openapi-spec out of this stage so image
+# builds (notably the arm64 leg) don't pay for compiling it. --locked turns
+# lockfile drift into a hard error instead of a silent re-resolve.
 RUN TARGET_DIR=$(echo $PROFILE | sed 's/^dev$/debug/') && \
-    SQLX_OFFLINE=true cargo build --profile $PROFILE --features migrate --bin vialo-api && \
+    SQLX_OFFLINE=true cargo build --locked --profile $PROFILE --features migrate -p vialo-api --bin vialo-api && \
     cp target/$TARGET_DIR/vialo-api /vialo-api
 # We use cached SQLX queries (SQLX_OFFLINE=true).
 # This means you need to run `cargo sqlx prepare` to update the cache!
@@ -43,7 +43,7 @@ RUN TARGET_DIR=$(echo $PROFILE | sed 's/^dev$/debug/') && \
 # spec for the docs (cheap: everything but the small bin is already compiled).
 FROM builder AS spec-builder
 RUN TARGET_DIR=$(echo $PROFILE | sed 's/^dev$/debug/') && \
-    SQLX_OFFLINE=true cargo build --profile $PROFILE --features migrate --bin openapi-spec && \
+    SQLX_OFFLINE=true cargo build --locked --profile $PROFILE --features migrate -p vialo-api --bin openapi-spec && \
     target/$TARGET_DIR/openapi-spec /openapi.json
 
 FROM scratch AS openapi
