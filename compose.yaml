@@ -1,31 +1,79 @@
 secrets:
   postgres_root_username:
-    file: ./private/postgres_root_username
+#   file: ../private/postgres_root_username
+    environment: POSTGRES_ROOT_USERNAME
   postgres_root_password:
-    file: ./private/postgres_root_password
+#    file: ../private/postgres_root_password
+    environment: POSTGRES_ROOT_PASSWORD
 services:
+  # Mock SMTP server for development
+  mailhog:
+    image: mailhog/mailhog
+    restart: unless-stopped
+    environment:
+      MH_MAILDIR_PATH: /data
+      MH_STORAGE: maildir
+    volumes:
+      - ../data/mailhog:/data:rw
+    ports:
+      - "1025:1025" #127.0.0.1:1025:1025  # SMTP
+      - "127.0.0.1:8025:8025" # Web UI
+  # Frontend services don't depend on vialo-api so that we at least have SOMETHING there if the API is down.
+  user-ui:
+    stop_grace_period: 30s
+    build:
+      context: .
+      dockerfile: user-ui/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    env_file:
+      - "nuxt.env"
+  admin-ui:
+    stop_grace_period: 30s
+    build:
+      context: .
+      dockerfile: admin-ui/Dockerfile
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    env_file:
+      - "nuxt.env"
+
   vialo-api:
     stop_grace_period: 30s
-    build: ./vialo-api
-    restart: always
+    build:
+      context: ./vialo-api
+      dockerfile: Dockerfile
+      args:
+        PROFILE: dev # set to "release" for production
+    restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
-      - ./vialo.toml:/app/vialo.toml
+      - ../vialo.toml:/app/vialo.toml
     depends_on:
       postgres:
         condition: service_healthy
     env_file:
-      - "./.env"
+      - "../.env"
+    environment:
+      # Override .env host
+      DATABASE_URL: postgresql://${POSTGRES_ROOT_USERNAME}:${POSTGRES_ROOT_PASSWORD}@postgres:5432/vialo?schema=public
+      EMAIL_URL: smtp://emailuser:emailpass@mailhog:1025/
   postgres:
     build: ./postgres
     volumes:
-      - "./data/postgres:/var/lib/postgresql"
+      - "../data/postgres:/var/lib/postgresql"
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready"]
-      interval: 10s
+      test:
+        [
+          "CMD-SHELL",
+          'pg_isready -U "$(cat /run/secrets/postgres_root_username)" -d vialo',
+        ]
+      interval: 3s
       timeout: 5s
       retries: 5
     environment:
@@ -38,3 +86,5 @@ services:
     secrets:
       - postgres_root_password
       - postgres_root_username
+  #     - postgres_db_password
+  #     - postgres_db_username

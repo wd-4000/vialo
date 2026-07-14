@@ -1,6 +1,6 @@
 [Unit]
 Description=Vialo API sockets
-Documentation=https://github.com/oih/oihd
+Documentation=https://github.com/wd-4000/vialo
 
 [Socket]
 ListenStream=/run/vialo-api/public.sock

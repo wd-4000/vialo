@@ -9,9 +9,10 @@ services:
       - cargo-cache:/root/.cargo/registry
       - cargo-target:/workspace/vialo/target
     environment:
-      - DATABASE_URL=postgresql://fuck:motherfucker@postgres:5432/vialo?schema=public
+      # Override .env host
+      DATABASE_URL: postgresql://${POSTGRES_ROOT_USERNAME}:${POSTGRES_ROOT_PASSWORD}@postgres:5432/vialo?schema=public
     networks:
-      - oihd_default
+      - vialo_default
 
   # Debian booting systemd as PID 1, for validating and smoke-running the unit:
   #   docker compose exec systemd systemd-analyze verify ...   (static checks)
@@ -35,13 +36,13 @@ services:
       - cargo-target:/workspace/vialo/target:ro
       - /sys/fs/cgroup:/sys/fs/cgroup
     networks:
-      - oihd_default
+      - vialo_default
 
 volumes:
   cargo-cache:
   cargo-target:
 
 networks:
-  oihd_default:
+  vialo_default:
     external: true
-    name: oihd_default
+    name: vialo_default

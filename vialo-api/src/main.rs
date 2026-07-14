@@ -108,11 +108,7 @@ async fn bind_listener(addr: &str) -> Listener {
     }
 }
 
-async fn serve_api(
-    listener: Listener,
-    app: axum::Router,
-    mut shutdown_rx: watch::Receiver<bool>,
-) {
+async fn serve_api(listener: Listener, app: axum::Router, mut shutdown_rx: watch::Receiver<bool>) {
     match listener {
         Listener::Tcp(l) => {
             axum::serve(l, app.into_make_service_with_connect_info::<SocketAddr>())
@@ -168,7 +164,7 @@ async fn main() {
     // Load encryption key
     let encryption_key: chacha20poly1305::Key = if let Ok(s) = std::env::var("ENCRYPTION_KEY") {
         let bytes: [u8; 32] = hex::decode(s.trim())
-            .expect("ENCRYPTION_KEY: invalid hex")
+            .unwrap_or_else(|e| panic!("ENCRYPTION_KEY: invalid hex: {e}"))
             .try_into()
             .expect("ENCRYPTION_KEY: must be 32 bytes (64 hex chars)");
         chacha20poly1305::Key::from(bytes)
@@ -178,7 +174,7 @@ async fn main() {
                 .expect("Error reading encryption key file")
                 .trim(),
         )
-        .expect("ENCRYPTION_KEY_PATH: invalid hex")
+        .unwrap_or_else(|e| panic!("ENCRYPTION_KEY_PATH: invalid hex: {e}"))
         .try_into()
         .expect("ENCRYPTION_KEY_PATH: the file must be 32 bytes (64 hex chars)");
         chacha20poly1305::Key::from(bytes)
@@ -235,6 +231,19 @@ async fn main() {
             std::process::exit(1);
         }
     };
+
+    #[cfg(feature = "migrate")]
+    {
+        match migrate!().run(&pool).await {
+            Ok(()) => {
+                info!("Applied migrations.");
+            }
+            Err(err) => {
+                error!("Failed to apply migrations: {:?}", err);
+                std::process::exit(1);
+            }
+        }
+    }
 
     let kratos_config = if let AuthConfig::Kratos {
         frontend_url,
@@ -443,19 +452,6 @@ async fn main() {
         }
     });
 
-    #[cfg(feature = "migrate")]
-    {
-        match migrate!().run(&pool).await {
-            Ok(()) => {
-                info!("Applied migrations.");
-            }
-            Err(err) => {
-                error!("Failed to apply migrations: {:?}", err);
-                std::process::exit(1);
-            }
-        }
-    }
-
     let (public_listener, hooks_listener) = {
         #[cfg(unix)]
         if let Some((p, h)) = try_socket_activation() {
@@ -553,27 +549,26 @@ async fn main() {
     let _ = tokio::join!(
         serve_api(
             public_listener,
-            app.merge(ws)
-                .layer(
-                    CorsLayer::new()
-                        .allow_origin(
-                            asp.config
-                                .public
-                                .cors_origins
-                                .iter()
-                                .map(|v| v.parse::<HeaderValue>().unwrap())
-                                .collect::<Vec<_>>(),
-                        )
-                        .allow_methods([
-                            Method::GET,
-                            Method::POST,
-                            Method::PATCH,
-                            Method::DELETE,
-                            Method::PUT,
-                        ])
-                        .allow_credentials(true)
-                        .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
-                ),
+            app.merge(ws).layer(
+                CorsLayer::new()
+                    .allow_origin(
+                        asp.config
+                            .public
+                            .cors_origins
+                            .iter()
+                            .map(|v| v.parse::<HeaderValue>().unwrap())
+                            .collect::<Vec<_>>(),
+                    )
+                    .allow_methods([
+                        Method::GET,
+                        Method::POST,
+                        Method::PATCH,
+                        Method::DELETE,
+                        Method::PUT,
+                    ])
+                    .allow_credentials(true)
+                    .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
+            ),
             public_api_shutdown,
         ),
         serve_api(hooks_listener, hook_app, hook_api_shutdown),

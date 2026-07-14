@@ -1,0 +1,26 @@
+[public]
+cors_origins = ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"]
+listen = "0.0.0.0:8000"
+
+[hooks]
+listen = "127.0.0.1:8011"
+
+[email]
+domain = "xyz.example.com"
+
+[email.url]
+unsubscribe = "https://xyz.example.com/unsub/"
+post = "https://xyz.example.com/post/"
+board = "https://xyz.example.com/board/"
+preferences = "https://xyz.example.com/prefs/"
+
+[auth]
+type = "mock"
+uuid = "1d63a916-36f9-4a14-9f9f-730b1fd58c12"
+email = "test@example.com"
+
+[org]
+name = "XYZ e.V."
+domain = "xyz.ac"
+short_name = "XYZ"
+impressum = "Straße 111, 12345 Hamburg – https://xyz.example.com"

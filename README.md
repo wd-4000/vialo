@@ -36,13 +36,10 @@ and how to run the app locally.
 ## Repository structure
 
 ```
-oihd/
-├── compose.yaml          # Top-level service orchestration
-├── vialo/
-│   ├── vialo-api/        # Rust backend (generic)
-│   ├── base-ui/          # Shared UI component library
-│   └── postgres/         # Custom PostgreSQL image
-└── proxy/                # nginx reverse proxy
+vialo/
+├── compose.yaml      # Docker
+├── vialo-api/        # Rust backend (generic)
+└── postgres/         # Custom PostgreSQL image
 ```
 
 ## API

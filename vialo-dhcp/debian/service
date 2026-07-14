@@ -47,7 +47,6 @@ MemoryDenyWriteExecute=yes
 KeyringMode=private
 UMask=0077
 
-# --- Syscall filter ---
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 SystemCallArchitectures=native
