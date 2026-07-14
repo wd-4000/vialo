@@ -5,8 +5,7 @@
 # use the plain Dockerfile — keep the final stage of both files in sync!
 FROM rust:1.95-alpine AS chef
 
-RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static
-RUN cargo install cargo-chef --locked
+RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static cargo-chef
 
 WORKDIR /usr/src/vialo-api
 
