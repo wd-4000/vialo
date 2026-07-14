@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
-# Make note of the debian version used by Rust!
+# This is the local/compose Dockerfile: cache mounts keep target/ between
+# builds for fast incremental compiles. CI publishes from Dockerfile.ci.
 FROM rust:1.95-alpine AS builder
 ARG PROFILE=release
 
