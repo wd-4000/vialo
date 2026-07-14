@@ -11,47 +11,165 @@ on:
       - "vialo-api/**"
 
 env:
-  CARGO_TERM_COLOR: always
+  IMAGE: ghcr.io/${{ github.repository }}/vialo-api
 
 jobs:
   build:
     permissions:
       contents: read
+      packages: write
 
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Pull requests only build amd64 for validation; arm64 is only built
+        # on pushes to main, where the image actually gets published.
+        # (The matrix context isn't available in job-level `if`, hence fromJSON.)
+        include: >-
+          ${{ github.event_name == 'push'
+              && fromJSON('[
+                {"platform": "linux/amd64", "runner": "ubuntu-24.04"},
+                {"platform": "linux/arm64", "runner": "ubuntu-24.04-arm"}
+              ]')
+              || fromJSON('[
+                {"platform": "linux/amd64", "runner": "ubuntu-24.04"}
+              ]') }}
 
-    # Applies to all 'run' steps in this job
-    defaults:
-      run:
-        working-directory: ./vialo-api
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v6
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+      # linux/amd64 -> linux-amd64, for use in cache scopes and artifact names
+      - name: Prepare platform slug
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_SLUG=${platform//\//-}" >> $GITHUB_ENV
+
+      # Buildx is required for layer caching and digest pushes
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
         with:
-          workspaces: "./vialo-api"
-      # - name: Build
-      #   run: cargo build --verbose
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      # - name: Run tests
-      #   run: cargo test --verbose
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
 
-      - name: Generate OpenAPI spec
-        run: cargo run --bin openapi-spec -- openapi.json
+      - name: Build image (push by digest on main)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./vialo-api
+          file: ./vialo-api/Dockerfile.ci
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # The workflow only triggers on push for the main branch.
+          # Tags are applied by the publish job below.
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'push' }}
+          # PROFILE build arg defaults to "release" in the Dockerfile
+          cache-from: type=gha,scope=${{ env.PLATFORM_SLUG }}
+          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_SLUG }}
+
+      - name: Export digest
+        if: github.event_name == 'push'
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ env.PLATFORM_SLUG }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+      # Every layer is hot in the buildx cache from the build step, so this
+      # just copies openapi.json out of the builder stage. The spec is
+      # arch-independent, so one leg suffices.
+      - name: Extract OpenAPI spec
+        if: matrix.platform == 'linux/amd64'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./vialo-api
+          file: ./vialo-api/Dockerfile.ci
+          target: openapi
+          outputs: type=local,dest=./openapi-out
+          cache-from: type=gha,scope=${{ env.PLATFORM_SLUG }}
 
       - name: Upload OpenAPI Artifact
+        if: matrix.platform == 'linux/amd64'
         uses: actions/upload-artifact@v7
         with:
           name: openapi-spec
-          # Since this is an action, it ignores the default working directory above.
-          # You must include the subfolder path explicitly.
-          path: ./vialo-api/openapi.json
+          path: ./openapi-out/openapi.json
           if-no-files-found: error
+
+  # Merges the per-arch digests into a single multi-arch manifest and tags it
+  publish:
+    needs: build
+
+    if: github.event_name == 'push'
+
+    permissions:
+      contents: read
+      packages: write
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.IMAGE }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: docker buildx imagetools inspect ${{ env.IMAGE }}:${{ steps.meta.outputs.version }}
+
   deploy-docs:
     # This ensures the deploy job only runs after the build job is successful
     needs: build
+
+    # Only deploy Pages from pushes to main, not from pull requests
+    if: github.event_name == 'push'
 
     # Required permissions for GitHub Pages deployments
     permissions:

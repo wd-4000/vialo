@@ -1,0 +1,53 @@
+# syntax=docker/dockerfile:1
+# CI variant of the Dockerfile: uses cargo-chef so compiled dependencies live
+# in an image layer that buildx can export to the GitHub Actions cache
+# (cache mounts don't survive between CI runners). For local compose builds
+# use the plain Dockerfile — keep the final stage of both files in sync!
+FROM rust:1.95-alpine AS chef
+
+RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static
+RUN cargo install cargo-chef --locked
+
+WORKDIR /usr/src/vialo-api
+
+# I Do Not Care
+ENV RUSTFLAGS=-Awarnings
+ENV OPENSSL_DIR=/usr
+ENV OPENSSL_STATIC=1
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+ARG PROFILE=release
+
+# Build dependencies only. This layer stays cached until Cargo.toml/Cargo.lock
+# change. Env and flags must match the real build below, or cargo rebuilds
+# everything anyway.
+COPY --from=planner /usr/src/vialo-api/recipe.json recipe.json
+RUN cargo chef cook --profile $PROFILE --features migrate --recipe-path recipe.json
+
+COPY . .
+
+# Build it for real. Also emit the OpenAPI spec while the compiled deps are
+# at hand. CI extracts it via the `openapi` stage below. Keep the feature
+# flags identical or cargo recompiles everything for the spec run.
+RUN TARGET_DIR=$(echo $PROFILE | sed 's/^dev$/debug/') && \
+    SQLX_OFFLINE=true cargo build --profile $PROFILE --features migrate && \
+    cp target/$TARGET_DIR/vialo-api /vialo-api && \
+    SQLX_OFFLINE=true cargo run --profile $PROFILE --features migrate --bin openapi-spec -- /openapi.json
+# We use cached SQLX queries (SQLX_OFFLINE=true).
+# This means you need to run `cargo sqlx prepare` to update the cache!
+
+# Build with --target openapi to get just the spec (CI does this to publish
+# the docs; it's free since every layer is shared with the image build).
+FROM scratch AS openapi
+COPY --from=builder /openapi.json /
+
+FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /vialo-api /usr/local/bin/vialo-api
+WORKDIR /app
+
+ENTRYPOINT ["vialo-api"]
