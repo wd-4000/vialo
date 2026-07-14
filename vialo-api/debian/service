@@ -1,6 +1,6 @@
 [Unit]
 Description=API service for Vialo
-Documentation=https://github.com/oih/oihd
+Documentation=https://github.com/wd-4000/vialo
 After=network-online.target postgresql.service
 Wants=network-online.target
 
