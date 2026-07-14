@@ -1,0 +1,17 @@
+# Applies to builds of vialo-api/Dockerfile.ci (context = workspace root).
+# Allowlist: only the workspace manifests and member crates are build inputs.
+*
+!Cargo.toml
+!Cargo.lock
+!vialo-api
+!vialo-dhcp
+# Non-build inputs inside the allowed directories
+vialo-api/Cargo.lock
+vialo-api/Dockerfile*
+vialo-api/debian
+vialo-dhcp/Dockerfile*
+vialo-dhcp/debian
+vialo-dhcp/compose.yaml
+vialo-dhcp/test
+**/target
+**/.DS_Store

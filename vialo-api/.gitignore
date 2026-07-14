@@ -18,3 +18,8 @@ target/
 
 sampledata/
 openapi.json
+
+# The workspace root Cargo.lock is the only real one; a nested lockfile here
+# would go stale (cargo ignores it inside the workspace) and break --locked
+# container builds, which use the root lock.
+/Cargo.lock

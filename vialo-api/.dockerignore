@@ -1,8 +1,0 @@
-target/
-.git/
-.env
-.env.*
-debian/
-# Not build inputs — keep edits from invalidating the COPY layers
-Dockerfile*
-.DS_Store
