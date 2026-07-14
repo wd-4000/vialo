@@ -29,20 +29,25 @@ RUN cargo chef cook --profile $PROFILE --features migrate --recipe-path recipe.j
 
 COPY . .
 
-# Build it for real. Also emit the OpenAPI spec while the compiled deps are
-# at hand. CI extracts it via the `openapi` stage below. Keep the feature
-# flags identical or cargo recompiles everything for the spec run.
+# Build it for real. Profile/feature flags must match the cook step above or
+# cargo recompiles all the deps anyway. --bin keeps openapi-spec out of this
+# stage so image builds (notably the arm64 leg) don't pay for compiling it.
 RUN TARGET_DIR=$(echo $PROFILE | sed 's/^dev$/debug/') && \
-    SQLX_OFFLINE=true cargo build --profile $PROFILE --features migrate && \
-    cp target/$TARGET_DIR/vialo-api /vialo-api && \
-    SQLX_OFFLINE=true cargo run --profile $PROFILE --features migrate --bin openapi-spec -- /openapi.json
+    SQLX_OFFLINE=true cargo build --profile $PROFILE --features migrate --bin vialo-api && \
+    cp target/$TARGET_DIR/vialo-api /vialo-api
 # We use cached SQLX queries (SQLX_OFFLINE=true).
 # This means you need to run `cargo sqlx prepare` to update the cache!
 
-# Build with --target openapi to get just the spec (CI does this to publish
-# the docs; it's free since every layer is shared with the image build).
+# Spec generation. The runtime image below doesn't depend on these stages, so
+# plain image builds skip them; CI builds with --target openapi to get the
+# spec for the docs (cheap: everything but the small bin is already compiled).
+FROM builder AS spec-builder
+RUN TARGET_DIR=$(echo $PROFILE | sed 's/^dev$/debug/') && \
+    SQLX_OFFLINE=true cargo build --profile $PROFILE --features migrate --bin openapi-spec && \
+    target/$TARGET_DIR/openapi-spec /openapi.json
+
 FROM scratch AS openapi
-COPY --from=builder /openapi.json /
+COPY --from=spec-builder /openapi.json /
 
 FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/

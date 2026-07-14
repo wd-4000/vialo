@@ -95,9 +95,9 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      # Every layer is hot in the buildx cache from the build step, so this
-      # just copies openapi.json out of the builder stage. The spec is
-      # arch-independent, so one leg suffices.
+      # Builds the spec-builder stage on top of the (locally hot) builder
+      # layers and copies openapi.json out. The spec is arch-independent, so
+      # one leg suffices.
       - name: Extract OpenAPI spec
         if: matrix.platform == 'linux/amd64'
         uses: docker/build-push-action@v6
@@ -107,6 +107,8 @@ jobs:
           target: openapi
           outputs: type=local,dest=./openapi-out
           cache-from: type=gha,scope=${{ env.PLATFORM_SLUG }}
+          # Persist the spec-builder layers too, so unchanged re-runs are free
+          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_SLUG }}
 
       - name: Upload OpenAPI Artifact
         if: matrix.platform == 'linux/amd64'
