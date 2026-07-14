@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # This is the local/compose Dockerfile: cache mounts keep target/ between
 # builds for fast incremental compiles. CI publishes from Dockerfile.ci.
-FROM rust:1.95-alpine AS builder
+FROM rust:1.97-alpine AS builder
 ARG PROFILE=release
 
 RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static

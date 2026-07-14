@@ -3,7 +3,7 @@
 # in an image layer that buildx can export to the GitHub Actions cache
 # (cache mounts don't survive between CI runners). For local compose builds
 # use the plain Dockerfile — keep the final stage of both files in sync!
-FROM rust:1.95-alpine AS chef
+FROM rust:1.97-alpine AS chef
 
 RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static cargo-chef
 
