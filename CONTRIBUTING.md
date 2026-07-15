@@ -3,7 +3,7 @@
 Large language models can be useful for reading into a codebase, or even writing new code.
 However, let's at least not completely slop it up here.
 
-I'm not going to pretend to have some moral high ground –¹ I've used LLMs for working on many parts of this project. Ideally this software would have been completely boutique, but I wanted to make it the best I could in the already glacial timeframe. I also acknowledge that they are problematic.
+I'm not going to pretend to have some moral high ground –¹ I've used LLMs for working on many parts of this project. Ideally this software would have been completely boutique, but I wanted to make it the best I could in the already glacial time frame. I also acknowledge that they are problematic in many ways.
 
 **If you see something I committed that's giving *vibe coded,*** I repent for my sins. Please flag it to me and I'll try to make it less annoying.
 
@@ -16,84 +16,48 @@ I'm not going to pretend to have some moral high ground –¹ I've used LLMs for
 - Make sure your contribution is not **annoying**. I will clarify this if needed.
 
 
-## Setup
-
+## Local development setup
+### 1. API
 You need:
 
 - [Rust](https://rust-lang.org) (latest stable)
 - Node.js with Corepack enabled (`corepack enable`)
 - PostgreSQL 18+
 
-### 1. Database
+Copy `vialo.example.toml` to `vialo.toml`.
+Copy `.env.example` to `.env`.
 
-Set `DATABASE_URL` in a `.env` file at the repo root:
-
+Start the mock email server:
 ```sh
-DATABASE_URL=postgresql://user:pass@localhost:5432/vialo?schema=public
+docker compose up -d mailhog
 ```
 
-### 2. Migrations
+Start the database:
+```sh
+docker compose up -d postgres
+```
 
+Run the migrations:
 ```sh
 cd vialo/vialo-api
 cargo sqlx migrate run
 ```
 
-### 3. API
-
-Create a `vialo.toml` in the repo root. Use mock auth to skip Kratos:
-
-```toml
-[public]
-cors_origins = ["http://localhost:3000", "http://localhost:3001"]
-listen = "0.0.0.0:8000"
-
-[hooks]
-listen = "127.0.0.1:8011"
-
-[auth]
-type = "mock"
-uuid = "1d63a916-36f9-4a14-9f9f-730b1fd58c12"
-email = "test@example.com"
-
-[org]
-name = "Test Org"
-domain = "test.example.com"
-short_name = "TEST"
-impressum = "https://example.com"
-```
-
-Then:
-
+Start the API
 ```sh
 cargo run
 ```
 
 The first start auto‑creates the mock admin account.
+The API will run on [localhost:8000](http://localhost:8000) by default.
 
-### 4. Frontends
-
-```sh
-cd vialo
-yarn install
-cd admin-ui && yarn run dev &
-cd user-ui && yarn run dev &
-```
 
 ## Code conventions
-
 ### Rust
 - Use `sqlx::query!()` and `sqlx::query_scalar!()` macros. Never use runtime
-  `sqlx::query()`. Queries are verified against the database at compile time.
-- Preference for `const fn` and `let` bindings over mutable state where
-  reasonable.
+  `sqlx::query()` so that queries are verified at compile time
+- Run `cargo sqlx prepare` after changes and check `.sqlx` into Git
 
-### TypeScript / Vue
-- Use arrow function notation: `const f = () => {}`, not `function f() {}`.
-
-### General
-- Documentation updates in the same PR as the code change.
-- Run `cargo check` before pushing. The CI will catch it anyway.
 
 ## Where to find things
 

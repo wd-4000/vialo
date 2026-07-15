@@ -1,0 +1,29 @@
+# Development overlay. docker compose merges this automatically on plain
+# `docker compose up`. Explicit -f invocations (prod, demo) skip it, so the
+# demo overlay duplicates the port mappings it needs.
+services:
+  # Mock SMTP server for development
+  mailhog:
+    image: mailhog/mailhog
+    restart: unless-stopped
+    environment:
+      MH_MAILDIR_PATH: /data
+      MH_STORAGE: maildir
+    volumes:
+      - ./data/mailhog:/data:rw
+    ports:
+      - "1025:1025" #127.0.0.1:1025:1025  # SMTP
+      - "127.0.0.1:8025:8025" # Web UI
+  vialo-api:
+    build:
+      args:
+        PROFILE: dev
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      # Override .env host (which points at 127.0.0.1 for native development)
+      EMAIL_URL: smtp://emailuser:emailpass@mailhog:1025/
+  postgres:
+    ports:
+      # Published so native tooling (cargo sqlx, psql) can reach the database.
+      - "127.0.0.1:5432:5432"

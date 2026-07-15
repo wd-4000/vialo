@@ -1,6 +1,8 @@
 # Deployment
 
 This guide covers deploying vialo-api in production on a Linux server with systemd.
+Alternatively, there is a docker compose overlay (`compose.prod.yaml` in the repository root).
+You can run it with `docker compose -f compose.yaml -f compose.prod.yaml up -d`.
 
 ## PostgreSQL
 

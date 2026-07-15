@@ -1,0 +1,15 @@
+# Production overlay:
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d
+# or set COMPOSE_FILE=compose.yaml:compose.prod.yaml in the host's .env and run
+# plain `docker compose up -d`.
+#
+# Publishes no ports: the reverse proxy (proxy/compose.yaml) is the only entry
+# point. No mailhog either — EMAIL_URL in .env must point at a real SMTP server.
+services:
+  vialo-api:
+    build:
+      args:
+        PROFILE: release
+    restart: always
+  postgres:
+    restart: always
