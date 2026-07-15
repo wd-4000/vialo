@@ -1,0 +1,25 @@
+# Demo overlay: pulls the prebuilt vialo-api image from ghcr instead of
+# building the Rust workspace from source. The UIs and postgres still build
+# locally.
+#   docker compose -f compose.yaml -f compose.demo.yaml up
+#
+# pull_policy: the merged vialo-api service still carries
+# build: from the base file, and compose prefers building unless told to pull.
+services:
+  mailhog:
+    image: mailhog/mailhog
+    restart: unless-stopped
+    environment:
+      MH_MAILDIR_PATH: /data
+      MH_STORAGE: maildir
+    volumes:
+      - ./data/mailhog:/data:rw
+    ports:
+      - "127.0.0.1:8025:8025" # Web UI, to look at the emails the demo sends
+  vialo-api:
+    image: ghcr.io/wd-4000/vialo/vialo-api:latest
+    pull_policy: missing
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      EMAIL_URL: smtp://emailuser:emailpass@mailhog:1025/

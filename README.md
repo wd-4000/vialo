@@ -8,6 +8,17 @@ topology, booking schedules, pricing, and groups are configurable at runtime. Th
 > [!CAUTION]
 > Under heavy development. Not ready for production.
 
+## Demo
+Pre-requisite: Docker
+```
+cp vialo.example.toml vialo.toml
+cp .env.example .env
+docker compose -f compose.yaml -f compose.demo.yaml up
+```
+This pulls a prebuilt `vialo-api` image from ghcr instead of compiling the Rust
+workspace. Plain `docker compose up` also works — it builds everything from
+source with dev settings (see `compose.override.yaml`).
+
 ## Development
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the **LLM policy**, as well as setup instructions, code conventions,
