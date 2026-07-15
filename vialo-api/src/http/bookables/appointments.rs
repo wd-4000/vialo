@@ -31,6 +31,8 @@ pub struct BookableAppointmentFilterOptions {
     pub account_id: IdOrMeOrAllQuery,
     pub to: Option<DateTime<Utc>>,
     pub search: Option<String>,
+    #[serde(default)]
+    pub include_cancelled: bool,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -287,7 +289,7 @@ pub async fn list(
             ba.activated,
             ba.maintenance
         FROM
-            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true {#account} {#from} {#to} ORDER BY during LIMIT {limit} OFFSET {offset}"#,
+            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true {#account} {#from} {#to} {#cancelled} ORDER BY during LIMIT {limit} OFFSET {offset}"#,
             #account_info = match(&resolved_account_id){
                   IdOrAllQuery::All => r#"jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account: AccountEmbed","#,
                   _ => r#"null AS "account: AccountEmbed","#
@@ -297,12 +299,16 @@ pub async fn list(
                 IdOrAllQuery::Id(account) => "AND account_id = {account}",
             },
             #from = match (opts.from) {
-                Some(from) => "AND ba.during @> {from}::timestamptz ",
+                Some(from) => "AND lower(ba.during) >= {from} ",
                 None => ""
             },
             #to = match (opts.to) {
                 Some(to) => "AND UPPER(ba.during) <= {to} ",
                 None => ""
+            },
+            #cancelled = match (opts.include_cancelled) {
+                true => "",
+                false => "AND ba.cancelled_at IS NULL",
             }
 
     )

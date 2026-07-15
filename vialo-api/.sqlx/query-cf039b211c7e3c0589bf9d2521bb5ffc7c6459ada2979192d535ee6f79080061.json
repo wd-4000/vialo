@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true AND account_id = $1 AND ba.during @> $2::timestamptz   ORDER BY during LIMIT $3 OFFSET $4",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true  AND lower(ba.during) >= $1  AND UPPER(ba.during) <= $2  AND ba.cancelled_at IS NULL ORDER BY during LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -39,7 +39,7 @@
       {
         "ordinal": 3,
         "name": "account: AccountEmbed",
-        "type_info": "Jsonb",
+        "type_info": "Text",
         "origin": "Expression"
       },
       {
@@ -112,7 +112,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
+        "Timestamptz",
         "Timestamptz",
         "Int8",
         "Int8"
@@ -131,5 +131,5 @@
       false
     ]
   },
-  "hash": "cc69b996ecbd0eeb91c35847cd9c456104febda0f0e46f50eaf490d2d09f66a6"
+  "hash": "cf039b211c7e3c0589bf9d2521bb5ffc7c6459ada2979192d535ee6f79080061"
 }

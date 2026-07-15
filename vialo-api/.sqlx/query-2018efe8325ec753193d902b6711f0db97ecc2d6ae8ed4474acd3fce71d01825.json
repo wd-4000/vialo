@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true   AND UPPER(ba.during) <= $1  ORDER BY during LIMIT $2 OFFSET $3",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true AND account_id = $1 AND lower(ba.during) >= $2    ORDER BY during LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -39,7 +39,7 @@
       {
         "ordinal": 3,
         "name": "account: AccountEmbed",
-        "type_info": "Jsonb",
+        "type_info": "Text",
         "origin": "Expression"
       },
       {
@@ -112,6 +112,7 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Timestamptz",
         "Int8",
         "Int8"
@@ -130,5 +131,5 @@
       false
     ]
   },
-  "hash": "e31da562253a8ade7a70d607854a5d0309c2e7f2a371f2be1f1fc9ebf22e4b71"
+  "hash": "2018efe8325ec753193d902b6711f0db97ecc2d6ae8ed4474acd3fce71d01825"
 }

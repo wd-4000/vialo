@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true    ORDER BY during LIMIT $1 OFFSET $2",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true AND account_id = $1 AND lower(ba.during) >= $2  AND UPPER(ba.during) <= $3   ORDER BY during LIMIT $4 OFFSET $5",
   "describe": {
     "columns": [
       {
@@ -112,6 +112,9 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
         "Int8",
         "Int8"
       ]
@@ -129,5 +132,5 @@
       false
     ]
   },
-  "hash": "d72002019e187a32c4dfffcf047acdaea479d36e8651dcbd1286cc333c8e16d4"
+  "hash": "b8001a7023bf5841430285a1e491c0398ea96109e4d8a5a31cd1cfd239cdcf9e"
 }
