@@ -26,3 +26,11 @@ name = "XYZ e.V."
 domain = "xyz.ac"
 short_name = "XYZ"
 impressum = "Straße 111, 12345 Hamburg – https://xyz.example.com"
+
+[ui]
+copyright = "X-ray-Yankee-Zulu e.V."
+appname_user = "XYZ"
+appname_admin = "XYZ Admin"
+appname_user_long = "X-ray-Yankee-Zulu"
+impressum_url = "https://xyz.example.com/impressum"
+privacy_policy_url = "https://xyz.example.com/datenschutz"
