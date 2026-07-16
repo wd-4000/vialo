@@ -50,9 +50,18 @@ pub enum AuthConfig {
     },
 }
 
+fn default_timezone() -> String {
+    "Europe/Berlin".to_string()
+}
+
 #[derive(Deserialize)]
 pub struct Config {
     pub proxy: Option<String>,
+    /// IANA timezone name (e.g. "Europe/Berlin") the venue operates in. Bookable
+    /// schedules are wall-clock times interpreted in this zone, so every DB
+    /// session's `TimeZone` is set to it.
+    #[serde(default = "default_timezone")]
+    pub timezone: String,
     pub public: PublicApiConfig,
     pub hooks: HooksApiConfig,
     pub auth: AuthConfig,
