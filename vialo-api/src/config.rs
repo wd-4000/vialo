@@ -54,6 +54,16 @@ fn default_timezone() -> String {
     "Europe/Berlin".to_string()
 }
 
+#[derive(Deserialize, Clone, Serialize, ToSchema)]
+pub struct UiConfig {
+    pub copyright: String,
+    pub appname_user: String,
+    pub appname_admin: String,
+    pub appname_user_long: String,
+    pub impressum_url: String,
+    pub privacy_policy_url: String,
+}
+
 #[derive(Deserialize)]
 pub struct Config {
     pub proxy: Option<String>,
@@ -66,6 +76,7 @@ pub struct Config {
     pub hooks: HooksApiConfig,
     pub auth: AuthConfig,
     pub org: OrgConfig,
+    pub ui: UiConfig,
 
     #[cfg(feature = "email")]
     pub email: EmailApiConfig,
@@ -84,15 +95,29 @@ impl Config {
 
 #[derive(Serialize, ToSchema)]
 pub struct PublicConfig {
+    pub timezone: String,
+    pub org: OrgConfig,
+    pub appname_user: String,
+    pub appname_admin: String,
+    pub appname_user_long: String,
+    pub copyright: String,
+    pub impressum_url: String,
+    pub privacy_policy_url: String,
     #[cfg(feature = "email")]
     pub email_domain: String,
-    pub org: OrgConfig,
 }
 
 impl From<&Config> for PublicConfig {
     fn from(config: &Config) -> Self {
         Self {
+            timezone: config.timezone.clone(),
             org: config.org.clone(),
+            appname_user: config.ui.appname_user.clone(),
+            appname_admin: config.ui.appname_admin.clone(),
+            appname_user_long: config.ui.appname_user_long.clone(),
+            copyright: config.ui.copyright.clone(),
+            impressum_url: config.ui.impressum_url.clone(),
+            privacy_policy_url: config.ui.privacy_policy_url.clone(),
 
             #[cfg(feature = "email")]
             email_domain: config.email_domain(),
