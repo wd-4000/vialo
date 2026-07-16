@@ -189,12 +189,16 @@ async fn main() {
     encryption::init(encryption_key);
 
     info!("Connecting to the database...");
+    let db_timezone = config.timezone.clone();
     let pool = match PgPoolOptions::new()
         .max_connections(32)
         .min_connections(4)
-        .after_connect(|conn, _meta| {
+        .after_connect(move |conn, _meta| {
+            let db_timezone = db_timezone.clone();
             Box::pin(async move {
-                conn.execute("SET TIME ZONE 'Europe/Berlin';").await?;
+                sqlx::query!("SELECT set_config('TimeZone', $1, false)", db_timezone)
+                    .fetch_one(&mut *conn)
+                    .await?;
                 Ok(())
             })
         })
