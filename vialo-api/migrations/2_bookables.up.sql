@@ -45,8 +45,12 @@ CREATE TABLE bookable_schemas (
   requires_activation boolean NOT NULL DEFAULT false,
   activation_grace_period interval,
   expiry_refund_percent smallint CHECK (expiry_refund_percent BETWEEN 0 AND 100),
-  CHECK ((activation_grace_period IS NULL) = (expiry_refund_percent IS NULL) -- one doesn't make sense without the other
-           AND NOT (NOT requires_activation AND expiry_refund_percent IS NOT NULL)
+  CHECK (
+    (activation_grace_period IS NULL) = (expiry_refund_percent IS NULL) -- one doesn't make sense without the other
+    AND NOT (
+      NOT requires_activation
+      AND expiry_refund_percent IS NOT NULL
+    )
   )
 );
 
@@ -63,6 +67,21 @@ CREATE TABLE bookable_schema_assignments (
   schema_id int NOT NULL REFERENCES bookable_schemas (id) ON DELETE CASCADE,
   PRIMARY KEY (begins, asset_id)
 );
+
+CREATE OR REPLACE FUNCTION enforce_bsa_asset_type () RETURNS trigger AS $$
+BEGIN
+    IF (SELECT asset_type_id FROM bookable_assets WHERE id = NEW.asset_id)
+       <>
+       (SELECT asset_type_id FROM bookable_schemas WHERE id = NEW.schema_id) THEN
+        RAISE EXCEPTION 'asset_type';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_bsa_asset_type_match
+BEFORE INSERT OR UPDATE ON bookable_schema_assignments FOR EACH ROW
+EXECUTE FUNCTION enforce_bsa_asset_type ();
 
 CREATE TYPE bookable_perm AS ENUM('view', 'book', 'admin');
 

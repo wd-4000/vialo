@@ -121,6 +121,7 @@ pub struct PostBookableSchema {
     pub connector: Option<i32>,
     pub connector_output_id: Option<i32>,
     pub asset_type_id: i32,
+    pub schema_id: Option<i32>,
 }
 
 #[utoipa::path(post, path = "/bookables", request_body=PostBookableSchema, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
@@ -158,6 +159,16 @@ pub async fn post_bookable(
     .map_err(|e| if is_unique_violation(&e) {
         VialoError::AppError(StatusCode::CONFLICT, "slug_conflict".into())
     } else { e.into() })?;
+
+    if let Some(schema_id) = body.schema_id {
+        sqlx::query!(
+            "INSERT INTO bookable_schema_assignments (begins, schema_id, asset_id) VALUES (CURRENT_DATE, $1, $2)",
+            schema_id,
+            record.id,
+        )
+        .execute(&mut *trans)
+        .await?;
+    }
 
     trans.commit().await?;
     Ok((StatusCode::CREATED, Json(record)))
