@@ -32,11 +32,11 @@ jobs:
         include: >-
           ${{ github.event_name == 'push'
               && fromJSON('[
-                {"platform": "linux/amd64", "runner": "ubuntu-24.04"},
-                {"platform": "linux/arm64", "runner": "ubuntu-24.04-arm"}
+                {"platform": "linux/amd64", "runner": "ubuntu-26.04"},
+                {"platform": "linux/arm64", "runner": "ubuntu-26.04-arm"}
               ]')
               || fromJSON('[
-                {"platform": "linux/amd64", "runner": "ubuntu-24.04"}
+                {"platform": "linux/amd64", "runner": "ubuntu-26.04"}
               ]') }}
 
     runs-on: ${{ matrix.runner }}
