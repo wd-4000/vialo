@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bookable_schema_assignments (begins, schema_id, asset_id) VALUES (CURRENT_DATE, $1, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "028d13e2dcde3f3a1420b9b5262abf076e3b66822226b712e6112676c6ec1793"
+}
