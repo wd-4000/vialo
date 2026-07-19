@@ -21,7 +21,8 @@ use utoipa::{IntoParams, ToSchema};
 pub struct TakenSlotQuery {
     pub from: NaiveDate,
     pub to: NaiveDate,
-    pub asset_id: Vec<i32>,
+    pub asset_id: Option<Vec<i32>>,
+    pub asset_type_id: Option<Vec<i32>>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -33,11 +34,20 @@ pub async fn taken_slots(
     Query(opts): Query<TakenSlotQuery>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    let asset_types = opts.asset_type_id.filter(|v| !v.is_empty());
+    let asset_ids = opts.asset_id.filter(|v| !v.is_empty());
+
     let record: TakenSlots = query_scalar!(
         r#"select coalesce(jsonb_object_agg(d.date, d.assets), '{}'::jsonb) as "taken!: TakenSlots" from (
-            SELECT * from get_taken_slots($1, $2, $3)
+            SELECT * from get_taken_slots(
+                (SELECT COALESCE(array_agg(id), ARRAY[]::int[])
+                 FROM bookable_assets
+                 WHERE ($1::int[] IS NULL OR asset_type_id = ANY($1))
+                   AND ($2::int[] IS NULL OR id = ANY($2))),
+                $3, $4)
         ) d"#,
-        &opts.asset_id,
+        asset_types.as_deref(),
+        asset_ids.as_deref(),
         opts.from,
         opts.to
     )
