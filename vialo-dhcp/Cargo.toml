@@ -16,4 +16,4 @@ clap = { version = "4", features = ["derive", "env"] }
 uuid = "1"
 mac_address = "1"
 rtnetlink = "0.21.0"
-futures = "0.3.32"
+futures = "0.3.33"
