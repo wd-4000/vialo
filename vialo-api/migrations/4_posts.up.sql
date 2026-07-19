@@ -59,6 +59,8 @@ CREATE INDEX board_posts_created_at_idx ON board_posts (created_at);
 
 CREATE INDEX board_posts_board_id_idx ON board_posts (board_id);
 
+CREATE INDEX board_posts_account_id_idx ON board_posts (account_id);
+
 -- This code remains here as a memorial to a stupid idea
 --
 -- CREATE TABLE board_includes (
@@ -74,12 +76,18 @@ CREATE TABLE board_pinned_posts (
   PRIMARY KEY (post_id, board_id)
 );
 
+-- "posts pinned to this board" lookups
+CREATE INDEX board_pinned_posts_board_id_idx ON board_pinned_posts (board_id, post_id) INCLUDE (pinned_until);
+
 CREATE TABLE board_subscriptions (
   id uuid PRIMARY KEY default gen_random_uuid(),
   account_id uuid REFERENCES accounts_people (id) ON DELETE CASCADE,
   board_id int NOT NULL REFERENCES boards (id) ON DELETE CASCADE,
   UNIQUE (account_id, board_id)
 );
+
+-- board_id-first subscriber lookups (for post notifications)
+CREATE INDEX board_subscriptions_board_id_idx ON board_subscriptions (board_id);
 
 CREATE FUNCTION account_board_perm_exists (acid uuid, bid int, min_perm board_perm) RETURNS boolean LANGUAGE sql STABLE AS $$
     SELECT (

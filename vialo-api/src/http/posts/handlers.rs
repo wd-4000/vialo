@@ -95,16 +95,17 @@ pub async fn list_posts(
                           bp.event_from,
                           bp.event_to,
                           bp.created_at,
-                          {#THROWING_UP} WHERE {#CURRENT_ONLY}
+                          {#INCLUDE_PINNING_INFO} WHERE {#CURRENT_ONLY}
                           AND {#VISIBILITY}
                           AND {#BOARD}
                           GROUP BY bp.id
                          )  WHERE {#SEARCH}
                           ORDER BY (event_from <= now() AND event_to >= now()), created_at DESC LIMIT {limit} OFFSET {offset}",
-                          #THROWING_UP = match(opts.pinned_on) {
+                          #INCLUDE_PINNING_INFO = match(opts.pinned_on) {
                             Some(true)=> r#"array_agg(bpp.board_id) FILTER (WHERE bpp.board_id IS NOT NULL) AS pinned_on
                             FROM board_posts bp
-                            LEFT JOIN board_pinned_posts bpp ON bpp.post_id = bp.id"#,
+                            LEFT JOIN board_pinned_posts bpp ON bpp.post_id = bp.id
+                                AND (bpp.pinned_until IS NULL OR bpp.pinned_until >= NOW())"#,
                             _ => r#"NULL AS "pinned_on: Vec<i32>"
                             FROM board_posts bp"#
                           },
@@ -112,16 +113,25 @@ pub async fn list_posts(
                               Some(search) => "(title ILIKE '%' || {search} || '%' OR location ILIKE '%' || {search} || '%')",
                               _ => "TRUE"
                           },
-                          #CURRENT_ONLY = match (opts.current_only){
-                              Some(true) | None => "CASE WHEN bp.event_to IS NOT NULL THEN bp.event_to >= NOW() - interval '3 hours' ELSE bp.created_at > NOW() - interval '1 day' END",
-                              Some(false) => "TRUE"
+                          #CURRENT_ONLY = match (opts.current_only, &opts.board_id){
+                              (Some(false), _) => "TRUE",
+                              // Posts pinned on a requested board never age out
+                              (Some(true) | None, Some(pin_board_ids)) => r#"(EXISTS (SELECT 1 FROM board_pinned_posts pin
+                                  WHERE pin.post_id = bp.id AND pin.board_id = ANY({pin_board_ids})
+                                  AND (pin.pinned_until IS NULL OR pin.pinned_until >= NOW()))
+                                  OR CASE WHEN bp.event_to IS NOT NULL THEN bp.event_to >= NOW() - interval '3 hours' ELSE bp.created_at > NOW() - interval '1 day' END)"#,
+                              (Some(true) | None, None) => "CASE WHEN bp.event_to IS NOT NULL THEN bp.event_to >= NOW() - interval '3 hours' ELSE bp.created_at > NOW() - interval '1 day' END"
                           },
                           #VISIBILITY = match (user_o){
                               Some(User {id: uid} ) => "(bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists({uid}, bp.board_id, 'view'::board_perm))",
                               _ => "bp.visibility = 'public'"
                           },
                           #BOARD = match (&opts.board_id){
-                              Some(board_ids) => "bp.board_id = ANY({board_ids})",
+                              // Include posts homed on a requested board or pinned to one
+                              Some(board_ids) => r#"(bp.board_id = ANY({board_ids})
+                                  OR EXISTS (SELECT 1 FROM board_pinned_posts pin
+                                  WHERE pin.post_id = bp.id AND pin.board_id = ANY({board_ids})
+                                  AND (pin.pinned_until IS NULL OR pin.pinned_until >= NOW())))"#,
                               _ => "TRUE"
                           }).fetch_all(&data.db).await?;
 
