@@ -7,7 +7,7 @@ use serde_json::json;
 use sqlx::{Executor, PgPool, Postgres, types::Json};
 use std::{collections::HashMap, sync::Arc};
 use tokio::{sync::watch, time};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 mod lib;
 mod models;
 use crate::http::history::models::Subsystem;
@@ -49,7 +49,7 @@ pub async fn main(
         }
         current_job_id = Some(job.id);
     }else{
-        info!("Nothing to do.");
+        debug!("Nothing to do.");
         tokio::select! {
             _ = time::sleep(time::Duration::from_secs(30)) => {}
             changed = shutdown.changed() => {

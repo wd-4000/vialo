@@ -199,7 +199,7 @@ pub async fn book_slots(
         ORDER BY j_i, bsa.begins DESC;"#, json!(body.slots)).fetch_all(&data.db)
         .await?;
 
-    tracing::info!("materialized_slots: {:?}", materialized_slots);
+    tracing::debug!("materialized_slots: {:?}", materialized_slots);
 
     // Verify the slots and the client's expectations (if present)
     let mut sum_total = 0;

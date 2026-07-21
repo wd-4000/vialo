@@ -304,7 +304,7 @@ pub async fn get_device_overview(
                 {
                     Ok(device) => Ok(Json(device)),
                     Err(e) => {
-                        println!("{:?}", e);
+                        tracing::error!("Failed to fetch device {}: {:?}", id, e);
                         Err(VialoError::NotFound())
                     }
                 };

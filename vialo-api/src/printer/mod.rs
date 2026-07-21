@@ -11,7 +11,7 @@ use serde_json::json;
 use sqlx::{Executor, PgConnection, PgPool, Postgres, query_scalar, types::Json};
 use std::{env, sync::Arc};
 use tokio::{fs, sync::watch, time};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 #[cfg(feature = "printer_km")]
 mod km;
@@ -163,7 +163,7 @@ pub async fn main(
                 break;
             }
 
-            info!("I'm gurch!");
+            debug!("I'm gurch!");
             let now = time::Instant::now();
             let mut current_task = None;
             let mut current_job_id = None;
@@ -195,11 +195,11 @@ pub async fn main(
                             current_task = Some(job.data.as_ref().clone());
                             current_job_id = Some(job.id);
                         }else{
-                            info!("Nothing to do.");
+                            debug!("Nothing to do.");
                             // Don't forget to unlock!!
                             if printer.printer_lock().is_some() {
                                 printer.unlock().await.context("Couldn't unlock printer")?;
-                                info!("Unlocked");
+                                debug!("Unlocked");
                             }
 
                             tokio::select! {
