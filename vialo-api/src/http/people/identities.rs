@@ -37,7 +37,7 @@ pub async fn get(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    let person = sqlx::query_as!(IdentityModel, r#"SELECT i.id, ap.id as "account_id", i.full_name, i.email, i.phone FROM identities i LEFT JOIN accounts_people ap ON ap.auth_id = i.id WHERE i.id = $1"#, id)
+    let person = sqlx::query_as!(IdentityModel, r#"SELECT i.id, ap.id as "account_id", i.full_name, i.email, i.phone, i.room FROM identities i LEFT JOIN accounts_people ap ON ap.auth_id = i.id WHERE i.id = $1"#, id)
         .fetch_one(&data.db)
         .await?;
 

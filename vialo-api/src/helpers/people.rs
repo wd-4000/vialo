@@ -18,7 +18,9 @@ fn build_kratos_http_client(kratos_url: &str) -> (reqwest::Client, String) {
         }
         #[cfg(not(unix))]
         {
-            panic!("Kratos URL configured as unix:// but this platform does not support Unix sockets");
+            panic!(
+                "Kratos URL configured as unix:// but this platform does not support Unix sockets"
+            );
         }
     }
     (reqwest::Client::new(), kratos_url.to_string())
@@ -32,6 +34,7 @@ pub struct IdentityModel {
     #[schema(format = Email)]
     pub email: Option<String>,
     pub phone: Option<String>,
+    pub room: Option<String>,
 }
 
 pub async fn delete_identity(id: Uuid, trans: &mut Transaction<'_, Postgres>) -> Result<()> {
@@ -59,8 +62,8 @@ pub async fn update_identity(
 ) -> Result<()> {
     // Insert/Update the identity
     sqlx::query!(
-        "INSERT INTO identities (id, email, full_name, phone) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET (email, full_name, phone) = ($2, $3, $4)",
-        body.id, body.email, body.full_name, body.phone
+        "INSERT INTO identities (id, email, full_name, phone, room) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO UPDATE SET (email, full_name, phone) = ($2, $3, $4)",
+        body.id, body.email, body.full_name, body.phone, body.room
     ).execute(&mut **trans).await?;
 
     // Create initial admin account if needed
