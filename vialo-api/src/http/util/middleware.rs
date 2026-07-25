@@ -113,6 +113,7 @@ pub async fn auth_middleware(
                                 email: trait_str("email"),
                                 full_name: trait_str("full_name"),
                                 phone: trait_str("phone"),
+                                room: trait_str("room"),
                                 account_id: None,
                             };
                             let mut trans = grab_trans(&mut conn).await?;

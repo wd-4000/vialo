@@ -9,7 +9,8 @@ CREATE TABLE identities (
   id uuid PRIMARY KEY,
   full_name text,
   email text,
-  phone text
+  phone text,
+  room text
 );
 
 -- General account info
