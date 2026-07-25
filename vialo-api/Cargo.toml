@@ -3,6 +3,7 @@ name = "vialo-api"
 version = "0.0.2"
 edition = "2024"
 default-run = "vialo-api"
+license = "AGPL-3.0-or-later"
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
