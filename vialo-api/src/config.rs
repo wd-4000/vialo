@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use strum::AsRefStr;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -37,8 +38,9 @@ pub struct EmailApiConfig {
     pub url: EmailApiUrlConfig,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, AsRefStr)]
 #[serde(rename_all = "snake_case", tag = "type")]
+#[strum(serialize_all = "snake_case")]
 pub enum AuthConfig {
     Mock {
         uuid: Uuid,
@@ -95,6 +97,7 @@ impl Config {
 
 #[derive(Serialize, ToSchema)]
 pub struct PublicConfig {
+    pub auth: String,
     pub timezone: String,
     pub org: OrgConfig,
     pub appname_user: String,
@@ -110,6 +113,7 @@ pub struct PublicConfig {
 impl From<&Config> for PublicConfig {
     fn from(config: &Config) -> Self {
         Self {
+            auth: config.auth.as_ref().to_string(),
             timezone: config.timezone.clone(),
             org: config.org.clone(),
             appname_user: config.ui.appname_user.clone(),
