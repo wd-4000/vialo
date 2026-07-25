@@ -114,6 +114,13 @@ DECLARE
     p_account_id uuid;
     p_subsystem subsystem_type;
     p_tx_id bigint;
+    p_bytea_cols text[];
+    -- Columns whose changes carry no value. We Do Not Care
+    -- account_people.credit_balance is just materialized from the transactions
+    p_noise_cols CONSTANT jsonb := '{
+      "*": ["last_updated", "last_seen"],
+      "accounts_people": ["credit_balance"]
+    }';
 BEGIN
     SELECT INTO p_account_id CAST(nullif(current_setting('app.account_id', true), '') AS uuid);
     SELECT INTO p_subsystem subsystem_type(nullif(current_setting('app.subsystem', true), ''));
@@ -144,6 +151,13 @@ BEGIN
             END IF;
         END LOOP;
 
+        p_diff := p_diff - ARRAY(
+            SELECT jsonb_array_elements_text(
+                COALESCE(p_noise_cols -> '*', '[]'::jsonb)
+                || COALESCE(p_noise_cols -> TG_TABLE_NAME, '[]'::jsonb)
+            )
+        );
+
         -- Skip logging empty UPDATEs
         IF p_diff = '{}'::jsonb THEN
             RETURN NULL;
@@ -152,6 +166,25 @@ BEGIN
     ELSIF TG_OP = 'DELETE' THEN
         p_diff := to_jsonb(OLD);
 
+    END IF;
+
+    -- Never copy secrets into the log
+    SELECT array_agg(attname) INTO p_bytea_cols
+    FROM pg_attribute
+    WHERE attrelid = TG_RELID AND atttypid = 'bytea'::regtype AND attnum > 0 AND NOT attisdropped;
+
+    IF p_bytea_cols IS NOT NULL THEN
+        FOREACH p_key IN ARRAY p_bytea_cols
+        LOOP
+            IF jsonb_typeof(p_diff -> p_key) = 'object' THEN -- UPDATE from/to pair
+                p_diff := jsonb_set(p_diff, ARRAY[p_key], jsonb_build_object(
+                    'from', CASE WHEN p_diff #> ARRAY[p_key, 'from'] = 'null'::jsonb THEN 'null'::jsonb ELSE '"[redacted]"'::jsonb END,
+                    'to',   CASE WHEN p_diff #> ARRAY[p_key, 'to']   = 'null'::jsonb THEN 'null'::jsonb ELSE '"[redacted]"'::jsonb END
+                ));
+            ELSIF jsonb_typeof(p_diff -> p_key) = 'string' THEN -- INSERT/DELETE full row
+                p_diff := jsonb_set(p_diff, ARRAY[p_key], '"[redacted]"');
+            END IF;
+        END LOOP;
     END IF;
 
     IF TG_ARGV[0] = 'integer' THEN
@@ -170,6 +203,8 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Special triggers
+-- (Such as composite keys)
+
 create trigger tg_table_log
 after insert
 or
@@ -226,6 +261,27 @@ update
 or delete on subsystem_printer_pricing for each row
 execute FUNCTION table_log_trigger ('text', 'product');
 
+create trigger tg_table_log
+after insert
+or
+update
+or delete on bookable_schema_cancellation_policy for each row
+execute FUNCTION table_log_trigger ('integer', 'schema_id');
+
+create trigger tg_table_log
+after insert
+or
+update
+or delete on i18n_strings for each row
+execute FUNCTION table_log_trigger ('integer', 'id');
+
+create trigger tg_table_log
+after insert
+or
+update
+or delete on net_network_nms_link for each row
+execute FUNCTION table_log_trigger ('integer', 'network_id');
+
 -- Create audit table trigger for tables where such a trigger doesn't exist
 create or replace procedure ddl_create_audit_trigger_on_all_tables () language plpgsql as $$
 declare
@@ -234,7 +290,10 @@ declare
   _excluded_tables text[] := ARRAY[
     'table_log',
     'net_ip_assignments',
-    'subsystem_jobs'
+    'subsystem_jobs',
+    'health_events',
+    'accounts', -- derived from accounts_people/account_groups
+    'i18n_index' -- autoincrement
   ];
 begin
   for _sql in select concat (
