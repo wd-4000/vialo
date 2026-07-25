@@ -3,7 +3,6 @@ name = "vialo-api"
 version = "0.0.2"
 edition = "2024"
 default-run = "vialo-api"
-license = "AGPL-3.0-or-later"
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
@@ -70,4 +69,5 @@ secrecy = "0.10.3"
 ipnetwork = { version = "0.21.1", features = ["serde"] }
 governor = { version = "0.10.4", features = ["dashmap"] }
 dashmap = "6.2.1"
+strum = { version = "0.28.0", features = ["derive"] }
 #iana-time-zone = "0.1.63"
