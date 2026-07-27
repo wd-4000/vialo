@@ -13,8 +13,8 @@ services:
   vialo-api:
     stop_grace_period: 30s
     build:
-      context: ./vialo-api
-      dockerfile: Dockerfile
+      context: ./
+      dockerfile: ./vialo-api/Dockerfile
     restart: unless-stopped
     volumes:
       - ../vialo.toml:/app/vialo.toml
