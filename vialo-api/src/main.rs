@@ -3,10 +3,11 @@ use axum::http::{
     header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
 };
 use dotenv::dotenv;
-use sqlx::Executor;
 use sqlx::postgres::PgPoolOptions;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::net::{TcpListener, UnixListener};
 use tokio::sync::broadcast;
@@ -27,6 +28,9 @@ use std::os::unix::io::FromRawFd;
 
 #[cfg(feature = "migrate")]
 use sqlx::migrate;
+
+/// How long every task gets to wind down after a shutdown signal before we give up
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(30);
 
 enum Listener {
     Tcp(TcpListener),
@@ -108,7 +112,11 @@ async fn bind_listener(addr: &str) -> Listener {
     }
 }
 
-async fn serve_api(listener: Listener, app: axum::Router, mut shutdown_rx: watch::Receiver<bool>) {
+async fn serve_api(
+    listener: Listener,
+    app: axum::Router,
+    mut shutdown_rx: watch::Receiver<bool>,
+) -> std::io::Result<()> {
     match listener {
         Listener::Tcp(l) => {
             axum::serve(l, app.into_make_service_with_connect_info::<SocketAddr>())
@@ -116,7 +124,6 @@ async fn serve_api(listener: Listener, app: axum::Router, mut shutdown_rx: watch
                     while shutdown_rx.changed().await.is_ok() && !*shutdown_rx.borrow() {}
                 })
                 .await
-                .expect("TCP serve failed");
         }
         Listener::Unix(l) => {
             axum::serve(l, app.into_make_service())
@@ -124,7 +131,37 @@ async fn serve_api(listener: Listener, app: axum::Router, mut shutdown_rx: watch
                     while shutdown_rx.changed().await.is_ok() && !*shutdown_rx.borrow() {}
                 })
                 .await
-                .expect("Unix serve failed");
+        }
+    }
+}
+
+/// run a subsystem, restart it if it fails, shut it down upon shutdown signal
+async fn run_subsystem<F, Fut>(
+    name: &'static str,
+    mut shutdown: watch::Receiver<bool>,
+    mut start: F,
+) where
+    F: FnMut(watch::Receiver<bool>) -> Fut,
+    Fut: Future<Output = Result<(), anyhow::Error>>,
+{
+    loop {
+        if *shutdown.borrow() {
+            break;
+        }
+
+        let result = start(shutdown.clone()).await;
+        if *shutdown.borrow() {
+            break;
+        }
+
+        warn!("{name} subsystem exited unexpectedly ({result:?}), restarting...");
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+            changed = shutdown.changed() => {
+                if changed.is_ok() && *shutdown.borrow() {
+                    break;
+                }
+            }
         }
     }
 }
@@ -285,195 +322,7 @@ async fn main() {
         rate_limiters: vialo_api::http::rate_limit::RateLimiters::new(),
     });
 
-    let (shutdown_tx, shutdown_rx) = watch::channel(false);
-
-    let shutdown_task = tokio::spawn({
-        let shutdown_tx = shutdown_tx.clone();
-        async move {
-            #[cfg(unix)]
-            {
-                use tokio::signal::unix::{SignalKind, signal};
-
-                let mut terminate =
-                    signal(SignalKind::terminate()).expect("failed to install SIGTERM handler");
-                tokio::select! {
-                    _ = tokio::signal::ctrl_c() => {},
-                    _ = terminate.recv() => {},
-                }
-            }
-
-            #[cfg(not(unix))]
-            {
-                tokio::signal::ctrl_c()
-                    .await
-                    .expect("failed to install Ctrl+C handler (why are you running this on non-unix anyway?)");
-            }
-
-            let _ = shutdown_tx.send(true);
-            info!("Shutting down...");
-        }
-    });
-
-    #[cfg(feature = "ppsk")]
-    let ppsk_subsystem_task = tokio::spawn({
-        let pool = pool.clone();
-        let asp = asp.clone();
-        let mut shutdown = shutdown_rx.clone();
-        async move {
-            loop {
-                if *shutdown.borrow() {
-                    break;
-                }
-
-                let result =
-                    vialo_api::ppsk::main(pool.clone(), asp.clone(), shutdown.clone()).await;
-                if *shutdown.borrow() {
-                    break;
-                }
-
-                tracing::warn!(
-                    "PPSK subsystem exited unexpectedly ({:?}), restarting...",
-                    result
-                );
-                tokio::select! {
-                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
-                    changed = shutdown.changed() => {
-                        if changed.is_ok() && *shutdown.borrow() {
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    #[cfg(feature = "printer")]
-    let printer_subsystem_set = tokio::task::LocalSet::new();
-    let printer_subsystem_pool = pool.clone();
-    let printer_subsystem_asp = asp.clone();
-    let mut printer_subsystem_shutdown = shutdown_rx.clone();
-    let printer_subsystem_task = printer_subsystem_set.run_until(async move {
-        #[cfg(feature = "printer")]
-        loop {
-            if *printer_subsystem_shutdown.borrow() {
-                break;
-            }
-
-            let result = vialo_api::printer::main(
-                printer_subsystem_pool.clone(),
-                printer_subsystem_asp.clone(),
-                printer_subsystem_shutdown.clone(),
-            )
-            .await;
-            if *printer_subsystem_shutdown.borrow() {
-                break;
-            }
-
-            tracing::warn!(
-                "printer subsystem exited unexpectedly ({:?}), restarting...",
-                result
-            );
-            tokio::select! {
-                _ = tokio::time::sleep(Duration::from_secs(5)) => {}
-                changed = printer_subsystem_shutdown.changed() => {
-                    if changed.is_ok() && *printer_subsystem_shutdown.borrow() {
-                        break;
-                    }
-                }
-            }
-        }
-    });
-
-    let bookable_connectors_subsystem_set = tokio::task::LocalSet::new();
-    let bookable_connectors_subsystem_asp = asp.clone();
-    let mut bookable_connectors_shutdown = shutdown_rx.clone();
-    let bookable_connectors_subsystem_task =
-        bookable_connectors_subsystem_set.run_until(async move {
-            loop {
-                if *bookable_connectors_shutdown.borrow() {
-                    break;
-                }
-
-                let result = vialo_api::bookables::main(
-                    bookable_connectors_subsystem_asp.clone(),
-                    bookable_connectors_shutdown.clone(),
-                )
-                .await;
-                if *bookable_connectors_shutdown.borrow() {
-                    break;
-                }
-
-                tracing::warn!(
-                    "bookable_connectors exited unexpectedly ({:?}), restarting...",
-                    result
-                );
-                tokio::select! {
-                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
-                    changed = bookable_connectors_shutdown.changed() => {
-                        if changed.is_ok() && *bookable_connectors_shutdown.borrow() {
-                            break;
-                        }
-                    }
-                }
-            }
-        });
-
-    let email_subsystem_set = tokio::task::LocalSet::new();
-
-    #[cfg(feature = "email")]
-    let email_subsystem_asp = asp.clone();
-    #[cfg(feature = "email")]
-    let mut email_subsystem_shutdown = shutdown_rx.clone();
-
-    let email_subsystem_task = email_subsystem_set.run_until(async move {
-        #[cfg(feature = "email")]
-        loop {
-            if *email_subsystem_shutdown.borrow() {
-                break;
-            }
-
-            let result = vialo_api::email::main(
-                email_subsystem_asp.clone(),
-                email_subsystem_shutdown.clone(),
-            )
-            .await;
-            if *email_subsystem_shutdown.borrow() {
-                break;
-            }
-
-            tracing::warn!(
-                "email subsystem exited unexpectedly ({:?}), restarting...",
-                result
-            );
-            tokio::select! {
-                _ = tokio::time::sleep(Duration::from_secs(5)) => {}
-                changed = email_subsystem_shutdown.changed() => {
-                    if changed.is_ok() && *email_subsystem_shutdown.borrow() {
-                        break;
-                    }
-                }
-            }
-        }
-    });
-
-    let (public_listener, hooks_listener) = {
-        #[cfg(unix)]
-        if let Some((p, h)) = try_socket_activation() {
-            info!("Received listeners from systemd socket activation.");
-            (p, h)
-        } else {
-            let p = bind_listener(&asp.config.public.listen).await;
-            let h = bind_listener(&asp.config.hooks.listen).await;
-            (p, h)
-        }
-        #[cfg(not(unix))]
-        {
-            let p = bind_listener(&asp.config.public.listen).await;
-            let h = bind_listener(&asp.config.hooks.listen).await;
-            (p, h)
-        }
-    };
-
+    // bootstrap (Not like web dev) admin account
     if let AuthConfig::Mock { uuid, email } = &asp.config.auth {
         if !(sqlx::query_scalar!(
             r#"
@@ -535,53 +384,191 @@ async fn main() {
                 );
                 info!("Waiting to receive webhook from Kratos...");
             } else {
-                panic!(
+                error!(
                     "Set the INITIAL_ADMIN_EMAIL environment variable for the application to set up your admin account."
-                )
+                );
+                std::process::exit(1);
             }
+        }
+    };
+
+    let (shutdown_tx, shutdown_rx) = watch::channel(false);
+
+    let shutdown_task = tokio::spawn({
+        let shutdown_tx = shutdown_tx.clone();
+        async move {
+            #[cfg(unix)]
+            {
+                use tokio::signal::unix::{SignalKind, signal};
+
+                let mut terminate =
+                    signal(SignalKind::terminate()).expect("failed to install SIGTERM handler");
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {},
+                    _ = terminate.recv() => {},
+                }
+            }
+
+            #[cfg(not(unix))]
+            {
+                tokio::signal::ctrl_c()
+                    .await
+                    .expect("failed to install Ctrl+C handler (why are you running this on non-unix anyway?)");
+            }
+
+            let _ = shutdown_tx.send(true);
+            info!("Shutting down...");
+        }
+    });
+
+    // Task per subsystem
+    let mut subsystems: Vec<(&'static str, tokio::task::JoinHandle<()>)> = Vec::new();
+
+    #[cfg(feature = "ppsk")]
+    subsystems.push(("ppsk", {
+        let pool = pool.clone();
+        let asp = asp.clone();
+        tokio::spawn(run_subsystem(
+            "ppsk",
+            shutdown_rx.clone(),
+            move |shutdown| vialo_api::ppsk::main(pool.clone(), asp.clone(), shutdown),
+        ))
+    }));
+
+    // Printer is !Send so it gets special treatment
+    #[cfg(feature = "printer")]
+    subsystems.push(("printer", {
+        let pool = pool.clone();
+        let asp = asp.clone();
+        let shutdown = shutdown_rx.clone();
+        let handle = tokio::runtime::Handle::current();
+        tokio::task::spawn_blocking(move || {
+            let local = tokio::task::LocalSet::new();
+            handle.block_on(
+                local.run_until(run_subsystem("printer", shutdown, move |shutdown| {
+                    vialo_api::printer::main(pool.clone(), asp.clone(), shutdown)
+                })),
+            );
+        })
+    }));
+
+    #[cfg(feature = "email")]
+    subsystems.push(("email", {
+        let asp = asp.clone();
+        tokio::spawn(run_subsystem(
+            "email",
+            shutdown_rx.clone(),
+            move |shutdown| vialo_api::email::main(asp.clone(), shutdown),
+        ))
+    }));
+
+    subsystems.push(("bookable_connectors", {
+        let asp = asp.clone();
+        tokio::spawn(run_subsystem(
+            "bookable_connectors",
+            shutdown_rx.clone(),
+            move |shutdown| vialo_api::bookables::main(asp.clone(), shutdown),
+        ))
+    }));
+
+    let (public_listener, hooks_listener) = {
+        #[cfg(unix)]
+        if let Some((p, h)) = try_socket_activation() {
+            info!("Received listeners from systemd socket activation.");
+            (p, h)
+        } else {
+            let p = bind_listener(&asp.config.public.listen).await;
+            let h = bind_listener(&asp.config.hooks.listen).await;
+            (p, h)
+        }
+        #[cfg(not(unix))]
+        {
+            let p = bind_listener(&asp.config.public.listen).await;
+            let h = bind_listener(&asp.config.hooks.listen).await;
+            (p, h)
         }
     };
 
     let app = vialo_api::http::create_router(asp.clone()).await;
     let hook_app = vialo_api::hooks::create_router(asp.clone()).await;
     let ws = vialo_api::ws::main(asp.clone());
-    let public_api_shutdown = shutdown_rx.clone();
-    let hook_api_shutdown = shutdown_rx.clone();
+
+    let cors = CorsLayer::new()
+        .allow_origin(
+            asp.config
+                .public
+                .cors_origins
+                .iter()
+                .map(|v| v.parse::<HeaderValue>().unwrap())
+                .collect::<Vec<_>>(),
+        )
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PATCH,
+            Method::DELETE,
+            Method::PUT,
+        ])
+        .allow_credentials(true)
+        .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE]);
+
+    let fatal = Arc::new(AtomicBool::new(false));
+
+    // clean shutdown if server dies
+    let serve = |name: &'static str, listener, app, shutdown_tx: watch::Sender<bool>| {
+        let shutdown_rx = shutdown_rx.clone();
+        let fatal = fatal.clone();
+        tokio::spawn(async move {
+            if let Err(err) = serve_api(listener, app, shutdown_rx).await {
+                error!("{name} server failed: {err}");
+                fatal.store(true, Ordering::Relaxed);
+                let _ = shutdown_tx.send(true);
+            }
+        })
+    };
+
+    let public_api_task = serve(
+        "public API",
+        public_listener,
+        app.merge(ws).layer(cors),
+        shutdown_tx.clone(),
+    );
+    let hooks_api_task = serve("hooks API", hooks_listener, hook_app, shutdown_tx.clone());
 
     info!("Serving.");
 
-    let _ = tokio::join!(
-        serve_api(
-            public_listener,
-            app.merge(ws).layer(
-                CorsLayer::new()
-                    .allow_origin(
-                        asp.config
-                            .public
-                            .cors_origins
-                            .iter()
-                            .map(|v| v.parse::<HeaderValue>().unwrap())
-                            .collect::<Vec<_>>(),
-                    )
-                    .allow_methods([
-                        Method::GET,
-                        Method::POST,
-                        Method::PATCH,
-                        Method::DELETE,
-                        Method::PUT,
-                    ])
-                    .allow_credentials(true)
-                    .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
-            ),
-            public_api_shutdown,
-        ),
-        serve_api(hooks_listener, hook_app, hook_api_shutdown),
-        printer_subsystem_task,
-        ppsk_subsystem_task,
-        email_subsystem_task,
-        bookable_connectors_subsystem_task,
-        shutdown_task
-    );
+    let mut shutdown_signalled = shutdown_rx.clone();
+    while !*shutdown_signalled.borrow() {
+        if shutdown_signalled.changed().await.is_err() {
+            break;
+        }
+    }
+
+    let drain = async move {
+        for (name, task) in [
+            ("public API", public_api_task),
+            ("hooks API", hooks_api_task),
+        ] {
+            if let Err(err) = task.await {
+                error!("{name} server task did not exit cleanly: {err}");
+            }
+        }
+        for (name, task) in subsystems {
+            if let Err(err) = task.await {
+                error!("{name} subsystem task did not exit cleanly: {err}");
+            }
+        }
+        if let Err(err) = shutdown_task.await {
+            error!("signal handler task did not exit cleanly: {err}");
+        }
+    };
+
+    if tokio::time::timeout(SHUTDOWN_TIMEOUT, drain).await.is_err() {
+        error!("Killing tasks not exited within {SHUTDOWN_TIMEOUT:?}");
+    }
 
     info!("Bye now!");
+
+    // exit, a return would cause a panic in tokio
+    std::process::exit(if fatal.load(Ordering::Relaxed) { 1 } else { 0 });
 }
