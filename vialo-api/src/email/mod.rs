@@ -1,9 +1,9 @@
 use handlebars::{DirectorySourceOptions, Handlebars};
 use icu::locale::locale;
 use lettre::{
-    Message, SmtpTransport, Transport,
+    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
     message::{Mailbox, MultiPart},
-    transport::sendmail::SendmailTransport,
+    transport::sendmail::AsyncSendmailTransport,
 };
 use serde::Serialize;
 use std::{env, sync::Arc};
@@ -20,21 +20,22 @@ use date::get_event_timespan;
 use tracing::{debug, error, warn};
 
 enum MailTransport {
-    Smtp(SmtpTransport),
-    Sendmail(SendmailTransport),
+    Smtp(AsyncSmtpTransport<Tokio1Executor>),
+    Sendmail(AsyncSendmailTransport<Tokio1Executor>),
 }
 
 impl MailTransport {
-    fn send(&self, message: &Message) -> Result<(), anyhow::Error> {
+    async fn send(&self, message: Message) -> Result<(), anyhow::Error> {
         match self {
             Self::Smtp(t) => t
                 .send(message)
+                .await
                 .map(|_| ())
                 .map_err(|e| anyhow::anyhow!("SMTP: {e}")),
-            Self::Sendmail(t) => {
-                t.send(message)
-                    .map_err(|e| anyhow::anyhow!("sendmail: {e}"))
-            }
+            Self::Sendmail(t) => t
+                .send(message)
+                .await
+                .map_err(|e| anyhow::anyhow!("sendmail: {e}")),
         }
     }
 }
@@ -255,10 +256,13 @@ async fn notify_post_subscribers(
         )
         .await?;
 
-        match mailer.send(&email) {
+        match mailer.send(email).await {
             Ok(_) => debug!("Post {} notification to {} sent!", post_id, person.email),
             Err(e) => {
-                error!("Post {} notification for {} failed: {:?}", post_id, person.email, e);
+                error!(
+                    "Post {} notification for {} failed: {:?}",
+                    post_id, person.email, e
+                );
                 crate::health::add_health_event(
                     &app_state.db,
                     crate::http::history::models::Subsystem::Email,
@@ -309,13 +313,16 @@ async fn notify_expired_appointment(
     )
     .await?;
 
-    match mailer.send(&email) {
+    match mailer.send(email).await {
         Ok(_) => debug!(
             "Expired appointment {} notification to {} sent!",
             message.id, message.email
         ),
         Err(e) => {
-            error!("Expired appointment {} notification for {} failed: {:?}", message.id, message.email, e);
+            error!(
+                "Expired appointment {} notification for {} failed: {:?}",
+                message.id, message.email, e
+            );
             crate::health::add_health_event(
                 &app_state.db,
                 crate::http::history::models::Subsystem::Email,
@@ -338,10 +345,10 @@ pub async fn main(
 ) -> Result<(), anyhow::Error> {
     let email_url = env::var("EMAIL_URL").expect("No SMTP URL provided!");
     let mailer = if email_url.starts_with("sendmail://") {
-        MailTransport::Sendmail(SendmailTransport::new())
+        MailTransport::Sendmail(AsyncSendmailTransport::new())
     } else {
-        let transport = SmtpTransport::from_url(&email_url)?.build();
-        transport.test_connection()?;
+        let transport = AsyncSmtpTransport::<Tokio1Executor>::from_url(&email_url)?.build();
+        transport.test_connection().await?;
         MailTransport::Smtp(transport)
     };
 
