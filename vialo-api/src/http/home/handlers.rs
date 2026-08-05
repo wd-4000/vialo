@@ -1,6 +1,7 @@
 use super::super::home::models::JumboModelTranslated;
 use super::{models::QuickLinkModelTranslated, schemas::PostFilterOptions};
 use crate::http::home::models::BoardPostModelHomeTranslated;
+use crate::http::util::models::GroupEmbed;
 use crate::http::util::{User, VialoError, clamp_pagination};
 use crate::{AppState, list_i18n_generic};
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
@@ -11,6 +12,7 @@ use sqlx::query_as;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[utoipa::path(get, path = "/home/quicklinks", params(PostFilterOptions), responses((status = 200, description = "OK", body=Vec<QuickLinkModelTranslated>)))]
 pub async fn list_quicklinks(
@@ -47,8 +49,16 @@ pub struct HomePosts {
 #[derive(Serialize, ToSchema)]
 pub struct HomeResponse {
     quicklinks: Vec<QuickLinkModelTranslated>,
+    groups: Vec<HomeGroup>,
     jumbo: Vec<JumboModelTranslated>,
     posts: HomePosts,
+}
+
+#[derive(Serialize, Debug, Clone, PartialEq, ToSchema)]
+pub struct HomeGroup {
+    pub id: Uuid,
+    pub label: String,
+    pub icon: Option<String>,
 }
 
 #[utoipa::path(get, path = "/home",  params(PostFilterOptions), responses((status = 200, description = "OK", body = HomeResponse)))]
@@ -75,6 +85,14 @@ pub async fn get_home_aggregated(
         QuickLinkModelTranslated,
         r#"SELECT id as "id!", label, link FROM get_i18n_quicklinks($1) LIMIT $2 OFFSET $3"#,
         &langs,
+        limit,
+        offset
+    )
+    .fetch_all(&data.db);
+
+    let groups = query_as!(
+        HomeGroup,
+        r#"SELECT id, label, icon FROM account_groups WHERE public = true LIMIT $1 OFFSET $2"#,
         limit,
         offset
     )
@@ -108,7 +126,7 @@ pub async fn get_home_aggregated(
     )
     .fetch_all(&data.db);
 
-    let (jumbo, quicklinks, posts) = tokio::try_join!(jumbo, quicklinks, posts)?;
+    let (jumbo, quicklinks, posts, groups) = tokio::try_join!(jumbo, quicklinks, posts, groups)?;
 
     let mut pinned = Vec::new();
     let mut timeline = Vec::new();
@@ -124,7 +142,7 @@ pub async fn get_home_aggregated(
     Ok((
         StatusCode::OK,
         Json(
-            json!({"quicklinks":quicklinks, "jumbo":jumbo, "posts":{"pinned":pinned,"timeline":timeline}}),
+            json!({"quicklinks":quicklinks, "jumbo":jumbo, "posts":{"pinned":pinned,"timeline":timeline}, "groups":groups}),
         ),
     ))
 }
