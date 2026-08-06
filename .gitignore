@@ -23,6 +23,7 @@ __MACOSX
 # Misc
 .fleet
 .idea
+.eslintcache
 
 # Local env files
 .env
