@@ -5,7 +5,8 @@ cors_origins = ["http://localhost:3000", "http://localhost:3001", "http://127.0.
 listen = "0.0.0.0:8000"
 
 [hooks]
-listen = "127.0.0.1:8011"
+# Unauthenticated. Do not publish the port.
+listen = "0.0.0.0:8011"
 
 [email]
 domain = "xyz.example.com"
