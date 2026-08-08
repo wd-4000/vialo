@@ -90,12 +90,20 @@ pub async fn update_identity(
                     body.id
                 ).fetch_one(&mut **trans).await?;
 
-            // Create the group
-            let group_id = sqlx::query_scalar!(
-                "insert into account_groups (label,public) values ('AdminAG', true) RETURNING id",
+            // Create the group or reuse it if a previous bootstrap left one behind
+            let group_id = match sqlx::query_scalar!(
+                "SELECT id FROM account_groups WHERE label = 'AdminAG'"
             )
-            .fetch_one(&mut **trans)
-            .await?;
+            .fetch_optional(&mut **trans)
+            .await?
+            {
+                Some(id) => id,
+                None => sqlx::query_scalar!(
+                    "INSERT INTO account_groups (label, public) VALUES ('AdminAG', true) RETURNING id"
+                )
+                .fetch_one(&mut **trans)
+                .await?,
+            };
 
             // Add the account to the group
             sqlx::query!(
