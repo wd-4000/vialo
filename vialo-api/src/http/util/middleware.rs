@@ -12,21 +12,31 @@ use super::super::AppState;
 use super::User;
 use crate::helpers;
 use axum::{
+    Json,
     extract::{Request, State},
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
 };
 use ory_kratos_client::apis::frontend_api::to_session;
 use reqwest::StatusCode;
 use serde_json::json;
 use std::sync::Arc;
-pub async fn auth_required(
-    // State(app_state): State<Arc<AppState>>,
-    request: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
+
+#[derive(Clone)]
+pub struct NotVerified;
+
+pub async fn auth_required(request: Request, next: Next) -> Result<Response, VialoError> {
     if request.extensions().get::<User>().is_none() {
-        return Err(StatusCode::UNAUTHORIZED);
+        if request.extensions().get::<NotVerified>().is_some() {
+            return Err(VialoError::AppError(
+                StatusCode::FORBIDDEN,
+                "not_verified".into(),
+            ));
+        }
+        return Err(VialoError::AppError(
+            StatusCode::UNAUTHORIZED,
+            "unauthorized".into(),
+        ));
     }
 
     Ok(next.run(request).await)
@@ -133,10 +143,7 @@ pub async fn auth_middleware(
                             trans.commit().await?;
                         }
 
-                        return Err(VialoError::AppError(
-                            StatusCode::FORBIDDEN,
-                            "not_verified".into(),
-                        ));
+                        request.extensions_mut().insert(NotVerified);
                     } else {
                         tracing::warn!("Couldn't parse Kratos identity ID: {}", identity.id);
                     }
