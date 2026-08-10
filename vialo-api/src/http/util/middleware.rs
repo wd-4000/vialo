@@ -4,7 +4,7 @@ use crate::{
     helpers::grab_authd_conn_subsystem,
     http::{
         history::models::Subsystem,
-        util::{VialoError, grab_trans},
+        util::{UserSuspendedReason, VialoError, grab_trans},
     },
 };
 
@@ -22,15 +22,12 @@ use reqwest::StatusCode;
 use serde_json::json;
 use std::sync::Arc;
 
-#[derive(Clone)]
-pub struct NotVerified;
-
 pub async fn auth_required(request: Request, next: Next) -> Result<Response, VialoError> {
     if request.extensions().get::<User>().is_none() {
-        if request.extensions().get::<NotVerified>().is_some() {
+        if let Some(user_suspended) = request.extensions().get::<UserSuspendedReason>() {
             return Err(VialoError::AppError(
                 StatusCode::FORBIDDEN,
-                "not_verified".into(),
+                serde_json::to_string(&user_suspended).unwrap_or_default(),
             ));
         }
         return Err(VialoError::AppError(
@@ -48,8 +45,12 @@ pub async fn auth_middleware(
     next: Next,
 ) -> Result<Response, VialoError> {
     if let AuthConfig::Mock { uuid, .. } = &app_state.config.auth {
-        request.extensions_mut().insert(Some(User { id: *uuid }));
-        request.extensions_mut().insert(User { id: *uuid });
+        let user = User {
+            id: *uuid,
+            ..Default::default()
+        };
+        request.extensions_mut().insert(Some(user.clone()));
+        request.extensions_mut().insert(user);
         return Ok(next.run(request).await);
     } else if let Some(kratos_frontend) = app_state.kratos_config.as_ref().map(|c| &c.frontend) {
         // Extract session token from headers or cookies
@@ -77,18 +78,32 @@ pub async fn auth_middleware(
             Ok(session) => {
                 if let Some(identity) = session.identity {
                     if let Ok(auth_id) = uuid::Uuid::parse_str(&identity.id) {
-                        if let Some(account_id) = sqlx::query_scalar!(
-                            "SELECT id from accounts_people WHERE auth_id = $1",
+                        if let Some(user_record) = sqlx::query!(
+                            "SELECT id, manually_suspended, membership_end < NOW() as expired from accounts_people WHERE auth_id = $1",
                             auth_id
                         )
                         .fetch_optional(&app_state.db)
                         .await?
                         {
+                            if user_record.manually_suspended {
+                                request
+                                    .extensions_mut()
+                                    .insert(UserSuspendedReason::ManuallySuspended);
+                            }
+
+                            if user_record.expired.is_some_and(|x| x) {
+                                request
+                                    .extensions_mut()
+                                    .insert(UserSuspendedReason::Expired);
+                            }
+
                             // All good
-                            request
-                                .extensions_mut()
-                                .insert(Some(User { id: account_id }));
-                            request.extensions_mut().insert(User { id: account_id });
+                            let user = User {
+                                id: user_record.id,
+                                ..Default::default()
+                            };
+                            request.extensions_mut().insert(Some(user.clone()));
+                            request.extensions_mut().insert(user);
                             return Ok(next.run(request).await);
                         }
 
@@ -143,7 +158,9 @@ pub async fn auth_middleware(
                             trans.commit().await?;
                         }
 
-                        request.extensions_mut().insert(NotVerified);
+                        request
+                            .extensions_mut()
+                            .insert(UserSuspendedReason::NotVerified);
                     } else {
                         tracing::warn!("Couldn't parse Kratos identity ID: {}", identity.id);
                     }

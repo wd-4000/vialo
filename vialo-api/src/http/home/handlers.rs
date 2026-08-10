@@ -120,7 +120,7 @@ pub async fn get_home_aggregated(
           AND {#visibility}
         ORDER BY created_at DESC LIMIT {limit} OFFSET {offset}",
         #visibility = match &user_o {
-            Some(User {id: uid}) => "(bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists({uid}, bp.board_id, 'view'))",
+            Some(User {id: uid, ..}) => "(bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists({uid}, bp.board_id, 'view'))",
             None => "bp.visibility = 'public'"
         }
     )

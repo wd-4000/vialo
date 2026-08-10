@@ -160,7 +160,7 @@ pub async fn lookup_people(
 
 #[utoipa::path(get, path = "/people/me/roles", responses((status = 200, description = "OK", body=Vec<AppRole>)))]
 pub async fn get_person_roles_me(
-    Extension(User { id }): Extension<User>,
+    Extension(User { id, .. }): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
     get_person_roles_impl(id, data).await
@@ -237,7 +237,7 @@ async fn get_person_capabilities_impl(
 
 #[utoipa::path(get, path = "/people/me/capabilities", description = "Used in the admin panel to detect which navbar items to show (see useConditionalUI)" ,responses((status = 200, description = "OK", body=AccountCapabilities)))]
 pub async fn get_person_capabilities_me(
-    Extension(User { id }): Extension<User>,
+    Extension(User { id, .. }): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
     get_person_capabilities_impl(id, data).await
@@ -305,7 +305,7 @@ async fn get_person_impl(
 
 #[utoipa::path(get, path = "/people/me", responses((status = 200, description = "OK", body=AccountModel)))]
 pub async fn get_me(
-    Extension(User { id: user_id }): Extension<User>,
+    Extension(User { id: user_id, .. }): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
     get_person_impl(user_id, data).await
