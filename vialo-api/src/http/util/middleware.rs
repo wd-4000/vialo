@@ -74,12 +74,22 @@ pub async fn auth_middleware(
                         .fetch_optional(&app_state.db)
                         .await?
                         {
+                            // All good
                             request
                                 .extensions_mut()
                                 .insert(Some(User { id: account_id }));
                             request.extensions_mut().insert(User { id: account_id });
                             return Ok(next.run(request).await);
-                        } else {
+                        }
+
+                        // Identity not present
+                        if !sqlx::query_scalar!(
+                            r#"SELECT EXISTS (SELECT 1 from identities WHERE id = $1) AS "exists!""#,
+                            auth_id
+                        )
+                        .fetch_one(&app_state.db)
+                        .await?
+                        {
                             tracing::warn!(
                                 "Kratos de-sync detected. Identity ID: {}. Fixing.",
                                 identity.id
@@ -122,6 +132,11 @@ pub async fn auth_middleware(
                                 .map_err(VialoError::Anyhow)?;
                             trans.commit().await?;
                         }
+
+                        return Err(VialoError::AppError(
+                            StatusCode::FORBIDDEN,
+                            "not_verified".into(),
+                        ));
                     } else {
                         tracing::warn!("Couldn't parse Kratos identity ID: {}", identity.id);
                     }
