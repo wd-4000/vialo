@@ -7,7 +7,7 @@ use axum::{
     http::header,
     response::{IntoResponse, Response},
 };
-use serde::de::DeserializeOwned;
+use serde::{Serialize, de::DeserializeOwned};
 
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -131,9 +131,18 @@ pub fn is_unique_violation(err: &sqlx::Error) -> bool {
     matches!(err, sqlx::Error::Database(e) if e.code().as_deref() == Some("23505"))
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UserSuspendedReason {
+    NotVerified,
+    Expired,
+    ManuallySuspended,
+}
+
+#[derive(Clone, Default)]
 pub struct User {
     pub id: Uuid,
+    pub suspended: Option<UserSuspendedReason>,
 }
 
 pub fn get_i18n_arg_arrays(
@@ -179,8 +188,9 @@ pub async fn insert_i18n_strings(
         .await
         {
             Ok(device) => {
-                let idx_id = device.insert_i18n_strings
-                    .ok_or_else(|| sqlx::Error::Protocol("insert_i18n_strings returned NULL".into()))?;
+                let idx_id = device.insert_i18n_strings.ok_or_else(|| {
+                    sqlx::Error::Protocol("insert_i18n_strings returned NULL".into())
+                })?;
                 processed_i18n_fields.insert(field_name, idx_id);
             }
             Err(e) => {

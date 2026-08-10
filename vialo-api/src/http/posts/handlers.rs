@@ -123,7 +123,7 @@ pub async fn list_posts(
                               (Some(true) | None, None) => "CASE WHEN bp.event_to IS NOT NULL THEN bp.event_to >= NOW() - interval '3 hours' ELSE bp.created_at > NOW() - interval '1 day' END"
                           },
                           #VISIBILITY = match (user_o){
-                              Some(User {id: uid} ) => "(bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists({uid}, bp.board_id, 'view'::board_perm))",
+                              Some(User {id: uid, ..} ) => "(bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists({uid}, bp.board_id, 'view'::board_perm))",
                               _ => "bp.visibility = 'public'"
                           },
                           #BOARD = match (&opts.board_id){
