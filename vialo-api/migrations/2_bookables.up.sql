@@ -256,7 +256,7 @@ CREATE OR REPLACE FUNCTION get_taken_slots (
                 '1 day'::interval
             ) AS j
         ) AS j_series_data,
-        LATERAL (SELECT ARRAY(select distinct u.id from (SELECT * FROM slots_from_schedule((SELECT schedule FROM bookable_schemas WHERE id = sq.schema_id), j_series_data.j::date)) u WHERE (SELECT range_agg(ba.during) FROM bookable_appointments ba WHERE ba.asset_id = sq.asset_id AND ba.during && tstzrange(j_series_data.j::date + '00:00'::time, j_series_data.j::date + '23:59'::time, '[]')) && u.range) as g) as f WHERE cardinality(f.g) > 0
+        LATERAL (SELECT ARRAY(select distinct u.id from (SELECT * FROM slots_from_schedule((SELECT schedule FROM bookable_schemas WHERE id = sq.schema_id), j_series_data.j::date)) u WHERE (SELECT range_agg(ba.during) FROM bookable_appointments ba WHERE ba.asset_id = sq.asset_id AND ba.cancelled_at IS NULL AND ba.during && tstzrange(j_series_data.j::date + '00:00'::time, j_series_data.j::date + '23:59'::time, '[]')) && u.range) as g) as f WHERE cardinality(f.g) > 0
         GROUP BY j_series_data.j::date, sq.schema_id);
     end;
     $$;
