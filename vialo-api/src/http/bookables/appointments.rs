@@ -185,6 +185,16 @@ pub async fn delete_appointment(
         ));
     }
 
+    // +inf doesn't count
+    if let PgDateTime::DateTime(end_timestamp) = appointment.ends
+        && end_timestamp < chrono::Utc::now()
+    {
+        return Err(VialoError::AppError(
+            StatusCode::FORBIDDEN,
+            "already_passed".to_string(),
+        ));
+    }
+
     if let Some(expected) = body.expected_credits {
         let actual_credits = appointment.credits.unwrap_or(0);
         if actual_credits != expected {
