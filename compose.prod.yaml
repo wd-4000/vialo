@@ -9,7 +9,7 @@ services:
   vialo-api:
     build:
       args:
-        PROFILE: release
+        PROFILE: ${PROFILE:-release}
     restart: always
   postgres:
     restart: always
