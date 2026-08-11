@@ -389,7 +389,7 @@ pub async fn get_person_overview(
             LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
             LEFT JOIN accounts_people ac_to ON to_account = ac_to.id
             WHERE to_account = $1 OR from_account = $1
-            ORDER BY created_at
+            ORDER BY created_at DESC
             LIMIT 5"#, id)
             .fetch_all(&data.db),
 
