@@ -77,7 +77,7 @@ pub async fn update_identity(
             )
             .fetch_optional(&mut **trans)
             .await?
-            .unwrap_or(true);
+            .unwrap_or(false);
 
         if !has_users {
             tracing::info!("Bootstrapping initial admin account for {}", email);
