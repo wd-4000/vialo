@@ -1,0 +1,20 @@
+{{#*inline "content"}}
+    <tr>
+        <td>
+            <div style="border: solid #ddd 1px;border-radius: 5px; padding: 10px 15px; margin-top: 10px;">
+                <h2>{{message.direct.subject}}</h2>
+                <p style="word-break: break-word;">{{message.direct.body}}</p>
+            </div>
+        </td>
+    </tr>
+    {{#if group.email}}
+    <tr>
+        <td>
+            <p style="margin: 15px 0 0 0; overflow-wrap: break-word; word-wrap: break-word;">
+                {{> email_replyable}}
+            </p>
+        </td>
+    </tr>
+    {{/if}}
+{{/inline}}
+{{> html/message}}

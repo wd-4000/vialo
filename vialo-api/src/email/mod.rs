@@ -1,4 +1,4 @@
-use handlebars::{DirectorySourceOptions, Handlebars};
+use handlebars::Handlebars;
 use icu::locale::locale;
 use lettre::{
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
@@ -89,6 +89,36 @@ struct EmailContext<'a> {
     pub url_email_preferences: String,
 }
 
+/// Templates are embedded at compile time so the binary does not depend on its
+/// working directory, and so a name/file mismatch is a build error rather than
+/// a render failure on the first email that needs it.
+fn build_registry() -> Result<Handlebars<'static>, anyhow::Error> {
+    let mut handlebars = Handlebars::new();
+    handlebars.set_strict_mode(true);
+
+    for (name, source) in [
+        ("html/index", include_str!("templates/html/index.hbs")),
+        ("html/message", include_str!("templates/html/message.hbs")),
+        ("html/post", include_str!("templates/html/post.hbs")),
+        ("html/direct", include_str!("templates/html/direct.hbs")),
+        (
+            "html/bookable_expired",
+            include_str!("templates/html/bookable_expired.hbs"),
+        ),
+        ("plain/message", include_str!("templates/plain/message.hbs")),
+        ("plain/post", include_str!("templates/plain/post.hbs")),
+        ("plain/direct", include_str!("templates/plain/direct.hbs")),
+        (
+            "plain/bookable_expired",
+            include_str!("templates/plain/bookable_expired.hbs"),
+        ),
+    ] {
+        handlebars.register_template_string(name, source)?;
+    }
+
+    Ok(handlebars)
+}
+
 fn register_locale_partials(handlebars: &mut Handlebars, yaml: &Yaml) -> Result<(), anyhow::Error> {
     let hash = yaml
         .as_hash()
@@ -103,6 +133,7 @@ fn register_locale_partials(handlebars: &mut Handlebars, yaml: &Yaml) -> Result<
 
 async fn form_email<'a>(
     config: &Config,
+    registry: &Handlebars<'static>,
     context: EmailContext<'a>,
     locale: Yaml,
     locale_plain: Yaml,
@@ -130,10 +161,9 @@ async fn form_email<'a>(
         ),
     };
 
-    let mut handlebars = Handlebars::new();
-    handlebars.set_strict_mode(true);
-    handlebars
-        .register_templates_directory("src/email/templates", DirectorySourceOptions::default())?;
+    // Cloned per message because the locale partials below are registered into
+    // the registry, and the plain ones overwrite the html ones between renders.
+    let mut handlebars = registry.clone();
 
     register_locale_partials(&mut handlebars, &locale["global"])?;
     register_locale_partials(&mut handlebars, &html_msg_locale)?;
@@ -182,6 +212,7 @@ async fn form_email<'a>(
 async fn notify_post_subscribers(
     app_state: &AppState,
     mailer: &MailTransport,
+    registry: &Handlebars<'static>,
     post_id: i32,
     locale: &Yaml,
     locale_plain: &Yaml,
@@ -236,6 +267,7 @@ async fn notify_post_subscribers(
         let full_name = person.full_name.as_deref().unwrap_or("");
         let email = form_email(
             &app_state.config,
+            registry,
             EmailContext {
                 message: &message,
                 account: EmailAccountInfo {
@@ -283,6 +315,7 @@ async fn notify_post_subscribers(
 async fn notify_expired_appointment(
     app_state: &AppState,
     mailer: &MailTransport,
+    registry: &Handlebars<'static>,
     message: &crate::bookables::ExpiredAppointmentMessage,
     locale: &Yaml,
     locale_plain: &Yaml,
@@ -297,6 +330,7 @@ async fn notify_expired_appointment(
 
     let email = form_email(
         &app_state.config,
+        registry,
         EmailContext {
             message: &message_type,
             account: EmailAccountInfo {
@@ -352,6 +386,8 @@ pub async fn main(
         MailTransport::Smtp(transport)
     };
 
+    let registry = build_registry()?;
+
     let locale = YamlLoader::load_from_str(include_str!("langs/en.yaml"))?;
     let locale_plain = YamlLoader::load_from_str(include_str!("langs/en_plain.yaml"))?;
     let locale = locale
@@ -372,7 +408,7 @@ pub async fn main(
                 match result {
                     Ok(post_id) => {
                         if let Err(e) = notify_post_subscribers(
-                            &app_state, &mailer, post_id, &locale, &locale_plain,
+                            &app_state, &mailer, &registry, post_id, &locale, &locale_plain,
                         ).await {
                             error!("Post {} notification failed: {:?}", post_id, e);
                         }
@@ -397,7 +433,7 @@ pub async fn main(
                 match result {
                     Ok(message) => {
                         if let Err(e) = notify_expired_appointment(
-                            &app_state, &mailer, &message, &locale, &locale_plain,
+                            &app_state, &mailer, &registry, &message, &locale, &locale_plain,
                         ).await {
                             error!(
                                 "Expired appointment {} notification failed: {e:?}",

@@ -22,7 +22,8 @@ post:
     footer: You can always <a href="{{account.url_unsubscribe}}" target="_blank">unsubscribe</a> from this board or <a href="{{url_email_preferences}}" target="_blank">manage your email preferences</a>.
 
 direct:
-  title: "{{direct.subject}} - {{group.label}}"
+  title: "{{message.direct.subject}} - {{group.label}}"
+  body: You have a new message from {{group.label}}.
   footer: "This is a direct message from {{group.label}}."
 
 bookable:
