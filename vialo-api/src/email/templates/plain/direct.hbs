@@ -1,0 +1,10 @@
+{{#*inline "content"}}
+{{message.direct.subject}}
+
+{{message.direct.body}}
+
+{{#if group.email}}
+{{> email_replyable}}
+{{/if}}
+{{/inline}}
+{{> plain/message}}

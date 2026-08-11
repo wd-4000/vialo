@@ -22,7 +22,8 @@ post:
     footer: "You can always unsubscribe from this board by visiting {{account.url_unsubscribe}} \n ...or manage your email preferences by visiting {{url_email_preferences}}."
 
 direct:
-  title: "{{direct.subject}} - {{group.label}}"
+  title: "{{message.direct.subject}} - {{group.label}}"
+  body: You have a new message from {{group.label}}.
   footer: "This is a direct message from {{group.label}}."
 
 bookable:

@@ -1,4 +1,4 @@
-{{#> plain/message}}
+{{#*inline "content"}}
 {{message.post.title}}
 {{#if message.post.time}}
 {{message.post.time}}
@@ -11,4 +11,5 @@
 {{#if group.email}}
 {{> email_replyable}}
 {{/if}}
-{{/plain/message}}
+{{/inline}}
+{{> plain/message}}
