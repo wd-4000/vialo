@@ -262,9 +262,14 @@ pub async fn book_slots(
         )
         .await;
 
-        return Err(VialoError::AppError(
+        return Err(VialoError::AppErrorWithDetails(
             StatusCode::BAD_REQUEST,
             "sum_total_expectation".to_string(),
+            json!({
+                "expected": body.expected_sum_total,
+                "actual": sum_total,
+                "slots": body.slots
+            }),
         ));
     }
 
