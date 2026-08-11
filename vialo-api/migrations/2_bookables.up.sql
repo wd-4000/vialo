@@ -101,6 +101,7 @@ CREATE TABLE bookable_appointments (
   transaction_id uuid REFERENCES credit_ledger (id),
   account_id uuid NOT NULL REFERENCES accounts (id), -- No cascade here, we want to make sure appointments are refunded appropriately.
   during tstzrange NOT NULL,
+  created_at timestamptz DEFAULT NOW(),
   activated timestamptz,
   cancelled_at timestamptz,
   cancellation_reason bookable_appointment_cancellation_reason,

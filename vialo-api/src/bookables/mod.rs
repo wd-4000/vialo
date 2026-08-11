@@ -169,7 +169,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
     JOIN credit_ledger cl ON ba.transaction_id = cl.id
     JOIN accounts_people ap ON ap.id = ba.account_id
     JOIN bookable_assets bast ON bast.id = ba.asset_id
-    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.requires_activation AND cs.expiry_refund_percent IS NOT NULL AND lower(ba.during) + cs.activation_grace_period <= NOW()"#,
+    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.requires_activation AND cs.expiry_refund_percent IS NOT NULL AND greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period <= NOW()"#,
         &["en".into(), "de".into()],
     )
     .fetch_all(&app_state.db)
@@ -240,7 +240,7 @@ async fn next_wakeup(app_state: &AppState) -> tokio::time::Instant {
         r#"SELECT MIN(
             CASE
                 WHEN lower(ba.during) > now() THEN lower(ba.during) -- not yet started
-                ELSE lower(ba.during) + cs.activation_grace_period -- expired
+                ELSE greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period -- expired
             END
         )::timestamptz
         FROM bookable_appointments ba
@@ -269,7 +269,7 @@ async fn next_wakeup(app_state: &AppState) -> tokio::time::Instant {
                 cs.requires_activation
                 AND cs.activation_grace_period IS NOT NULL
                 AND cs.expiry_refund_percent IS NOT NULL
-                AND lower(ba.during) + cs.activation_grace_period > now()
+                AND greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period > now()
             )
         )"#
     )
