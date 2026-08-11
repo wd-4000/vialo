@@ -25,9 +25,10 @@ use std::sync::Arc;
 pub async fn auth_required(request: Request, next: Next) -> Result<Response, VialoError> {
     if request.extensions().get::<User>().is_none() {
         if let Some(user_suspended) = request.extensions().get::<UserSuspendedReason>() {
-            return Err(VialoError::AppError(
+            return Err(VialoError::AppErrorWithDetails(
                 StatusCode::FORBIDDEN,
-                serde_json::to_string(&user_suspended).unwrap_or_default(),
+                "suspended".into(),
+                user_suspended.as_ref().into(),
             ));
         }
         return Err(VialoError::AppError(

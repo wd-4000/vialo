@@ -7,12 +7,13 @@ use axum::{
     http::header,
     response::{IntoResponse, Response},
 };
-use serde::{Serialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 
 use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::{Acquire, PgConnection, PgPool, PgTransaction, Postgres, pool::PoolConnection};
+use strum::AsRefStr;
 use utoipa::IntoParams;
 use uuid::Uuid;
 
@@ -131,8 +132,8 @@ pub fn is_unique_violation(err: &sqlx::Error) -> bool {
     matches!(err, sqlx::Error::Database(e) if e.code().as_deref() == Some("23505"))
 }
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, AsRefStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum UserSuspendedReason {
     NotVerified,
     Expired,
