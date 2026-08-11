@@ -212,6 +212,13 @@ pub async fn book_slots(
             VialoError::AppError(StatusCode::BAD_REQUEST, "slot_index".to_string()),
         )?;
         if let (Some(real_start), Some(real_end)) = (slot.begins, slot.ends) {
+            if real_end < chrono::Utc::now() {
+                return Err(VialoError::AppErrorWithDetails(
+                    StatusCode::BAD_REQUEST,
+                    "slot_has_passed".to_string(),
+                    json!(slot),
+                ));
+            }
             if let Some(expected_end) = expected_slot.expected_end {
                 if expected_slot.expected_start != real_start || expected_end != real_end {
                     tracing::debug!(
