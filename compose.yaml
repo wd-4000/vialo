@@ -15,6 +15,11 @@ services:
     build:
       context: ./
       dockerfile: ./vialo-api/Dockerfile
+      args:
+        # Cargo profile. The overlays pick a sensible per-environment default;
+        # PROFILE in the host's .env overrides all of them. `fast` is release
+        # codegen plus incremental — see [profile.fast] in vialo/Cargo.toml.
+        PROFILE: ${PROFILE:-release}
     restart: unless-stopped
     volumes:
       - ../vialo.toml:/app/vialo.toml
