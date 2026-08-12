@@ -169,7 +169,7 @@ pub async fn main(
             let mut current_job_id = None;
             let mut conn = grab_authd_conn_subsystem(&printer_subsystem_pool.clone(), "printer")
                 .await
-                .expect("couldn't connect to db!");
+                .map_err(|e| anyhow::anyhow!("couldn't connect to db: {e:?}"))?;
 
             // See what there is to do
             if last_refresh.is_none()

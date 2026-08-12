@@ -35,7 +35,7 @@ pub async fn main(
 
         let mut conn = grab_authd_conn_subsystem(&db_pool.clone(), "ppsk")
             .await
-            .expect("couldn't connect to db!");
+            .map_err(|e| anyhow::anyhow!("couldn't connect to db: {e:?}"))?;
 
         if let Some(job) = sqlx::query!(
         r#"UPDATE subsystem_jobs SET status = 'processing', last_updated = NOW() WHERE id IN (SELECT id
