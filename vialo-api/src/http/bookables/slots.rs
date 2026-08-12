@@ -7,7 +7,7 @@ use crate::http::util::{grab_authd_conn_user, grab_trans};
 use crate::{AppState, health, http::history::models::Subsystem, impl_jsonb_embed};
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
-use chrono::{DateTime, Local, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{query, query_as, query_scalar};
@@ -219,8 +219,8 @@ pub async fn book_slots(
                     json!(slot),
                 ));
             }
-            if let Some(expected_end) = expected_slot.expected_end {
-                if expected_slot.expected_start != real_start || expected_end != real_end {
+            if let Some(expected_end) = expected_slot.expected_end
+                && (expected_slot.expected_start != real_start || expected_end != real_end) {
                     tracing::debug!(
                         "expected_start: {:?}, real_start: {:?}, expected_end: {:?}, real_end: {:?}",
                         expected_slot.expected_start,
@@ -233,7 +233,6 @@ pub async fn book_slots(
                         "slot_expectation".to_string(),
                     ));
                 }
-            }
         } else {
             return Err(VialoError::AppError(
                 StatusCode::BAD_REQUEST,

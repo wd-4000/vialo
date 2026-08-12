@@ -15,9 +15,11 @@ pub fn init(key: Key) {
 }
 
 fn get_cipher() -> XChaCha20Poly1305 {
-    XChaCha20Poly1305::new(Key::from_slice(KEY.get().expect(
-        "Who do you think you are? Call encryption::init before using Encrypted<T>",
-    )))
+    let key: &Key = KEY
+        .get()
+        .expect("Who do you think you are? Call encryption::init before using Encrypted<T>")
+        .into();
+    XChaCha20Poly1305::new(key)
 }
 
 pub fn decrypt<T: for<'de> Deserialize<'de>>(blob: &[u8]) -> Result<T, anyhow::Error> {

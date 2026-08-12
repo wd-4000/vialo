@@ -136,15 +136,14 @@ async fn handle_socket(
             {
                 let id: i32 = sub.id.into();
                 let key = (sub.channel.clone(), id);
-                if subscribed.insert(key) {
-                    if sub.channel.as_str() == "bookables" {
+                if subscribed.insert(key)
+                    && sub.channel.as_str() == "bookables" {
                         state
                             .event_channels
                             .bookables
                             .subscribe(id, user_id, Arc::clone(&slot_recv), Arc::clone(&notify_recv))
                             .await;
                     }
-                }
             }
         }
     });

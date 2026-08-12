@@ -39,7 +39,7 @@ pub fn clamp_pagination(limit: Option<i64>, page: Option<i64>) -> Result<(i64, i
     let limit = limit.unwrap_or(10);
     let page = page.unwrap_or(1);
 
-    if limit < 1 || limit > MAX_PAGE_SIZE {
+    if !(1..=MAX_PAGE_SIZE).contains(&limit) {
         return Err(VialoError::AppError(
             StatusCode::BAD_REQUEST,
             format!("limit must be between 1 and {}", MAX_PAGE_SIZE),
@@ -116,11 +116,10 @@ impl From<anyhow::Error> for VialoError {
 
 impl From<sqlx::Error> for VialoError {
     fn from(err: sqlx::Error) -> Self {
-        if let sqlx::Error::Database(ref db_err) = err {
-            if db_err.code().as_deref() == Some("23503") {
+        if let sqlx::Error::Database(ref db_err) = err
+            && db_err.code().as_deref() == Some("23503") {
                 return Self::AppError(StatusCode::BAD_REQUEST, "invalid_reference".into());
             }
-        }
         match err {
             sqlx::Error::RowNotFound => Self::NotFound(),
             _ => Self::Anyhow(err.into()),

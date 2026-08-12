@@ -333,12 +333,12 @@ pub async fn get_person_overview(
     // theoretically nothing prevents us from also letting regular users query this but I don't think it's needed
     check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
 
-    let account_task;
+    
 
     // what if conditional_query_as was evil
     cfg_if::cfg_if! {
     if #[cfg(feature = "printer")] {
-         account_task = sqlx::query_as!(AccountModelForOverview, r#"SELECT ap.id,
+         let account_task = sqlx::query_as!(AccountModelForOverview, r#"SELECT ap.id,
          ap.label,
        ap.auth_id,
         ap.email,

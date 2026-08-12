@@ -6,7 +6,6 @@ use axum::{
     middleware::{self},
     routing::get,
 };
-use chrono::Utc;
 use tower_http::trace::TraceLayer;
 pub mod bookables;
 mod config;
@@ -21,7 +20,6 @@ pub mod posts;
 pub mod rate_limit;
 pub mod util;
 
-use crate::config::AuthConfig;
 use rand::prelude::*;
 
 use super::AppState;

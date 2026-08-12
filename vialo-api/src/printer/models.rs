@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::{error, fmt, sync::Arc};
+use std::{error, fmt};
 use utoipa::ToSchema;
 use uuid::Uuid;
 

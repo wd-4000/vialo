@@ -1,7 +1,6 @@
 use super::super::home::models::JumboModelTranslated;
 use super::{models::QuickLinkModelTranslated, schemas::PostFilterOptions};
 use crate::http::home::models::BoardPostModelHomeTranslated;
-use crate::http::util::models::GroupEmbed;
 use crate::http::util::{User, VialoError, clamp_pagination};
 use crate::{AppState, list_i18n_generic};
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
