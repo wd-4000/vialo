@@ -3,9 +3,11 @@ use axum::http::{
     header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
 };
 use dotenv::dotenv;
+use futures::FutureExt;
 use sqlx::postgres::PgPoolOptions;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -149,7 +151,24 @@ async fn run_subsystem<F, Fut>(
             break;
         }
 
-        let result = start(shutdown.clone()).await;
+        // A panic would otherwise escape into the JoinHandle, leaving the
+        // subsystem dead for the rest of the process's life
+        let result = match AssertUnwindSafe(start(shutdown.clone()))
+            .catch_unwind()
+            .await
+        {
+            Ok(result) => result,
+            Err(panic) => {
+                let message = if let Some(s) = panic.downcast_ref::<&str>() {
+                    (*s).to_string()
+                } else if let Some(s) = panic.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "unknown panic payload".to_string()
+                };
+                Err(anyhow::anyhow!("panicked: {message}"))
+            }
+        };
         if *shutdown.borrow() {
             break;
         }
