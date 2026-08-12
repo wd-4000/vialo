@@ -26,7 +26,6 @@ use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 use std::{i64, time::Duration};
 use tokio::time::sleep;
-use tracing::info;
 use utoipa::{IntoParams, ToSchema};
 
 #[derive(Deserialize, Debug, Default, IntoParams)]

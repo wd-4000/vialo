@@ -12,10 +12,9 @@ use super::super::AppState;
 use super::User;
 use crate::helpers;
 use axum::{
-    Json,
     extract::{Request, State},
     middleware::Next,
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use ory_kratos_client::apis::frontend_api::to_session;
 use reqwest::StatusCode;

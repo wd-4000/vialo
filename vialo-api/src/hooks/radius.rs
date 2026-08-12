@@ -198,8 +198,8 @@ pub(crate) async fn auth(
     };
 
     // Auto-register the device if the network is configured for it
-    if m.auto_add_on_auth {
-        if let Some(mac_addr) = mac {
+    if m.auto_add_on_auth
+        && let Some(mac_addr) = mac {
             let existing_device_id = if !m.multi_device {
                 // Singular device per credential — find the one device for this cred
                 sqlx::query_scalar!("SELECT id FROM net_devices WHERE cred_id = $1", m.cred_id,)
@@ -236,7 +236,6 @@ pub(crate) async fn auth(
                 .await?;
             }
         }
-    }
 
     trans.commit().await?;
 

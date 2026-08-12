@@ -37,6 +37,12 @@ pub struct RateLimiters {
     pub strikes: Arc<DashMap<IpAddr, u32>>,
 }
 
+impl Default for RateLimiters {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RateLimiters {
     pub fn new() -> Self {
         let per_min = |n: u32| Quota::per_minute(NonZeroU32::new(n).unwrap());

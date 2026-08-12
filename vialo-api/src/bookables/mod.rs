@@ -198,8 +198,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
         }
         trans.commit().await?;
         fetch_and_broadcast_status(app_state, [appointment.asset_id]).await;
-        if let Err(_) =
-            app_state
+        if app_state
                 .event_channels
                 .expired_appointments_tx
                 .send(ExpiredAppointmentMessage {
@@ -211,7 +210,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
                     credits_refunded: appointment.credits.unwrap_or(0)
                         * appointment.expiry_refund_percent as i32
                         / 100,
-                })
+                }).is_err()
         {
             tracing::error!(
                 appointment_id = %appointment.id,

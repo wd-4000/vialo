@@ -46,7 +46,7 @@ macro_rules! list_i18n_generic {
     ($db:expr, $query:expr, $opts:expr, $result_type:ty) => {{
         use sqlx::query_as;
 
-        let (offset, limit) = crate::http::util::clamp_pagination($opts.limit, $opts.page)?;
+        let (offset, limit) = $crate::http::util::clamp_pagination($opts.limit, $opts.page)?;
         let langs = $opts
             .lang
             .unwrap_or(vec![String::from("en"), String::from("de")]);
