@@ -117,10 +117,11 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             .route("/printer", get(printer::list))
             .route(
                 "/{id}/printer",
-                get(printer::get)
+                get(printer::get_by_id)
                     .post(printer::link_or_create)
                     .delete(printer::delete),
             )
+            .route("/me/printer", get(printer::get_me))
             .route("/{id}/printer/unlink", post(printer::unlink));
     }
 

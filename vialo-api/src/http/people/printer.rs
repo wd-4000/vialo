@@ -99,20 +99,17 @@ pub struct PersonPrinterResponse {
     pub pending: Vec<String>,
 }
 
-#[utoipa::path(get, path = "/people/{id}/printer", responses((status = 200, description = "OK", body=PersonPrinterResponse)))]
-pub async fn get(
-    Path(id): Path<Uuid>,
-    Extension(user): Extension<User>,
-    State(data): State<Arc<AppState>>,
+async fn get_printer_impl(
+    target_id: Uuid,
+    data: Arc<AppState>,
 ) -> Result<impl IntoResponse, VialoError> {
-    if user.id != id {
-        check_app_role(user, AppRole::AccountManager, &data.db).await?;
-    }
+    // permission check in the caller!
+
     let details = sqlx::query_as!(
         PrinterInfo,
         r#"SELECT id as "id!", printer_id, printer_username, printer_password as "printer_password: Encrypted<String>", color, bw
         FROM subsystem_printer_context WHERE id = $1 AND id IS NOT NULL"#,
-        id
+        target_id
     )
     .fetch_optional(&data.db)
     .await?;
@@ -120,7 +117,7 @@ pub async fn get(
     let (error, pending): (Vec<String>, Vec<String>) = sqlx::query_as!(JobWithStatus,
         r#"SELECT data['type'] as "type!: String", status as "status: JobStatus" FROM subsystem_jobs
         WHERE subsystem = 'printer' AND data->>'account_id' = $1::text AND status != 'done' AND data->>'type' IS NOT NULL"#,
-        id.to_string()).fetch_all(&data.db)
+        target_id.to_string()).fetch_all(&data.db)
     .await?.into_iter().partition_map(|j| {if j.status == JobStatus::Error  {
         Either::Left(j.r#type)
     } else {   Either::Right(j.r#type)}});
@@ -130,6 +127,26 @@ pub async fn get(
         error,
         pending,
     }))
+}
+
+#[utoipa::path(get, path = "/people/{id}/printer", responses((status = 200, description = "OK", body=PersonPrinterResponse)))]
+pub async fn get_by_id(
+    Path(id): Path<Uuid>,
+    Extension(user): Extension<User>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    if user.id != id {
+        check_app_role(user, AppRole::AccountManager, &data.db).await?;
+    }
+    get_printer_impl(id, data).await
+}
+
+#[utoipa::path(get, path = "/people/me/printer", responses((status = 200, description = "OK", body=PersonPrinterResponse)))]
+pub async fn get_me(
+    Extension(user): Extension<User>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    get_printer_impl(user.id, data).await
 }
 
 #[derive(Deserialize, Debug, Default, ToSchema)]
