@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true AND account_id = $1 AND lower(ba.during) >= $2   AND ba.cancelled_at IS NULL ORDER BY during LIMIT $3 OFFSET $4",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true  AND upper(ba.during) >= $1   AND ba.cancelled_at IS NULL ORDER BY during LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -112,7 +112,6 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Timestamptz",
         "Int8",
         "Int8"
@@ -131,5 +130,5 @@
       false
     ]
   },
-  "hash": "58743d3f02968edc6c448c8fb64908b86d4971b170e350bc32e13fde5fda2767"
+  "hash": "a08f03d41fe256cde092d647efecf2538949068d8708032e960dcbd43ac16abe"
 }
