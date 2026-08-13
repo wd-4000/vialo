@@ -69,7 +69,7 @@ pub async fn create_router(app_state: Arc<AppState>) -> Router {
     //                             lessor_id: None,
     //                         }),
     //                         auto_setup_network: Some(true),
-    //                         auto_setup_printer: Some(false),
+    //                         enable_amenities_login: Some(false),
     //                     }),
     //                 )
     //                 .await;
