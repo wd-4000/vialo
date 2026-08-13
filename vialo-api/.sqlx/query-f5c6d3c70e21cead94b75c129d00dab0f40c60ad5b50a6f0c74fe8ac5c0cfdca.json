@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM subsystem_printer_context WHERE printer_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f5c6d3c70e21cead94b75c129d00dab0f40c60ad5b50a6f0c74fe8ac5c0cfdca"
+}

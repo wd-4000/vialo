@@ -11,6 +11,7 @@ use crate::{
     permissions::{AppRole, require_app_role},
 };
 
+pub mod amenities;
 pub mod groups;
 pub mod handlers;
 pub mod identities;
@@ -104,12 +105,21 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             delete(groups::delete_account).patch(groups::patch_account),
         );
 
+    let amenities_routes = Router::new()
+        .route(
+            "/{id}/amenities",
+            get(amenities::get_by_id).delete(amenities::delete),
+        )
+        .route("/{id}/amenities/generate", post(amenities::generate))
+        .route("/me/amenities", get(amenities::get_me));
+
     let mut builder = Router::new()
         .merge(me_routes)
         .merge(credit_routes)
         .merge(account_routes)
         .merge(group_read_routes)
-        .merge(group_write_routes);
+        .merge(group_write_routes)
+        .merge(amenities_routes);
 
     #[cfg(feature = "printer")]
     {

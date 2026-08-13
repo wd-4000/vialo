@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (now()::time >= TIME '04:00')\n                       AND NOT EXISTS (\n                           SELECT 1 FROM subsystem_jobs\n                           WHERE subsystem = 'printer'\n                             AND data ->> 'type' = 'full_sync'\n                             AND created_at >= date_trunc('day', now())\n                       ) AS \"due!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "due!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "10a2c72ccb9568dd72b0a817e97f13e144ce29193212e12319f7d1802ac7b88b"
+}

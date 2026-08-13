@@ -1,14 +1,11 @@
 use crate::{
     AppState,
-    http::util::{JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user},
+    http::util::{JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans},
     permissions::{AppRole, check_app_role},
 };
 use crate::{
-    helpers::encryption::{self as encryption, Encrypted},
-    printer::{
-        self,
-        models::{JobData, JobStatus},
-    },
+    helpers::{self},
+    printer::models::JobStatus,
 };
 use axum::{
     Extension, Json,
@@ -18,10 +15,6 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use itertools::{Either, Itertools};
-use rand::{
-    distr::{Alphanumeric, SampleString},
-    rng,
-};
 
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
@@ -34,9 +27,6 @@ use uuid::Uuid;
 pub struct PrinterInfo {
     pub id: Uuid,
     pub printer_username: Option<String>,
-    #[serde(serialize_with = "encryption::serialize_exposed_opt")]
-    #[schema(value_type = Option<String>)]
-    pub printer_password: Option<Encrypted<String>>,
     pub printer_id: Option<i32>,
     pub color: Option<i32>,
     pub bw: Option<i32>,
@@ -107,7 +97,7 @@ async fn get_printer_impl(
 
     let details = sqlx::query_as!(
         PrinterInfo,
-        r#"SELECT id as "id!", printer_id, printer_username, printer_password as "printer_password: Encrypted<String>", color, bw
+        r#"SELECT id as "id!", printer_id, printer_username, color, bw
         FROM subsystem_printer_context WHERE id = $1 AND id IS NOT NULL"#,
         target_id
     )
@@ -172,18 +162,32 @@ pub async fn link_or_create(
         .execute(&mut *conn)
         .await?;
     } else {
-        let username = Alphanumeric.sample_string(&mut rng(), 8);
-        let password = Alphanumeric.sample_string(&mut rng(), 16);
+        let mut trans = grab_trans(&mut conn).await?;
 
-        printer::add_task(
-            &mut *conn,
-            JobData::CreateAccount {
-                account_id: id,
-                username: username.clone(),
-                password: encryption::encrypt(&password)?,
-            },
+        let provisioned = sqlx::query_scalar!(
+            r#"SELECT (amenities_username IS NOT NULL AND amenities_pin IS NOT NULL) AS "provisioned!"
+            FROM accounts_people WHERE id = $1"#,
+            id
         )
-        .await?;
+        .fetch_optional(&mut *trans)
+        .await?
+        .ok_or(VialoError::NotFound())?;
+
+        if provisioned {
+            // Reuse the existing amenities login instead of rotating it.
+            // Nothing changed so the sync trigger won't fire, enqueue the sync.
+            sqlx::query!(
+                "INSERT INTO subsystem_jobs (subsystem, data, last_updated, status)
+                 VALUES ('printer', jsonb_build_object('type', 'sync_account', 'account_id', $1::uuid), NOW(), 'pending')",
+                id
+            )
+            .execute(&mut *trans)
+            .await?;
+        } else {
+            helpers::people::generate_amenities_login(id, &mut trans).await?;
+        }
+
+        trans.commit().await?;
     }
     Ok(StatusCode::NO_CONTENT)
 }

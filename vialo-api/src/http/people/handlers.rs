@@ -19,10 +19,7 @@ use crate::{
         models::{AccountEmbed, AccountPersonEmbed, GroupEmbed, ProductType, RoomEmbed},
     },
 };
-use crate::{
-    helpers::{PgDate, encryption},
-    permissions::check_app_role,
-};
+use crate::{helpers::PgDate, permissions::check_app_role};
 use crate::{http::people::models::PersonalNetRealmOverviewModel, permissions::AppRole};
 use axum::{
     Extension, Json,
@@ -31,10 +28,6 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::Query;
-use rand::{
-    distr::{Alphanumeric, SampleString},
-    rng,
-};
 use serde::Serialize;
 use serde_json::json;
 use sqlx::{prelude::FromRow, query, query_scalar};
@@ -333,8 +326,6 @@ pub async fn get_person_overview(
     // theoretically nothing prevents us from also letting regular users query this but I don't think it's needed
     check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
 
-    
-
     // what if conditional_query_as was evil
     cfg_if::cfg_if! {
     if #[cfg(feature = "printer")] {
@@ -346,7 +337,7 @@ pub async fn get_person_overview(
          ap.membership_end as "membership_end: PgDate",
           ap.full_name,
           ap.manually_suspended,
-         ap.credit_balance, spc.printer_username, spc.printer_id as "printer_id?"
+         ap.credit_balance, ap.amenities_username, spc.printer_username, spc.printer_id as "printer_id?"
          FROM accounts_people ap LEFT JOIN subsystem_printer_context spc ON ap.id = spc.id WHERE ap.id = $1"#, id).fetch_one(&data.db);
 
          } else {
@@ -358,7 +349,7 @@ pub async fn get_person_overview(
              ap.membership_end as "membership_end: PgDate",
               ap.full_name,
               ap.manually_suspended,
-             ap.credit_balance FROM accounts_people ap WHERE ap.id = $1"#, id).fetch_one(&data.db);
+             ap.credit_balance, ap.amenities_username FROM accounts_people ap WHERE ap.id = $1"#, id).fetch_one(&data.db);
       }
       }
     let q = try_join!(
@@ -483,24 +474,13 @@ pub async fn add_person(
         );
     }
 
-    #[cfg(feature = "printer")]
-    if body.auto_setup_printer.unwrap_or(false) {
-        let username = Alphanumeric.sample_string(&mut rng(), 8);
-        let password = Alphanumeric.sample_string(&mut rng(), 16);
-
-        printer::add_task(
-            trans.deref_mut(),
-            JobData::CreateAccount {
-                account_id: created_user.id,
-                username: username.clone(),
-                password: encryption::encrypt(&password)?,
-            },
-        )
-        .await?;
+    if body.enable_amenities_login.unwrap_or(false) {
+        let credentials =
+            helpers::people::generate_amenities_login(created_user.id, &mut trans).await?;
 
         response.as_object_mut().unwrap().insert(
-            "printer".into(),
-            json!({"username": username, "password": password}),
+            "amenities".into(),
+            json!({"username": credentials.username, "password": credentials.pin}),
         );
     }
 

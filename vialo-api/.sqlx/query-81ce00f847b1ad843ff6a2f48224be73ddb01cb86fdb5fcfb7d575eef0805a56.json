@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO subsystem_printer_context (id, printer_id, printer_username, bw, color) VALUES ($1,$2,$3,$4,$5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Text",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "81ce00f847b1ad843ff6a2f48224be73ddb01cb86fdb5fcfb7d575eef0805a56"
+}

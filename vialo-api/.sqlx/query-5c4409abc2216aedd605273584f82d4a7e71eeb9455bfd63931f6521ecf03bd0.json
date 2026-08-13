@@ -1,16 +1,16 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id as \"id!\", printer_id, printer_username, printer_password as \"printer_password: Encrypted<String>\", color, bw\n        FROM subsystem_printer_context WHERE id = $1 AND id IS NOT NULL",
+  "query": "SELECT credit_balance, printer_id, printer_username, bw, color FROM accounts_people ap JOIN subsystem_printer_context spc ON ap.id = spc.id WHERE ap.id = $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!",
-        "type_info": "Uuid",
+        "name": "credit_balance",
+        "type_info": "Int4",
         "origin": {
           "Table": {
-            "table": "subsystem_printer_context",
-            "name": "id"
+            "table": "accounts_people",
+            "name": "credit_balance"
           }
         }
       },
@@ -38,12 +38,12 @@
       },
       {
         "ordinal": 3,
-        "name": "printer_password: Encrypted<String>",
-        "type_info": "Bytea",
+        "name": "bw",
+        "type_info": "Int4",
         "origin": {
           "Table": {
             "table": "subsystem_printer_context",
-            "name": "printer_password"
+            "name": "bw"
           }
         }
       },
@@ -57,17 +57,6 @@
             "name": "color"
           }
         }
-      },
-      {
-        "ordinal": 5,
-        "name": "bw",
-        "type_info": "Int4",
-        "origin": {
-          "Table": {
-            "table": "subsystem_printer_context",
-            "name": "bw"
-          }
-        }
       }
     ],
     "parameters": {
@@ -79,10 +68,9 @@
       true,
       false,
       true,
-      true,
       false,
       false
     ]
   },
-  "hash": "09e19e670ed787e1304df274e661b57352516dd0edc8b3410a1264d35c0b4ce0"
+  "hash": "5c4409abc2216aedd605273584f82d4a7e71eeb9455bfd63931f6521ecf03bd0"
 }

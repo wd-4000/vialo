@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n                                    (SELECT unit_price FROM subsystem_printer_pricing\n                                        WHERE product = 'printer_bw'\n                                          AND begins <= NOW()\n                                        ORDER BY begins DESC\n                                        LIMIT 1) AS bw_price,\n                                    (SELECT unit_price FROM subsystem_printer_pricing\n                                        WHERE product = 'printer_color'\n                                          AND begins <= NOW()\n                                        ORDER BY begins DESC\n                                        LIMIT 1) AS color_price",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bw_price",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "color_price",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "03d57ba81430849606e56eedb35ce8daa7dddb5c5664fe8c7f7b5bc5c6d2651c"
+}

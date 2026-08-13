@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE subsystem_printer_context SET bw = 0, color = 0 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aaeac5c6d48ca55793015397a41c0fd78fa43c8febb17311a528a76ab93d5509"
+}

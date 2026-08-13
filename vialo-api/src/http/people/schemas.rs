@@ -70,7 +70,7 @@ pub struct CreateUserSchema {
     pub label: Option<String>,
     pub membership_end: PgDate,
     pub auto_setup_network: Option<bool>,
-    pub auto_setup_printer: Option<bool>,
+    pub enable_amenities_login: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
