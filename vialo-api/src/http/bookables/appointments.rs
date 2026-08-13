@@ -309,7 +309,7 @@ pub async fn list(
                 IdOrAllQuery::Id(account) => "AND account_id = {account}",
             },
             #from = match (opts.from) {
-                Some(from) => "AND lower(ba.during) >= {from} ",
+                Some(from) => "AND upper(ba.during) >= {from} ",
                 None => ""
             },
             #to = match (opts.to) {
