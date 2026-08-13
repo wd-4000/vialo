@@ -17,7 +17,6 @@ CREATE TABLE subsystem_printer_context (
   id uuid UNIQUE REFERENCES accounts_people (id) ON DELETE SET NULL,
   printer_id int PRIMARY KEY,
   printer_username text,
-  printer_password BYTEA,
   bw int NOT NULL DEFAULT 0,
   color int NOT NULL DEFAULT 0
 );
@@ -29,7 +28,6 @@ CREATE TABLE subsystem_printer_pricing (
   PRIMARY KEY (begins, product)
 );
 
--- TODO Add trigger to remove printer user account
 -- Create the trigger function
 --
 CREATE OR REPLACE FUNCTION log_printer_transaction (
@@ -133,3 +131,124 @@ CREATE TABLE subsystem_jobs (
 CREATE INDEX idx_subsystem_jobs_account_id ON subsystem_jobs (subsystem, (data ->> 'account_id'))
 WHERE
   status != 'done';
+
+-- The amenities login lives on the person, the printer mirrors it on the device.
+CREATE OR REPLACE FUNCTION amenities_login_printer_sync () RETURNS TRIGGER AS $$
+BEGIN
+    -- Nothing to push until both halves exist
+    IF NEW.amenities_username IS NULL OR NEW.amenities_pin IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    -- UPDATE OF fires on assignment, not on change
+    IF TG_OP = 'UPDATE'
+       AND NEW.amenities_username IS NOT DISTINCT FROM OLD.amenities_username
+       AND NEW.amenities_pin IS NOT DISTINCT FROM OLD.amenities_pin THEN
+        RETURN NULL;
+    END IF;
+
+    INSERT INTO subsystem_jobs (subsystem, data, created_at, last_updated, status)
+    VALUES (
+      'printer',
+      jsonb_build_object('type', 'sync_account', 'account_id', NEW.id),
+      NOW(),
+      NOW(),
+      'pending'
+    );
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_amenities_login_printer_sync
+AFTER INSERT
+OR
+UPDATE OF amenities_username,
+amenities_pin ON accounts_people FOR EACH ROW
+EXECUTE FUNCTION amenities_login_printer_sync ();
+
+-- Deleting a person-linked mirror row also deletes the device account.
+CREATE OR REPLACE FUNCTION printer_context_delete_sync () RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.id IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    INSERT INTO subsystem_jobs (subsystem, data, created_at, last_updated, status)
+    VALUES (
+      'printer',
+      jsonb_build_object('type', 'delete_account', 'printer_id', OLD.printer_id),
+      NOW(),
+      NOW(),
+      'pending'
+    );
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_printer_context_delete_sync
+AFTER DELETE ON subsystem_printer_context FOR EACH ROW
+EXECUTE FUNCTION printer_context_delete_sync ();
+
+-- Credit changes need a limit update (limits are counter + balance/price).
+-- Printer billing rows don't, balance and counter move together.
+CREATE OR REPLACE FUNCTION enqueue_account_limit_update () RETURNS TRIGGER AS $$
+DECLARE
+    p_account_id uuid;
+BEGIN
+    IF NOT (
+        (NEW.entry_type = 'transfer'
+         AND (NEW.product IS NULL OR NEW.product NOT IN ('printer_bw', 'printer_color')))
+        OR NEW.entry_type IN ('unlimited_enabled', 'unlimited_disabled')
+    ) THEN
+        RETURN NULL;
+    END IF;
+
+    -- Both sides of a transfer may change balance
+    FOR p_account_id IN
+        SELECT unnest(ARRAY[NEW.from_account, NEW.to_account])
+    LOOP
+        CONTINUE WHEN p_account_id IS NULL;
+
+        -- No printer access, nothing to limit
+        CONTINUE WHEN NOT EXISTS (
+            SELECT 1 FROM subsystem_printer_context WHERE id = p_account_id
+        );
+
+        INSERT INTO subsystem_jobs (subsystem, data, created_at, last_updated, status)
+        VALUES (
+          'printer',
+          jsonb_build_object('type', 'update_account_limit', 'account_id', p_account_id),
+          NOW(),
+          NOW(),
+          'pending'
+        );
+    END LOOP;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_enqueue_account_limit_update
+AFTER INSERT ON credit_ledger FOR EACH ROW
+EXECUTE FUNCTION enqueue_account_limit_update ();
+
+-- Dedup identical pending jobs.
+CREATE OR REPLACE FUNCTION dedup_subsystem_jobs () RETURNS TRIGGER AS $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM subsystem_jobs
+        WHERE subsystem = NEW.subsystem
+          AND status = 'pending'
+          AND data = NEW.data
+    ) THEN
+        RETURN NULL;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_dedup_subsystem_jobs
+BEFORE INSERT ON subsystem_jobs FOR EACH ROW
+EXECUTE FUNCTION dedup_subsystem_jobs ();

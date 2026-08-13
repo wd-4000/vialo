@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE credit_ledger SET status = 'done' WHERE from_account = $1 AND status = 'pending' AND (product = 'printer_bw' OR product = 'printer_color')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb83b5891a2edf2dcaa2e3b0c2c9515b967f0ef7923964b95f3ff845cebc75e5"
+}

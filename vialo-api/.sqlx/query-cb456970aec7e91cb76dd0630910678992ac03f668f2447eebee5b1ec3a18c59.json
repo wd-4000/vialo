@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(\n                                       SELECT 1 FROM subsystem_jobs\n                                        WHERE subsystem = 'printer' AND status = 'pending'\n                                   ) AS \"exists!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cb456970aec7e91cb76dd0630910678992ac03f668f2447eebee5b1ec3a18c59"
+}

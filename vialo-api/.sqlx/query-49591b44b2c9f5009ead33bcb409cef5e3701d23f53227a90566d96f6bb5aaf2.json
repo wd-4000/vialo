@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id as \"id!\", printer_id FROM subsystem_printer_context WHERE id IS NOT NULL",
+  "query": "SELECT id, printer_id FROM subsystem_printer_context",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!",
+        "name": "id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -34,5 +34,5 @@
       false
     ]
   },
-  "hash": "46338ed384a4527938e8a719a0c24d3c996de8cc5eaecbc21948cd0a6ce77247"
+  "hash": "49591b44b2c9f5009ead33bcb409cef5e3701d23f53227a90566d96f6bb5aaf2"
 }

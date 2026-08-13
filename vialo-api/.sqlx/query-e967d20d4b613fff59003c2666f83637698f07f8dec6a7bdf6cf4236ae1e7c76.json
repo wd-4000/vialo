@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT amenities_username AS \"username!\", amenities_pin AS \"password!: Encrypted<String>\"\n        FROM accounts_people\n        WHERE id = $1 AND amenities_username IS NOT NULL AND amenities_pin IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "username!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "amenities_username"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "password!: Encrypted<String>",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "amenities_pin"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "e967d20d4b613fff59003c2666f83637698f07f8dec6a7bdf6cf4236ae1e7c76"
+}

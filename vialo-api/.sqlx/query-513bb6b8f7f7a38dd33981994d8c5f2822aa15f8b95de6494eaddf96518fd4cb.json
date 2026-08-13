@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE accounts_people SET (amenities_username, amenities_pin) = ($1, $2) WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bytea",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "513bb6b8f7f7a38dd33981994d8c5f2822aa15f8b95de6494eaddf96518fd4cb"
+}

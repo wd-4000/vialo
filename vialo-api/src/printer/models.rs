@@ -1,12 +1,15 @@
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use std::{error, fmt};
+use strum::AsRefStr;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
 pub enum PrinterRequestError {
     XMLError,
+    /// The referenced account does not exist on the device.
+    AccountNotFound,
+    /// Internal error
     Failure(Option<String>),
     Reqwest(#[serde(serialize_with = "serialize_reqwest_error")] reqwest::Error),
 }
@@ -29,6 +32,7 @@ impl fmt::Display for PrinterRequestError {
                 )
             }
             PrinterRequestError::XMLError => write!(f, "Printer returned unexpected XML."),
+            PrinterRequestError::AccountNotFound => write!(f, "Printer account not found"),
             PrinterRequestError::Reqwest(..) => write!(f, "Reqwest error"),
         }
     }
@@ -63,27 +67,15 @@ pub struct AccountInfo {
     pub password: String,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-#[serde_as]
+#[derive(Deserialize, Serialize, Debug, Clone, AsRefStr)]
 #[serde(rename_all = "snake_case", tag = "type")]
+#[strum(serialize_all = "snake_case")]
 pub enum JobData {
-    CreateAccount {
-        account_id: Uuid,
-        username: String,
-        // Manually handle encryption here to avoid ugly serialization
-        #[serde_as(as = "serde_with::base64::Base64")]
-        password: Vec<u8>,
-    },
+    SyncAccount { account_id: Uuid },
     FullSync {},
     Refresh {},
-    UpdateAccountLimit {
-        account_id: Uuid,
-        color_limit: u16,
-        bw_limit: u16,
-    },
-    DeleteAccount {
-        printer_id: i32,
-    },
+    UpdateAccountLimit { account_id: Uuid },
+    DeleteAccount { printer_id: i32 },
 }
 
 #[derive(Debug, sqlx::FromRow, Deserialize, Serialize)]

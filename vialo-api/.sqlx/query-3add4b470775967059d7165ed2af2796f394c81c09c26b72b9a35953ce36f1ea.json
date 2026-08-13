@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO subsystem_jobs (subsystem, data, last_updated, status)\n                 VALUES ('printer', jsonb_build_object('type', 'sync_account', 'account_id', $1::uuid), NOW(), 'pending')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3add4b470775967059d7165ed2af2796f394c81c09c26b72b9a35953ce36f1ea"
+}

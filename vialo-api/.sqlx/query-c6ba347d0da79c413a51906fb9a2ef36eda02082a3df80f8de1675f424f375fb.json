@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (amenities_username IS NOT NULL AND amenities_pin IS NOT NULL) AS \"provisioned!\"\n            FROM accounts_people WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provisioned!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c6ba347d0da79c413a51906fb9a2ef36eda02082a3df80f8de1675f424f375fb"
+}

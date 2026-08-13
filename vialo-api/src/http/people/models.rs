@@ -97,6 +97,7 @@ pub struct AccountModelForOverview {
     pub full_name: Option<String>,
     pub manually_suspended: Option<bool>,
     pub credit_balance: Option<i32>,
+    pub amenities_username: Option<String>,
     #[cfg(feature = "printer")]
     pub printer_username: Option<String>,
     #[cfg(feature = "printer")]

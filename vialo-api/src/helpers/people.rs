@@ -1,9 +1,47 @@
+use crate::helpers::encryption;
 use anyhow::Result;
+use rand::{
+    RngExt,
+    distr::{Alphanumeric, SampleString},
+    rng,
+};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, Transaction};
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+/// A person's amenities login (printer, kiosk).
+pub struct AmenitiesLogin {
+    pub username: String,
+    pub pin: String,
+}
+
+/// Generate and store a person's amenities login, replacing any existing pair.
+pub async fn generate_amenities_login(
+    id: Uuid,
+    trans: &mut Transaction<'_, Postgres>,
+) -> Result<AmenitiesLogin> {
+    let (username, pin) = {
+        let mut rng = rng();
+        let username = Alphanumeric.sample_string(&mut rng, 8);
+        let pin: String = (0..6)
+            .map(|_| char::from(b'0' + rng.random_range(0..10u8)))
+            .collect();
+        (username, pin)
+    };
+
+    sqlx::query!(
+        "UPDATE accounts_people SET (amenities_username, amenities_pin) = ($1, $2) WHERE id = $3",
+        username,
+        encryption::encrypt(&pin)?,
+        id
+    )
+    .execute(&mut **trans)
+    .await?;
+
+    Ok(AmenitiesLogin { username, pin })
+}
 
 fn build_kratos_http_client(kratos_url: &str) -> (reqwest::Client, String) {
     if kratos_url.starts_with("unix://") {

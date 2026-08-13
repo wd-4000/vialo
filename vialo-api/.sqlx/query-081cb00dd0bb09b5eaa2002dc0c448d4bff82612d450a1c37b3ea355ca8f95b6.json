@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT email, amenities_username, amenities_pin from accounts_people where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "amenities_username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "amenities_username"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "amenities_pin",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "amenities_pin"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "081cb00dd0bb09b5eaa2002dc0c448d4bff82612d450a1c37b3ea355ca8f95b6"
+}
