@@ -147,7 +147,8 @@ SELECT
       'infinity'::timestamptz
     )
   END as ends,
-  lower(COALESCE(x.during, y.during)) as begins
+  lower(COALESCE(x.during, y.during)) as begins,
+  y.appointment_id
 FROM
   bookable_assets ba
   LEFT JOIN LATERAL (
@@ -159,6 +160,7 @@ FROM
     SELECT
       apa.during as during,
       apa.asset_id,
+      apa.id as appointment_id,
       CASE
         WHEN apa.maintenance THEN 'maintenance'::bookable_status_type
         WHEN apa.activated IS NOT NULL

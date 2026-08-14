@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                id as \"id!\",\n                asset_type_id as \"asset_type_id!\",\n                status as \"status!: BookableStatus\",\n                begins,\n                ends as \"ends: PgDateTime\"\n               FROM bookable_asset_status WHERE id = $1",
+  "query": "SELECT\n                id as \"id!\",\n                asset_type_id as \"asset_type_id!\",\n                status as \"status!: BookableStatus\",\n                begins,\n                ends as \"ends: PgDateTime\",\n                appointment_id\n               FROM bookable_asset_status WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -70,6 +70,17 @@
             "name": "ends"
           }
         }
+      },
+      {
+        "ordinal": 5,
+        "name": "appointment_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "bookable_asset_status",
+            "name": "appointment_id"
+          }
+        }
       }
     ],
     "parameters": {
@@ -82,8 +93,9 @@
       true,
       true,
       true,
+      true,
       true
     ]
   },
-  "hash": "bb71ee1e160332509b65087d0775f3799d96793427cc8744c282f8774a9b3fba"
+  "hash": "b6e814120591448ed9c868fe58cd308eda0edbe578c9d554dfa38bb267d222df"
 }

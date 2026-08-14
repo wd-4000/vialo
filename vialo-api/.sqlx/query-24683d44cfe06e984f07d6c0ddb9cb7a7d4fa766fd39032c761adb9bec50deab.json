@@ -1,13 +1,18 @@
 {
   "db_name": "PostgreSQL",
-  "query": "update bookable_assets set quick_unlock = tstzrange(now(), now() + '1 minute', '[]') WHERE id = $1 AND (NOT (quick_unlock @> now()) OR quick_unlock IS NULL) RETURNING $1 as \"id!\", asset_type_id as \"asset_type_id!\", 'quick_unlock'::bookable_status_type as \"status!: BookableStatus\",\n    now() as begins,\n   (now() + '1 minute') as \"ends: PgDateTime\";",
+  "query": "update bookable_appointments bap set activated = NOW() FROM bookable_assets ba WHERE bap.asset_id = ba.id AND bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as \"id!\", ba.asset_type_id as \"asset_type_id!\", 'active'::bookable_status_type as \"status!: BookableStatus\",\n        lower(bap.during) as begins,\n        coalesce(upper(bap.during), 'infinity'::timestamptz) as \"ends!: PgDateTime\",\n        bap.id as \"appointment_id?\";",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
         "name": "id!",
         "type_info": "Int4",
-        "origin": "Expression"
+        "origin": {
+          "Table": {
+            "table": "bookable_appointments",
+            "name": "asset_id"
+          }
+        }
       },
       {
         "ordinal": 1,
@@ -47,23 +52,36 @@
       },
       {
         "ordinal": 4,
-        "name": "ends: PgDateTime",
+        "name": "ends!: PgDateTime",
         "type_info": "Timestamptz",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "appointment_id?",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "bookable_appointments",
+            "name": "id"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
-        "Int4"
+        "Uuid",
+        "Uuid"
       ]
     },
     "nullable": [
-      null,
+      false,
       false,
       null,
       null,
-      null
+      null,
+      false
     ]
   },
-  "hash": "9ebec7cdd76438c109f14c64f270090ece1951413c28c13edeefae8feb4356ed"
+  "hash": "24683d44cfe06e984f07d6c0ddb9cb7a7d4fa766fd39032c761adb9bec50deab"
 }

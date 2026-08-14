@@ -333,7 +333,8 @@ pub async fn fetch_and_broadcast_status(
                 asset_type_id as "asset_type_id!",
                 status as "status!: BookableStatus",
                 begins,
-                ends as "ends: PgDateTime"
+                ends as "ends: PgDateTime",
+                appointment_id
                FROM bookable_asset_status WHERE id = $1"#,
             asset_id,
         )

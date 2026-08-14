@@ -62,7 +62,8 @@ pub async fn activate(
 
     let bookable_record = query_as!(BookableAssetStatus, r#"update bookable_appointments bap set activated = NOW() FROM bookable_assets ba WHERE bap.asset_id = ba.id AND bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as "id!", ba.asset_type_id as "asset_type_id!", 'active'::bookable_status_type as "status!: BookableStatus",
         lower(bap.during) as begins,
-        coalesce(upper(bap.during), 'infinity'::timestamptz) as "ends!: PgDateTime";"#, id, user.id).fetch_one(&mut *conn).await?;
+        coalesce(upper(bap.during), 'infinity'::timestamptz) as "ends!: PgDateTime",
+        bap.id as "appointment_id?";"#, id, user.id).fetch_one(&mut *conn).await?;
 
     let evil_data = data.clone();
     tokio::spawn(async move {
