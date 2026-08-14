@@ -23,6 +23,7 @@ pub struct BookableAssetStatus {
     pub status: BookableStatus,
     pub begins: Option<DateTime<Utc>>,
     pub ends: Option<PgDateTime>,
+    pub appointment_id: Option<uuid::Uuid>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -35,6 +36,7 @@ pub struct BookableAssetTranslatedWithStatus {
     #[schema(format = DateTime)]
     pub begins: Option<DateTime<Utc>>,
     pub ends: Option<PgDateTime>,
+    pub appointment_id: Option<uuid::Uuid>,
 }
 
 #[derive(Serialize, ToSchema)]

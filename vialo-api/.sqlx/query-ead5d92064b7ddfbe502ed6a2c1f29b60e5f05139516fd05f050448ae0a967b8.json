@@ -1,18 +1,13 @@
 {
   "db_name": "PostgreSQL",
-  "query": "update bookable_appointments bap set activated = NOW() FROM bookable_assets ba WHERE bap.asset_id = ba.id AND bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as \"id!\", ba.asset_type_id as \"asset_type_id!\", 'active'::bookable_status_type as \"status!: BookableStatus\",\n        lower(bap.during) as begins,\n        coalesce(upper(bap.during), 'infinity'::timestamptz) as \"ends!: PgDateTime\";",
+  "query": "update bookable_assets set quick_unlock = tstzrange(now(), now() + '1 minute', '[]') WHERE id = $1 AND (NOT (quick_unlock @> now()) OR quick_unlock IS NULL) RETURNING $1 as \"id!\", asset_type_id as \"asset_type_id!\", 'quick_unlock'::bookable_status_type as \"status!: BookableStatus\",\n    now() as begins,\n   (now() + '1 minute') as \"ends: PgDateTime\",\n   NULL::uuid as appointment_id;",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
         "name": "id!",
         "type_info": "Int4",
-        "origin": {
-          "Table": {
-            "table": "bookable_appointments",
-            "name": "asset_id"
-          }
-        }
+        "origin": "Expression"
       },
       {
         "ordinal": 1,
@@ -52,24 +47,30 @@
       },
       {
         "ordinal": 4,
-        "name": "ends!: PgDateTime",
+        "name": "ends: PgDateTime",
         "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "appointment_id",
+        "type_info": "Uuid",
         "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid"
+        "Int4"
       ]
     },
     "nullable": [
+      null,
       false,
-      false,
+      null,
       null,
       null,
       null
     ]
   },
-  "hash": "5452c6c0648111e25be141c1ffda57b2932b9d91a316533696baa499b7888071"
+  "hash": "ead5d92064b7ddfbe502ed6a2c1f29b60e5f05139516fd05f050448ae0a967b8"
 }

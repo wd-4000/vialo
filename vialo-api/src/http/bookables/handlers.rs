@@ -60,7 +60,8 @@ pub async fn list_bookables(
                 asset_type_id as "asset_type_id!",
                 status as "status!: BookableStatus",
                 begins,
-                ends as "ends: PgDateTime"
+                ends as "ends: PgDateTime",
+                appointment_id
             FROM
                 bookable_asset_status
             WHERE account_bookable_perm_exists({user_id_o}, asset_type_id, 'view'::bookable_perm)
@@ -89,7 +90,8 @@ pub async fn quick_unlock(
 
     let record = query_as!(BookableAssetStatus, r#"update bookable_assets set quick_unlock = tstzrange(now(), now() + '1 minute', '[]') WHERE id = $1 AND (NOT (quick_unlock @> now()) OR quick_unlock IS NULL) RETURNING $1 as "id!", asset_type_id as "asset_type_id!", 'quick_unlock'::bookable_status_type as "status!: BookableStatus",
     now() as begins,
-   (now() + '1 minute') as "ends: PgDateTime";"#, id).fetch_one(&mut *conn).await?;
+   (now() + '1 minute') as "ends: PgDateTime",
+   NULL::uuid as appointment_id;"#, id).fetch_one(&mut *conn).await?;
 
     let evil_data = data.clone();
     tokio::spawn(async move {
@@ -277,7 +279,8 @@ pub async fn get_bookable(
                bd.asset_type_id as "asset_type_id!",
                bd.status as "status!: BookableStatus",
                begins,
-               ends as "ends: PgDateTime"
+               ends as "ends: PgDateTime",
+               bd.appointment_id
            FROM
                bookable_asset_status bd
            WHERE bd.id = $2
