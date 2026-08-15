@@ -53,7 +53,6 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/appointments/{id}",
             delete(appointments::delete_appointment),
         )
-        .route("/appointments/{id}/activate", post(appointments::activate))
         .route("/slots/taken", get(slots::taken_slots))
         .route("/slots/schemas", get(slots::slot_schemas))
         .merge(booking_routes)
@@ -73,4 +72,5 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/queues", get(handlers::list_queues))
         .route("/{id}", get(handlers::get_bookable))
         .route("/{id}/quick-unlock", post(handlers::quick_unlock))
+        .route("/appointments/{id}/activate", post(appointments::activate))
 }
