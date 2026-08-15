@@ -35,3 +35,9 @@ appname_admin = "XYZ Admin"
 appname_user_long = "X-ray-Yankee-Zulu"
 impressum_url = "https://xyz.example.com/impressum"
 privacy_policy_url = "https://xyz.example.com/datenschutz"
+
+# Device credential for the kiosk: /laundry/kiosk?key=<token>.
+# Without it, the kiosk renders status but cannot read the queue.
+[bookables.kiosk]
+token = "change-me"
+asset_types = [1]
