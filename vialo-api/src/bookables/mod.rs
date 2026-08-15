@@ -1,13 +1,16 @@
 mod channel;
-pub use channel::BookableChannel;
+pub use channel::{BookableChannel, BookableQueueChannel};
 
 use crate::helpers::{PgDateTime, encryption::Encrypted};
 use crate::http::bookables::connectors::BookableConnectorWithPassword;
-use crate::http::bookables::models::{BookableAssetStatus, BookableStatus};
+use crate::http::bookables::models::{
+    BookableAssetQueue, BookableAssetStatus, BookableQueueEntry, BookableStatus,
+};
 use crate::http::util::grab_trans;
 use crate::{AppState, helpers::grab_authd_conn_subsystem};
 use netio::models::OutputPost;
-use sqlx::{query, query_as, query_scalar};
+use sqlx::{postgres::PgListener, query, query_as, query_scalar};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch;
@@ -18,6 +21,52 @@ mod models;
 
 mod netio;
 pub use models::*;
+
+pub const QUEUE_PREVIOUS_DEPTH: i64 = 2;
+pub const QUEUE_UPCOMING_DEPTH: i64 = 4;
+
+/// bookable_asset_queue
+pub struct QueueRow {
+    pub asset_id: i32,
+    pub asset_type_id: i32,
+    pub appointment_id: uuid::Uuid,
+    pub begins: Option<chrono::DateTime<chrono::Utc>>,
+    pub ends: Option<PgDateTime>,
+    pub room: Option<String>,
+    pub maintenance: bool,
+    pub bucket: String,
+}
+
+pub fn assemble_queues(rows: Vec<QueueRow>) -> Vec<BookableAssetQueue> {
+    let mut queues: HashMap<i32, BookableAssetQueue> = HashMap::new();
+    for row in rows {
+        let entry = BookableQueueEntry {
+            appointment_id: row.appointment_id,
+            begins: row.begins,
+            ends: row.ends,
+            room: row.room,
+            maintenance: row.maintenance,
+        };
+        let queue = queues
+            .entry(row.asset_id)
+            .or_insert_with(|| BookableAssetQueue {
+                id: row.asset_id,
+                asset_type_id: row.asset_type_id,
+                previous: Vec::new(),
+                current: None,
+                upcoming: Vec::new(),
+            });
+        match row.bucket.as_str() {
+            "previous" => queue.previous.push(entry),
+            "current" => queue.current = Some(entry),
+            _ => queue.upcoming.push(entry),
+        }
+    }
+
+    let mut queues: Vec<BookableAssetQueue> = queues.into_values().collect();
+    queues.sort_by_key(|q| q.id);
+    queues
+}
 
 pub async fn sync_connectors(app_state: &AppState) -> Result<(), anyhow::Error> {
     let mut conn = grab_authd_conn_subsystem(&app_state.db, "bookable")
@@ -102,7 +151,7 @@ pub async fn auto_activate_appointments(app_state: &AppState) -> Result<(), anyh
         .await
         .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
-    let activated = query!(
+    query!(
         "UPDATE bookable_appointments ba
     SET activated = NOW()
     WHERE ba.activated IS NULL
@@ -118,16 +167,10 @@ pub async fn auto_activate_appointments(app_state: &AppState) -> Result<(), anyh
         ORDER BY bsa.begins DESC
         LIMIT 1
     )
-    RETURNING ba.asset_id
 "
     )
-    .fetch_all(&mut *conn)
+    .execute(&mut *conn)
     .await?;
-
-    if !activated.is_empty() {
-        let asset_ids: Vec<i32> = activated.iter().map(|r| r.asset_id).collect();
-        fetch_and_broadcast_status(app_state, asset_ids).await;
-    }
 
     Ok(())
 }
@@ -197,20 +240,20 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
             .await?;
         }
         trans.commit().await?;
-        fetch_and_broadcast_status(app_state, [appointment.asset_id]).await;
         if app_state
-                .event_channels
-                .expired_appointments_tx
-                .send(ExpiredAppointmentMessage {
-                    id: appointment.id,
-                    account_id: appointment.account_id,
-                    full_name: appointment.full_name,
-                    email: appointment.email,
-                    asset_name: appointment.asset_name.unwrap_or_else(|| "Unknown".into()),
-                    credits_refunded: appointment.credits.unwrap_or(0)
-                        * appointment.expiry_refund_percent as i32
-                        / 100,
-                }).is_err()
+            .event_channels
+            .expired_appointments_tx
+            .send(ExpiredAppointmentMessage {
+                id: appointment.id,
+                account_id: appointment.account_id,
+                full_name: appointment.full_name,
+                email: appointment.email,
+                asset_name: appointment.asset_name.unwrap_or_else(|| "Unknown".into()),
+                credits_refunded: appointment.credits.unwrap_or(0)
+                    * appointment.expiry_refund_percent as i32
+                    / 100,
+            })
+            .is_err()
         {
             tracing::error!(
                 appointment_id = %appointment.id,
@@ -236,12 +279,26 @@ async fn next_wakeup(app_state: &AppState) -> tokio::time::Instant {
     let fallback = tokio::time::Instant::now() + Duration::from_secs(3600); // wake up every hour just in case
 
     let result = query_scalar!(
-        r#"SELECT MIN(
+        r#"SELECT LEAST(
+        -- the end of whatever is running now: nothing else wakes us for it, and
+        -- both the status and the queue go stale the moment it passes
+        (SELECT MIN(upper(ba.during))
+           FROM bookable_appointments ba
+          WHERE ba.cancelled_at IS NULL
+            AND ba.during @> now()
+            AND NOT upper_inf(ba.during)
+            AND upper(ba.during) <> 'infinity'::timestamptz),
+        -- quick unlocks are ranges too, and end the same way
+        (SELECT MIN(upper(ba.quick_unlock))
+           FROM bookable_assets ba
+          WHERE ba.quick_unlock @> now()
+            AND NOT upper_inf(ba.quick_unlock)),
+        (SELECT MIN(
             CASE
                 WHEN lower(ba.during) > now() THEN lower(ba.during) -- not yet started
                 ELSE greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period -- expired
             END
-        )::timestamptz
+        )
         FROM bookable_appointments ba
 
         -- schema for asset
@@ -270,7 +327,8 @@ async fn next_wakeup(app_state: &AppState) -> tokio::time::Instant {
                 AND cs.expiry_refund_percent IS NOT NULL
                 AND greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period > now()
             )
-        )"#
+        ))
+        )::timestamptz"#
     )
     .fetch_one(&app_state.db)
     .await
@@ -289,12 +347,17 @@ pub async fn main(
     app_state: Arc<AppState>,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), anyhow::Error> {
-    let notify = app_state.event_channels.bookables.subscribe_notify().await;
+    let mut listener = PgListener::connect_with(&app_state.db).await?;
+    listener.listen("bookable_update").await?;
+
+    // Empty on first pass, so everything broadcasts once
+    let mut cache: HashMap<i32, (BookableAssetStatus, BookableAssetQueue)> = HashMap::new();
 
     loop {
         auto_activate_appointments(&app_state).await?;
         expire_appointments(&app_state).await?;
         sync_connectors(&app_state).await?;
+        publish_bookables(&app_state, &mut cache).await?;
 
         if *shutdown.borrow() {
             break;
@@ -306,9 +369,9 @@ pub async fn main(
             _ = time::sleep_until(wakeup) => {
                 // Scheduled wakeup
             }
-            _ = notify.notified() => {
-                debug!("event received");
-                // TODO be less lazy about this
+            notif = listener.recv() => {
+                notif?;
+                debug!("bookable write notification received");
             }
             changed = shutdown.changed() => {
                 if changed.is_ok() && *shutdown.borrow() {
@@ -320,33 +383,107 @@ pub async fn main(
     Ok(())
 }
 
-/// Query the current status of each bookable asset and broadcast to all WS subscribers.
-pub async fn fetch_and_broadcast_status(
-    state: &AppState,
-    asset_ids: impl IntoIterator<Item = i32>,
-) {
-    for asset_id in asset_ids {
-        let record = query_as!(
-            BookableAssetStatus,
-            r#"SELECT
-                id as "id!",
-                asset_type_id as "asset_type_id!",
-                status as "status!: BookableStatus",
-                begins,
-                ends as "ends: PgDateTime",
-                appointment_id
-               FROM bookable_asset_status WHERE id = $1"#,
-            asset_id,
-        )
-        .fetch_one(&state.db)
-        .await;
+/// Recompute every bookable payload and broadcast what changed.
 
-        if let Ok(record) = record {
-            state
+async fn publish_bookables(
+    app_state: &AppState,
+    cache: &mut HashMap<i32, (BookableAssetStatus, BookableAssetQueue)>,
+) -> Result<(), anyhow::Error> {
+    let statuses = query_as!(
+        BookableAssetStatus,
+        r#"SELECT
+            id as "id!",
+            asset_type_id as "asset_type_id!",
+            status as "status!: BookableStatus",
+            begins,
+            ends as "ends: PgDateTime",
+            appointment_id
+           FROM bookable_asset_status
+           ORDER BY id"#
+    )
+    .fetch_all(&app_state.db)
+    .await?;
+
+    let queue_rows = query!(
+        r#"SELECT
+            asset_id as "asset_id!",
+            asset_type_id as "asset_type_id!",
+            appointment_id as "appointment_id!",
+            begins,
+            ends as "ends: PgDateTime",
+            room,
+            maintenance as "maintenance!",
+            bucket as "bucket!"
+           FROM bookable_asset_queue
+           WHERE (bucket = 'previous' AND past_rank <= $1)
+              OR bucket = 'current'
+              OR (bucket = 'upcoming' AND future_rank <= $2)
+           ORDER BY asset_id, begins"#,
+        QUEUE_PREVIOUS_DEPTH,
+        QUEUE_UPCOMING_DEPTH,
+    )
+    .fetch_all(&app_state.db)
+    .await?;
+
+    let mut queues: HashMap<i32, BookableAssetQueue> = assemble_queues(
+        queue_rows
+            .into_iter()
+            .map(|r| QueueRow {
+                asset_id: r.asset_id,
+                asset_type_id: r.asset_type_id,
+                appointment_id: r.appointment_id,
+                begins: r.begins,
+                ends: r.ends,
+                room: r.room,
+                maintenance: r.maintenance,
+                bucket: r.bucket,
+            })
+            .collect(),
+    )
+    .into_iter()
+    .map(|q| (q.id, q))
+    .collect();
+
+    let mut fresh: HashMap<i32, (BookableAssetStatus, BookableAssetQueue)> = HashMap::new();
+
+    for status in statuses {
+        // An asset with nothing queued publishes empty buckets to clear the
+        // client side.
+        let queue = queues.remove(&status.id).unwrap_or(BookableAssetQueue {
+            id: status.id,
+            asset_type_id: status.asset_type_id,
+            previous: Vec::new(),
+            current: None,
+            upcoming: Vec::new(),
+        });
+
+        // Broadcast each channel only when it actually changed, so e.g. a
+        // booking made for next week moves the queue without re-sending the
+        // status. An asset new to the cache broadcasts both.
+        let (changed_status, changed_queue) = match cache.get(&status.id) {
+            Some((prev_status, prev_queue)) => (prev_status != &status, prev_queue != &queue),
+            None => (true, true),
+        };
+
+        if changed_status {
+            app_state
                 .event_channels
                 .bookables
-                .broadcast(record.asset_type_id, record.id, record)
+                .broadcast(status.asset_type_id, status.id, status.clone())
                 .await;
         }
+        if changed_queue {
+            app_state
+                .event_channels
+                .bookable_queues
+                .broadcast(queue.asset_type_id, queue.id, queue.clone())
+                .await;
+        }
+
+        fresh.insert(status.id, (status, queue));
     }
+
+    *cache = fresh;
+
+    Ok(())
 }

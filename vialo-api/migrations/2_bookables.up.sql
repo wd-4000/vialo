@@ -136,18 +136,26 @@ SELECT
   ba.asset_type_id,
   ba.connector,
   ba.connector_output_id,
-  COALESCE(
-    x.status,
-    y.status,
-    'available'::bookable_status_type
-  ) as status,
+  -- an active appointment overshadows quick_unlock
   CASE
+    WHEN y.status = 'active' THEN 'active'::bookable_status_type
+    ELSE COALESCE(
+      x.status,
+      y.status,
+      'available'::bookable_status_type
+    )
+  END as status,
+  CASE
+    WHEN y.status = 'active' THEN upper(y.during)
     WHEN COALESCE(x.during, y.during) IS NOT NULL THEN COALESCE(
       upper(COALESCE(x.during, y.during)),
       'infinity'::timestamptz
     )
   END as ends,
-  lower(COALESCE(x.during, y.during)) as begins,
+  CASE
+    WHEN y.status = 'active' THEN lower(y.during)
+    ELSE lower(COALESCE(x.during, y.during))
+  END as begins,
   y.appointment_id
 FROM
   bookable_assets ba
@@ -187,6 +195,88 @@ FROM
     LIMIT
       1
   ) y ON y.asset_id = ba.id;
+
+-- Who is queued for each asset, split into the three buckets the board shows:
+-- finished, running, scheduled. Includes room.
+CREATE VIEW bookable_asset_queue AS
+WITH q AS (
+  SELECT
+    apa.asset_id,
+    ba.asset_type_id,
+    apa.id as appointment_id,
+    lower(apa.during) as begins,
+    COALESCE(upper(apa.during), 'infinity'::timestamptz) as ends,
+    CASE
+      WHEN apa.maintenance THEN NULL
+      ELSE cro.room_name
+    END as room,
+    apa.maintenance,
+    CASE
+      WHEN COALESCE(upper(apa.during), 'infinity'::timestamptz) <= now() THEN 'previous'
+      WHEN apa.during @> now() THEN 'current'
+      ELSE 'upcoming'
+    END as bucket
+  FROM
+    bookable_appointments apa
+    JOIN bookable_assets ba ON ba.id = apa.asset_id
+    LEFT JOIN current_room_occupants cro ON cro.id = apa.account_id
+  WHERE
+    apa.cancelled_at IS NULL
+)
+SELECT
+  q.*,
+  -- 1 = most recently finished; caps the previous bucket
+  row_number() OVER (
+    PARTITION BY
+      q.asset_id,
+      q.bucket
+    ORDER BY
+      q.begins DESC
+  ) as past_rank,
+  -- 1 = soonest within current/upcoming; caps the upcoming bucket
+  row_number() OVER (
+    PARTITION BY
+      q.asset_id,
+      q.bucket
+    ORDER BY
+      q.begins ASC
+  ) as future_rank
+FROM
+  q;
+
+-- Writes to these tables change derived views (bookable_asset_status, bookable_asset_queue), so wake the publisher via NOTIFY.
+CREATE OR REPLACE FUNCTION bookable_notify_trigger () RETURNS TRIGGER AS $$
+DECLARE
+    col text := TG_ARGV[0];
+    new_id text;
+    old_id text;
+BEGIN
+    IF TG_OP <> 'DELETE' THEN
+        EXECUTE format('SELECT ($1).%I::text', col) INTO new_id USING NEW;
+    END IF;
+    IF TG_OP <> 'INSERT' THEN
+        EXECUTE format('SELECT ($1).%I::text', col) INTO old_id USING OLD;
+    END IF;
+
+    IF new_id IS NOT NULL THEN
+        PERFORM pg_notify('bookable_update', new_id);
+    END IF;
+    -- appointment moved between assets
+    IF old_id IS NOT NULL AND old_id IS DISTINCT FROM new_id THEN
+        PERFORM pg_notify('bookable_update', old_id);
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_bookable_update_appointments
+AFTER INSERT OR UPDATE OR DELETE ON bookable_appointments FOR EACH ROW
+EXECUTE FUNCTION bookable_notify_trigger ('asset_id');
+
+CREATE TRIGGER tg_bookable_update_assets
+AFTER INSERT OR UPDATE OR DELETE ON bookable_assets FOR EACH ROW
+EXECUTE FUNCTION bookable_notify_trigger ('id');
 
 CREATE OR REPLACE FUNCTION slots_from_schedule (schedule time[], reference_date DATE) RETURNS table (id int, range tstzrange) LANGUAGE plpgsql AS $$
     DECLARE

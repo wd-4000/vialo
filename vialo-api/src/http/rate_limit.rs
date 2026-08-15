@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use crate::{AppState, health::add_health_event, http::history::models::Subsystem};
 
-use super::util::User;
+use super::util::{User, VialoError};
 
 type RlInstant = <DefaultClock as Clock>::Instant;
 
@@ -34,6 +34,10 @@ pub struct RateLimiters {
     /// Separate IP-keyed limiter for the unauthenticated fallback path.
     /// Uses its own bucket so it doesn't double-consume from `global`.
     pub anonymous: Arc<DefaultKeyedRateLimiter<IpAddr>>,
+    /// IP-keyed limiter for kiosk PIN attempts. Checked in the activate handler
+    /// (kiosk branch only) rather than as middleware, because the endpoint is
+    /// shared with the session flow.
+    pub kiosk_pin: Arc<DefaultKeyedRateLimiter<IpAddr>>,
     pub strikes: Arc<DashMap<IpAddr, u32>>,
 }
 
@@ -52,8 +56,21 @@ impl RateLimiters {
             credential: Arc::new(RateLimiter::keyed(per_min(10))),
             credits: Arc::new(RateLimiter::keyed(per_min(5))),
             anonymous: Arc::new(RateLimiter::keyed(per_min(120))),
+            kiosk_pin: Arc::new(RateLimiter::keyed(per_min(10))),
             strikes: Arc::new(DashMap::new()),
         }
+    }
+
+    /// In-handler check for kiosk PIN attempts keyed by client IP
+    pub fn check_kiosk_pin(
+        &self,
+        headers: &HeaderMap,
+        connect_info: Option<&ConnectInfo<SocketAddr>>,
+    ) -> Result<(), VialoError> {
+        let ip = extract_ip(headers, connect_info);
+        self.kiosk_pin.check_key(&ip).map_err(|_| {
+            VialoError::AppError(StatusCode::TOO_MANY_REQUESTS, "too_many_requests".into())
+        })
     }
 }
 

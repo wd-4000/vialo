@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT amenities_pin FROM accounts_people WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "amenities_pin",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "amenities_pin"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "9928236625590e08af89ebd3dd6c18c0a0db2df6302ce04d735f8b3bdaa60726"
+}

@@ -9,7 +9,7 @@ use sqlx::{
     postgres::{PgArgumentBuffer, PgTypeInfo, types::Oid},
 };
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum PgDateTime {
     Infinity,

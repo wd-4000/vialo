@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE bookable_appointments ba\n    SET activated = NOW()\n    WHERE ba.activated IS NULL\n    AND ba.cancelled_at IS NULL\n    AND ba.maintenance = false\n    AND lower(ba.during) <= now()\n    AND NOT (\n        SELECT bs.requires_activation\n        FROM bookable_schema_assignments bsa\n        JOIN bookable_schemas bs ON bs.id = bsa.schema_id\n        WHERE bsa.asset_id = ba.asset_id\n          AND bsa.begins <= lower(ba.during)\n        ORDER BY bsa.begins DESC\n        LIMIT 1\n    )\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "c76300b312a2d982d45198f0777571f4dc445c952607718e82a4195f393522db"
+}

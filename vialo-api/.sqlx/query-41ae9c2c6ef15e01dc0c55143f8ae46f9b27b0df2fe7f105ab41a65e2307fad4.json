@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT LEAST(\n        -- the end of whatever is running now: nothing else wakes us for it, and\n        -- both the status and the queue go stale the moment it passes\n        (SELECT MIN(upper(ba.during))\n           FROM bookable_appointments ba\n          WHERE ba.cancelled_at IS NULL\n            AND ba.during @> now()\n            AND NOT upper_inf(ba.during)\n            AND upper(ba.during) <> 'infinity'::timestamptz),\n        -- quick unlocks are ranges too, and end the same way\n        (SELECT MIN(upper(ba.quick_unlock))\n           FROM bookable_assets ba\n          WHERE ba.quick_unlock @> now()\n            AND NOT upper_inf(ba.quick_unlock)),\n        (SELECT MIN(\n            CASE\n                WHEN lower(ba.during) > now() THEN lower(ba.during) -- not yet started\n                ELSE greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period -- expired\n            END\n        )\n        FROM bookable_appointments ba\n\n        -- schema for asset\n        LEFT JOIN (\n            SELECT DISTINCT ON (bsa.asset_id)\n                bsa.asset_id,\n                bs.activation_grace_period,\n                bs.expiry_refund_percent,\n                bs.requires_activation\n            FROM bookable_schema_assignments bsa\n            JOIN bookable_schemas bs ON bs.id = bsa.schema_id\n            WHERE bsa.begins <= now()\n            ORDER BY bsa.asset_id, bsa.begins DESC\n        ) cs ON cs.asset_id = ba.asset_id\n\n        -- not activated, not canceled\n        WHERE ba.cancelled_at IS NULL\n        AND ba.activated IS NULL\n\n        -- and begins or expires in the future\n        AND (\n            lower(ba.during) > now()\n            OR (\n                cs.requires_activation\n                AND cs.activation_grace_period IS NOT NULL\n                AND cs.expiry_refund_percent IS NOT NULL\n                AND greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period > now()\n            )\n        ))\n        )::timestamptz",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "least",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "41ae9c2c6ef15e01dc0c55143f8ae46f9b27b0df2fe7f105ab41a65e2307fad4"
+}

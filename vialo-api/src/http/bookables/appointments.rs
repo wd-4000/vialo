@@ -1,7 +1,6 @@
-use super::models::{BookableAssetStatus, BookableStatus};
 use super::permissions::{BookablePerm, require_asset_type_perm};
 use crate::bookables::CancellationReason;
-use crate::helpers::PgDateTime;
+use crate::helpers::{PgDateTime, encryption, grab_authd_conn_subsystem};
 use crate::http::history::models::Subsystem;
 use crate::http::util::models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery};
 use crate::http::util::{
@@ -9,14 +8,20 @@ use crate::http::util::{
 };
 use crate::permissions::{AppRole, check_app_role};
 use crate::{AppState, health};
-use axum::extract::Path;
-use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
-use axum_extra::extract::Query;
+use axum::extract::{ConnectInfo, Path};
+use axum::{
+    Extension, Json,
+    extract::State,
+    http::{HeaderMap, StatusCode},
+    response::IntoResponse,
+};
+use axum_extra::{TypedHeader, extract::Query};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{query, query_as};
+use sqlx::{query, query_scalar};
 use sqlx_conditional_queries::conditional_query_as;
 use std::i64;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
@@ -50,33 +55,143 @@ pub struct BookableAppointmentType {
     pub maintenance: Option<bool>,
 }
 
-#[utoipa::path(post, path = "/bookables/appointments/{id}/activate", responses((status = 204, description = "Activated")))] // no body
+#[derive(Deserialize, Debug, Default, ToSchema)]
+pub struct KioskActivateBody {
+    #[serde(default)]
+    pub pin: Option<String>,
+}
+
+#[utoipa::path(post, path = "/bookables/appointments/{id}/activate", request_body=KioskActivateBody, responses((status = 204, description = "Activated")))]
 pub async fn activate(
     Path(id): Path<Uuid>,
-    Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
+    Extension(user_o): Extension<Option<User>>,
+    authorization: Option<TypedHeader<headers::Authorization<headers::authorization::Bearer>>>,
+    headers: HeaderMap,
+    connect_info: Option<Extension<ConnectInfo<SocketAddr>>>,
+    body: Option<Json<KioskActivateBody>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    // Implicit permission check in the query
+    // A valid kiosk credential: activate on behalf of the appointment's owner
+    let kiosk = authorization.and_then(|TypedHeader(h)| {
+        let token = h.0.token();
+        data.config
+            .bookables
+            .as_ref()?
+            .kiosk
+            .as_ref()
+            .filter(|k| k.matches(token))
+            .cloned()
+    });
 
+    if let Some(kiosk) = kiosk {
+        let Some(Json(body)) = body else {
+            return Err(VialoError::Forbidden());
+        };
+        let Some(pin) = body.pin else {
+            return Err(VialoError::Forbidden());
+        };
+
+        // The PIN is brute-forceable, so e throttle it per IP.
+        data.rate_limiters
+            .check_kiosk_pin(&headers, connect_info.as_deref())?;
+
+        return kiosk_activate(&data, id, &kiosk, &pin).await;
+    }
+
+    let Some(user) = user_o else {
+        return Err(VialoError::Forbidden());
+    };
+
+    // Implicit permission check in the query
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
-    let bookable_record = query_as!(BookableAssetStatus, r#"update bookable_appointments bap set activated = NOW() FROM bookable_assets ba WHERE bap.asset_id = ba.id AND bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as "id!", ba.asset_type_id as "asset_type_id!", 'active'::bookable_status_type as "status!: BookableStatus",
-        lower(bap.during) as begins,
-        coalesce(upper(bap.during), 'infinity'::timestamptz) as "ends!: PgDateTime",
-        bap.id as "appointment_id?";"#, id, user.id).fetch_one(&mut *conn).await?;
+    let res = query!(
+        "UPDATE bookable_appointments SET activated = NOW() WHERE id = $1 AND account_id = $2",
+        id,
+        user.id
+    )
+    .execute(&mut *conn)
+    .await?;
 
-    let evil_data = data.clone();
-    tokio::spawn(async move {
-        evil_data
-            .event_channels
-            .bookables
-            .broadcast(
-                bookable_record.asset_type_id,
-                bookable_record.id,
-                bookable_record,
-            )
-            .await;
-    });
+    if res.rows_affected() != 1 {
+        return Err(VialoError::NotFound());
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn kiosk_activate(
+    data: &Arc<AppState>,
+    id: Uuid,
+    kiosk: &crate::config::KioskConfig,
+    pin: &str,
+) -> Result<StatusCode, VialoError> {
+    let record = query!(
+        r#"SELECT ba.account_id, ba.activated, b.asset_type_id
+           FROM bookable_appointments ba
+           JOIN bookable_assets b ON b.id = ba.asset_id
+           WHERE ba.id = $1"#,
+        id,
+    )
+    .fetch_optional(&data.db)
+    .await?
+    .ok_or(VialoError::NotFound())?;
+
+    // The token is scoped to asset types, same as the queue read.
+    if !kiosk.allows(record.asset_type_id) {
+        return Err(VialoError::Forbidden());
+    }
+
+    if record.activated.is_some() {
+        return Err(VialoError::AppError(
+            StatusCode::FORBIDDEN,
+            "already_activated".into(),
+        ));
+    }
+
+    let stored = query_scalar!(
+        "SELECT amenities_pin FROM accounts_people WHERE id = $1",
+        record.account_id
+    )
+    .fetch_optional(&data.db)
+    .await?
+    .flatten();
+
+    // No credentials and a wrong PIN are indistinguishable here on purpose.
+    let Some(stored) = stored else {
+        return Err(VialoError::AppError(
+            StatusCode::FORBIDDEN,
+            "invalid_pin".into(),
+        ));
+    };
+    let Ok(stored_pin) = encryption::decrypt::<String>(&stored) else {
+        return Err(VialoError::AppError(
+            StatusCode::FORBIDDEN,
+            "invalid_pin".into(),
+        ));
+    };
+    if !stored_pin.as_bytes().eq(pin.as_bytes()) {
+        return Err(VialoError::AppError(
+            StatusCode::FORBIDDEN,
+            "invalid_pin".into(),
+        ));
+    }
+
+    let mut conn = grab_authd_conn_subsystem(&data.db, "bookable").await?;
+    let res = query!(
+        "UPDATE bookable_appointments SET activated = NOW() WHERE id = $1 AND account_id = $2 AND activated IS NULL",
+        id,
+        record.account_id,
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    if res.rows_affected() != 1 {
+        return Err(VialoError::AppError(
+            StatusCode::FORBIDDEN,
+            "already_activated".into(),
+        ));
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -255,13 +370,6 @@ pub async fn delete_appointment(
     }
 
     trans.commit().await?;
-
-    // Broadcast the updated status so WS clients see the cancellation immediately
-    let asset_id = appointment.asset_id;
-    let evil_data = data.clone();
-    tokio::spawn(async move {
-        crate::bookables::fetch_and_broadcast_status(&evil_data, [asset_id]).await;
-    });
 
     Ok(StatusCode::NO_CONTENT)
 }

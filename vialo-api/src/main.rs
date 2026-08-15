@@ -19,7 +19,7 @@ use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vialo_api::{
     AppState, EventChannels, KratosConfigs,
-    bookables::BookableChannel,
+    bookables::{BookableChannel, BookableQueueChannel},
     config::{AuthConfig, Config},
     helpers::{encryption, find_upward, grab_authd_conn_subsystem},
     http::util::grab_trans,
@@ -333,6 +333,11 @@ async fn main() {
         db: pool.clone(),
         event_channels: EventChannels {
             bookables: BookableChannel::new("bookables".into(), pool.clone()),
+            bookable_queues: BookableQueueChannel::new(
+                "bookables/queues".into(),
+                pool.clone(),
+                config.bookables.as_ref().and_then(|b| b.kiosk.clone()),
+            ),
             posts_tx,
             expired_appointments_tx,
         },
