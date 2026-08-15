@@ -31,13 +31,13 @@ use crate::AppState;
 use crate::http::util::{User, middleware::auth_middleware};
 use futures::{sink::SinkExt, stream::StreamExt};
 
+/// Subscription first, so a frame carrying both channel/id and auth_key can't
+/// be mistaken for the auth-only variant
 #[derive(Deserialize, Debug)]
-struct EventSubscriptionSchema {
-    pub channel: String,
-    pub id: u16,
-    /// Kiosk device credential. Only honoured as the first message, before any
-    /// subscription — browsers can't set WS headers, so the key rides here.
-    pub auth_key: Option<String>,
+#[serde(untagged)]
+enum WsFrame {
+    Subscription { channel: String, id: u16 },
+    Auth { auth_key: String },
 }
 
 pub fn main(app_state: Arc<AppState>) -> Router {
@@ -136,52 +136,56 @@ async fn handle_socket(
         let mut subscribed: HashSet<(String, i32)> = HashSet::new();
         while let Some(Ok(msg)) = receiver.next().await {
             if let Message::Text(msg_text) = msg
-                && let Ok(sub) = serde_json::from_str::<EventSubscriptionSchema>(msg_text.as_str())
+                && let Ok(frame) = serde_json::from_str::<WsFrame>(msg_text.as_str())
             {
-                // The key only counts before the first subscription
-                if subscribed.is_empty()
-                    && let Some(auth_key) = &sub.auth_key
-                    && state
-                        .config
-                        .bookables
-                        .as_ref()
-                        .and_then(|b| b.kiosk.as_ref())
-                        .is_some_and(|k| k.matches(auth_key))
-                {
-                    socket_auth = crate::events::Auth::Kiosk;
-                    debug!("kiosk authenticated");
-                    continue;
-                }
-
-                let id: i32 = sub.id.into();
-                let key = (sub.channel.clone(), id);
-                if subscribed.insert(key) {
-                    match sub.channel.as_str() {
-                        "bookables" => {
-                            state
-                                .event_channels
+                match frame {
+                    WsFrame::Auth { auth_key } => {
+                        // The key only counts before the first subscription
+                        if subscribed.is_empty()
+                            && state
+                                .config
                                 .bookables
-                                .subscribe(
-                                    id,
-                                    socket_auth.clone(),
-                                    Arc::clone(&slot_recv),
-                                    Arc::clone(&notify_recv),
-                                )
-                                .await;
+                                .as_ref()
+                                .and_then(|b| b.kiosk.as_ref())
+                                .is_some_and(|k| k.matches(&auth_key))
+                        {
+                            socket_auth = crate::events::Auth::Kiosk;
+                            debug!("kiosk authenticated");
                         }
-                        "bookables/queues" => {
-                            state
-                                .event_channels
-                                .bookable_queues
-                                .subscribe(
-                                    id,
-                                    socket_auth.clone(),
-                                    Arc::clone(&slot_recv),
-                                    Arc::clone(&notify_recv),
-                                )
-                                .await;
+                        continue;
+                    }
+                    WsFrame::Subscription { channel, id } => {
+                        let id: i32 = id.into();
+                        let key = (channel.clone(), id);
+                        if subscribed.insert(key) {
+                            match channel.as_str() {
+                                "bookables" => {
+                                    state
+                                        .event_channels
+                                        .bookables
+                                        .subscribe(
+                                            id,
+                                            socket_auth.clone(),
+                                            Arc::clone(&slot_recv),
+                                            Arc::clone(&notify_recv),
+                                        )
+                                        .await;
+                                }
+                                "bookables/queues" => {
+                                    state
+                                        .event_channels
+                                        .bookable_queues
+                                        .subscribe(
+                                            id,
+                                            socket_auth.clone(),
+                                            Arc::clone(&slot_recv),
+                                            Arc::clone(&notify_recv),
+                                        )
+                                        .await;
+                                }
+                                _ => {}
+                            }
                         }
-                        _ => {}
                     }
                 }
             }
