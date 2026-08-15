@@ -159,7 +159,7 @@ pub async fn quick_unlock(
     let mut conn = if let Some(user) = user_o {
         grab_authd_conn_user(&data.db, user.id).await?
     } else {
-        grab_authd_conn_subsystem(&data.db, "guest").await?
+        grab_authd_conn_subsystem(&data.db, "bookable").await?
     };
 
     let res = query!(
