@@ -220,19 +220,20 @@ pub async fn book_slots(
                 ));
             }
             if let Some(expected_end) = expected_slot.expected_end
-                && (expected_slot.expected_start != real_start || expected_end != real_end) {
-                    tracing::debug!(
-                        "expected_start: {:?}, real_start: {:?}, expected_end: {:?}, real_end: {:?}",
-                        expected_slot.expected_start,
-                        real_start,
-                        expected_end,
-                        real_end
-                    );
-                    return Err(VialoError::AppError(
-                        StatusCode::BAD_REQUEST,
-                        "slot_expectation".to_string(),
-                    ));
-                }
+                && (expected_slot.expected_start != real_start || expected_end != real_end)
+            {
+                tracing::debug!(
+                    "expected_start: {:?}, real_start: {:?}, expected_end: {:?}, real_end: {:?}",
+                    expected_slot.expected_start,
+                    real_start,
+                    expected_end,
+                    real_end
+                );
+                return Err(VialoError::AppError(
+                    StatusCode::BAD_REQUEST,
+                    "slot_expectation".to_string(),
+                ));
+            }
         } else {
             return Err(VialoError::AppError(
                 StatusCode::BAD_REQUEST,
@@ -333,23 +334,6 @@ pub async fn book_slots(
     }
 
     trans.commit().await?;
-
-    // Broadcast updated status (only for slots that start now i.e. change status immediately)
-    {
-        let now = Utc::now();
-        let asset_ids: std::collections::BTreeSet<i32> = body
-            .slots
-            .iter()
-            .filter(|s| s.expected_start <= now)
-            .map(|s| s.asset_id)
-            .collect();
-        if !asset_ids.is_empty() {
-            let evil_data = data.clone();
-            tokio::spawn(async move {
-                crate::bookables::fetch_and_broadcast_status(&evil_data, asset_ids).await;
-            });
-        }
-    }
 
     Ok((StatusCode::OK, Json(materialized_slots)))
 }

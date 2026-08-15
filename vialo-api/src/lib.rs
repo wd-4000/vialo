@@ -18,7 +18,11 @@ pub mod email;
 #[cfg(feature = "printer")]
 pub mod printer;
 
-use crate::{bookables::BookableChannel, config::Config, http::rate_limit::RateLimiters};
+use crate::{
+    bookables::{BookableChannel, BookableQueueChannel},
+    config::Config,
+    http::rate_limit::RateLimiters,
+};
 use sqlx::{Pool, Postgres};
 use tokio::sync::broadcast;
 
@@ -29,6 +33,7 @@ pub struct KratosConfigs {
 
 pub struct EventChannels {
     pub bookables: BookableChannel,
+    pub bookable_queues: BookableQueueChannel,
     pub posts_tx: broadcast::Sender<i32>,
     pub expired_appointments_tx: broadcast::Sender<crate::bookables::ExpiredAppointmentMessage>,
 }

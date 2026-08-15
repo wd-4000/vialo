@@ -1,7 +1,7 @@
 use crate::helpers::{I18nMap, LangVariant, PgDateTime};
 
 use super::models::{
-    BoardPostIdModel, BookableAssetStatus, BookableAssetTranslatedAllLanguages,
+    BoardPostIdModel, BookableAssetQueue, BookableAssetTranslatedAllLanguages,
     BookableAssetTranslatedWithStatus, BookableStatus,
 };
 use super::permissions::{BookablePerm, require_asset_type_perm};
@@ -19,13 +19,13 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use axum_extra::TypedHeader;
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
-use sqlx::query_as;
+use sqlx::query;
 use sqlx_conditional_queries::conditional_query_as;
+use std::i64;
 use std::sync::Arc;
-use std::{i64, time::Duration};
-use tokio::time::sleep;
 use utoipa::{IntoParams, ToSchema};
 
 #[derive(Deserialize, Debug, Default, IntoParams)]
@@ -76,6 +76,80 @@ pub async fn list_bookables(
     Ok((StatusCode::OK, Json(record)))
 }
 
+// rooms list
+#[utoipa::path(get, path = "/bookables/queues", params(BookableFilterOptions), responses((status = 200, description = "OK", body=Vec<BookableAssetQueue>)))]
+pub async fn list_queues(
+    Query(opts): Query<BookableFilterOptions>,
+    State(data): State<Arc<AppState>>,
+    Extension(user_o): Extension<Option<User>>,
+    authorization: Option<TypedHeader<headers::Authorization<headers::authorization::Bearer>>>,
+) -> Result<impl IntoResponse, VialoError> {
+    // Either a valid kiosk credential, an account with 'book', or nothing.
+    let kiosk = authorization.and_then(|TypedHeader(h)| {
+        let token = h.0.token();
+        data.config
+            .bookables
+            .as_ref()?
+            .kiosk
+            .as_ref()
+            .filter(|k| k.matches(token))
+            .cloned()
+    });
+
+    let (account_id, kiosk_types) = if let Some(kiosk) = kiosk {
+        (None, Some(kiosk.asset_types))
+    } else if let Some(user) = user_o {
+        (Some(user.id), None)
+    } else {
+        return Err(VialoError::Forbidden());
+    };
+
+    let rows = query!(
+        r#"SELECT
+            q.asset_id as "asset_id!",
+            q.asset_type_id as "asset_type_id!",
+            q.appointment_id as "appointment_id!",
+            q.begins,
+            q.ends as "ends: PgDateTime",
+            q.room,
+            q.maintenance as "maintenance!",
+            q.bucket as "bucket!"
+        FROM bookable_asset_queue q
+        WHERE ((q.bucket = 'previous' AND q.past_rank <= $1)
+           OR q.bucket = 'current'
+           OR (q.bucket = 'upcoming' AND q.future_rank <= $2))
+          AND ($3::uuid IS NULL OR account_bookable_perm_exists($3, q.asset_type_id, 'book'::bookable_perm))
+          AND ($4::int[] IS NULL OR q.asset_type_id = ANY($4))
+          AND ($5::int[] IS NULL OR q.asset_type_id = ANY($5))
+        ORDER BY q.asset_id, q.begins"#,
+        crate::bookables::QUEUE_PREVIOUS_DEPTH,
+        crate::bookables::QUEUE_UPCOMING_DEPTH,
+        account_id,
+        kiosk_types.as_deref(),
+        opts.asset_types.as_deref(),
+    )
+    .fetch_all(&data.db)
+    .await?;
+
+    Ok((
+        StatusCode::OK,
+        Json(crate::bookables::assemble_queues(
+            rows.into_iter()
+                .map(|r| crate::bookables::QueueRow {
+                    asset_id: r.asset_id,
+                    asset_type_id: r.asset_type_id,
+                    appointment_id: r.appointment_id,
+                    begins: r.begins,
+                    ends: r.ends,
+                    room: r.room,
+                    maintenance: r.maintenance,
+                    bucket: r.bucket,
+                })
+                .collect(),
+        )),
+    ))
+}
+
 #[utoipa::path(post, path = "/bookables/{id}/quick-unlock", responses((status = 204, description = "Unlocked")))] // no body
 pub async fn quick_unlock(
     Path(id): Path<i32>,
@@ -88,26 +162,16 @@ pub async fn quick_unlock(
         grab_authd_conn_subsystem(&data.db, "guest").await?
     };
 
-    let record = query_as!(BookableAssetStatus, r#"update bookable_assets set quick_unlock = tstzrange(now(), now() + '1 minute', '[]') WHERE id = $1 AND (NOT (quick_unlock @> now()) OR quick_unlock IS NULL) RETURNING $1 as "id!", asset_type_id as "asset_type_id!", 'quick_unlock'::bookable_status_type as "status!: BookableStatus",
-    now() as begins,
-   (now() + '1 minute') as "ends: PgDateTime",
-   NULL::uuid as appointment_id;"#, id).fetch_one(&mut *conn).await?;
+    let res = query!(
+        "UPDATE bookable_assets SET quick_unlock = tstzrange(now(), now() + '1 minute', '[]') WHERE id = $1 AND (NOT (quick_unlock @> now()) OR quick_unlock IS NULL)",
+        id
+    )
+    .execute(&mut *conn)
+    .await?;
 
-    let evil_data = data.clone();
-    tokio::spawn(async move {
-        evil_data
-            .event_channels
-            .bookables
-            .broadcast(record.asset_type_id, record.id, record.clone())
-            .await;
-        if let (Some(begins), Some(PgDateTime::DateTime(ends))) = (record.begins, record.ends) {
-            sleep(Duration::from_secs(
-                (ends - begins).num_seconds().unsigned_abs() + 1,
-            ))
-            .await;
-            crate::bookables::fetch_and_broadcast_status(&evil_data, [id]).await;
-        }
-    });
+    if res.rows_affected() != 1 {
+        return Err(VialoError::NotFound());
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }

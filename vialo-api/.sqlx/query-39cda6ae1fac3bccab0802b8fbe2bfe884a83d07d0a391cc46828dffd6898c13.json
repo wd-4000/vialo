@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        SELECT id FROM accounts_people WHERE id = ANY($2)\n                            AND account_bookable_perm_exists(id, $1, 'book')\n                        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "39cda6ae1fac3bccab0802b8fbe2bfe884a83d07d0a391cc46828dffd6898c13"
+}

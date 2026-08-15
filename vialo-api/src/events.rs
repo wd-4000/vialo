@@ -15,12 +15,20 @@ pub struct EventEnvelope<K, V> {
     pub data: V,
 }
 
-type AuthCallback<K> =
-    Arc<dyn Fn(K, Vec<Option<Uuid>>) -> BoxFuture<'static, HashSet<Option<Uuid>>> + Send + Sync>;
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum Auth {
+    Anonymous,
+    Account(Uuid),
+    Kiosk,
+}
+
+type AuthCallback<K> = Arc<dyn Fn(K, Vec<Auth>) -> BoxFuture<'static, HashSet<Auth>> + Send + Sync>;
+
+pub type SlotMap<K> = Arc<Mutex<HashMap<(String, K), Arc<String>>>>;
 
 struct Subscriber<K> {
-    account_id: Option<Uuid>,
-    slot: Weak<Mutex<HashMap<K, Arc<String>>>>,
+    auth: Auth,
+    slot: Weak<Mutex<HashMap<(String, K), Arc<String>>>>,
     notify: Weak<Notify>,
 }
 
@@ -32,7 +40,6 @@ struct Subscriber<K> {
 pub struct StatusChannel<K, V> {
     name: String,
     subscribers: tokio::sync::RwLock<HashMap<K, Vec<Subscriber<K>>>>,
-    wildcard_notifiers: tokio::sync::RwLock<Vec<Weak<Notify>>>,
     auth_filter: OnceLock<AuthCallback<K>>,
     _phantom: std::marker::PhantomData<V>,
 }
@@ -44,15 +51,14 @@ impl<K: Hash + Eq + Clone + Debug + Serialize + Send + Sync + 'static, V: Serial
         StatusChannel {
             name,
             subscribers: tokio::sync::RwLock::new(HashMap::new()),
-            wildcard_notifiers: tokio::sync::RwLock::new(Vec::new()),
             auth_filter: OnceLock::new(),
             _phantom: std::marker::PhantomData,
         }
     }
 
     /// Install an authorization filter. Must be called before any broadcast.
-    /// `callback` receives (routing_key, subscriber account_ids) and returns
-    /// the set of account_ids that are still authorized.
+    /// `callback` receives (routing_key, subscriber auths) and returns the set
+    /// of auths that are still authorized.
     pub fn set_auth_filter(&self, callback: AuthCallback<K>) {
         assert!(
             self.auth_filter.set(callback).is_ok(),
@@ -60,32 +66,17 @@ impl<K: Hash + Eq + Clone + Debug + Serialize + Send + Sync + 'static, V: Serial
         );
     }
 
-    pub async fn subscribe(
-        &self,
-        key: K,
-        account_id: Option<Uuid>,
-        slot: Arc<Mutex<HashMap<K, Arc<String>>>>,
-        notify: Arc<Notify>,
-    ) {
+    pub async fn subscribe(&self, key: K, auth: Auth, slot: SlotMap<K>, notify: Arc<Notify>) {
         self.subscribers
             .write()
             .await
             .entry(key)
             .or_default()
             .push(Subscriber {
-                account_id,
+                auth,
                 slot: Arc::downgrade(&slot),
                 notify: Arc::downgrade(&notify),
             });
-    }
-
-    pub async fn subscribe_notify(&self) -> Arc<Notify> {
-        let notify = Arc::new(Notify::new());
-        self.wildcard_notifiers
-            .write()
-            .await
-            .push(Arc::downgrade(&notify));
-        notify
     }
 
     pub async fn broadcast(&self, routing_key: K, coalesce_key: K, value: V) {
@@ -96,20 +87,18 @@ impl<K: Hash + Eq + Clone + Debug + Serialize + Send + Sync + 'static, V: Serial
         };
         let json = Arc::new(serde_json::to_string(&envelope).unwrap_or_default());
 
-        // collect account_ids under read lock, then run filter outside lock
+        // collect subscriber auths under read lock, then run filter outside lock
         let authorized = {
             let subs = self.subscribers.read().await;
             let Some(list) = subs.get(&routing_key) else {
-                // Still notify wildcard listeners even with no keyed subscribers
-                self.notify_wildcard().await;
                 return;
             };
 
             if let Some(filter) = self.auth_filter.get() {
-                let account_ids: Vec<Option<Uuid>> = list.iter().map(|s| s.account_id).collect();
+                let auths: Vec<Auth> = list.iter().map(|s| s.auth.clone()).collect();
                 // drop read lock before running the async filter
                 drop(subs);
-                Some(filter(routing_key.clone(), account_ids).await)
+                Some(filter(routing_key.clone(), auths).await)
             } else {
                 drop(subs);
                 None
@@ -121,14 +110,14 @@ impl<K: Hash + Eq + Clone + Debug + Serialize + Send + Sync + 'static, V: Serial
             let mut subs = self.subscribers.write().await;
             if let Some(list) = subs.get_mut(&routing_key) {
                 if let Some(ref authorized) = authorized {
-                    list.retain(|sub| authorized.contains(&sub.account_id));
+                    list.retain(|sub| authorized.contains(&sub.auth));
                 }
 
                 list.retain(|sub| match (sub.slot.upgrade(), sub.notify.upgrade()) {
                     (Some(slot), Some(notify)) => {
                         slot.lock()
                             .unwrap()
-                            .insert(coalesce_key.clone(), Arc::clone(&json));
+                            .insert((self.name.clone(), coalesce_key.clone()), Arc::clone(&json));
                         notify.notify_one();
                         true
                     }
@@ -140,18 +129,5 @@ impl<K: Hash + Eq + Clone + Debug + Serialize + Send + Sync + 'static, V: Serial
                 }
             }
         }
-
-        self.notify_wildcard().await;
-    }
-
-    async fn notify_wildcard(&self) {
-        let mut notifiers = self.wildcard_notifiers.write().await;
-        notifiers.retain(|weak| match weak.upgrade() {
-            Some(notify) => {
-                notify.notify_one();
-                true
-            }
-            None => false,
-        });
     }
 }

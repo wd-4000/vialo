@@ -22,7 +22,6 @@ use std::{
 use tokio::sync::Notify;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::debug;
-use uuid::Uuid;
 
 //allows to extract the IP of connecting user
 use axum::extract::connect_info::ConnectInfo;
@@ -36,6 +35,9 @@ use futures::{sink::SinkExt, stream::StreamExt};
 struct EventSubscriptionSchema {
     pub channel: String,
     pub id: u16,
+    /// Kiosk device credential. Only honoured as the first message, before any
+    /// subscription — browsers can't set WS headers, so the key rides here.
+    pub auth_key: Option<String>,
 }
 
 pub fn main(app_state: Arc<AppState>) -> Router {
@@ -101,7 +103,7 @@ async fn handle_socket(
     // unsolicited messages to client based on some sort of server's internal event (i.e .timer).
     let (mut sender, mut receiver) = socket.split();
 
-    let slot: Arc<Mutex<HashMap<i32, Arc<String>>>> = Arc::new(Mutex::new(HashMap::new()));
+    let slot: crate::events::SlotMap<i32> = Arc::new(Mutex::new(HashMap::new()));
     let notify = Arc::new(Notify::new());
 
     let slot_send = Arc::clone(&slot);
@@ -127,23 +129,61 @@ async fn handle_socket(
 
     let slot_recv = Arc::clone(&slot);
     let notify_recv = Arc::clone(&notify);
-    let user_id: Option<Uuid> = user.map(|u| u.id);
+    let mut socket_auth = user
+        .map(|u| crate::events::Auth::Account(u.id))
+        .unwrap_or(crate::events::Auth::Anonymous);
     let mut recv_task = tokio::spawn(async move {
         let mut subscribed: HashSet<(String, i32)> = HashSet::new();
         while let Some(Ok(msg)) = receiver.next().await {
             if let Message::Text(msg_text) = msg
                 && let Ok(sub) = serde_json::from_str::<EventSubscriptionSchema>(msg_text.as_str())
             {
+                // The key only counts before the first subscription
+                if subscribed.is_empty()
+                    && let Some(auth_key) = &sub.auth_key
+                    && state
+                        .config
+                        .bookables
+                        .as_ref()
+                        .and_then(|b| b.kiosk.as_ref())
+                        .is_some_and(|k| k.matches(auth_key))
+                {
+                    socket_auth = crate::events::Auth::Kiosk;
+                    debug!("kiosk authenticated");
+                    continue;
+                }
+
                 let id: i32 = sub.id.into();
                 let key = (sub.channel.clone(), id);
-                if subscribed.insert(key)
-                    && sub.channel.as_str() == "bookables" {
-                        state
-                            .event_channels
-                            .bookables
-                            .subscribe(id, user_id, Arc::clone(&slot_recv), Arc::clone(&notify_recv))
-                            .await;
+                if subscribed.insert(key) {
+                    match sub.channel.as_str() {
+                        "bookables" => {
+                            state
+                                .event_channels
+                                .bookables
+                                .subscribe(
+                                    id,
+                                    socket_auth.clone(),
+                                    Arc::clone(&slot_recv),
+                                    Arc::clone(&notify_recv),
+                                )
+                                .await;
+                        }
+                        "bookables/queues" => {
+                            state
+                                .event_channels
+                                .bookable_queues
+                                .subscribe(
+                                    id,
+                                    socket_auth.clone(),
+                                    Arc::clone(&slot_recv),
+                                    Arc::clone(&notify_recv),
+                                )
+                                .await;
+                        }
+                        _ => {}
                     }
+                }
             }
         }
     });

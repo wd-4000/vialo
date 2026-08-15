@@ -145,7 +145,6 @@ pub async fn undo(
     .fetch_optional(&mut *trans)
     .await?;
 
-    let mut cancelled_asset_id: Option<i32> = None;
     if let Some(product) = product {
         match body.and_then(|b| b.cancel_associated_product) {
             Some(true) => {
@@ -155,7 +154,6 @@ pub async fn undo(
                 )
                 .execute(&mut *trans)
                 .await?;
-                cancelled_asset_id = Some(product.asset_id);
             }
             Some(false) => {}
             None => {
@@ -176,13 +174,6 @@ pub async fn undo(
     .await?;
 
     trans.commit().await?;
-
-    if let Some(asset_id) = cancelled_asset_id {
-        let evil_data = data.clone();
-        tokio::spawn(async move {
-            crate::bookables::fetch_and_broadcast_status(&evil_data, [asset_id]).await;
-        });
-    }
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "update bookable_appointments bap set activated = NOW() FROM bookable_assets ba WHERE bap.asset_id = ba.id AND bap.id = $1 AND bap.account_id = $2 RETURNING bap.asset_id as \"id!\", ba.asset_type_id as \"asset_type_id!\", 'active'::bookable_status_type as \"status!: BookableStatus\",\n        lower(bap.during) as begins,\n        coalesce(upper(bap.during), 'infinity'::timestamptz) as \"ends!: PgDateTime\",\n        bap.id as \"appointment_id?\";",
+  "query": "SELECT\n            id as \"id!\",\n            asset_type_id as \"asset_type_id!\",\n            status as \"status!: BookableStatus\",\n            begins,\n            ends as \"ends: PgDateTime\",\n            appointment_id\n           FROM bookable_asset_status\n           ORDER BY id",
   "describe": {
     "columns": [
       {
@@ -9,8 +9,8 @@
         "type_info": "Int4",
         "origin": {
           "Table": {
-            "table": "bookable_appointments",
-            "name": "asset_id"
+            "table": "bookable_asset_status",
+            "name": "id"
           }
         }
       },
@@ -20,7 +20,7 @@
         "type_info": "Int4",
         "origin": {
           "Table": {
-            "table": "bookable_assets",
+            "table": "bookable_asset_status",
             "name": "asset_type_id"
           }
         }
@@ -42,46 +42,58 @@
             }
           }
         },
-        "origin": "Expression"
+        "origin": {
+          "Table": {
+            "table": "bookable_asset_status",
+            "name": "status"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "begins",
         "type_info": "Timestamptz",
-        "origin": "Expression"
+        "origin": {
+          "Table": {
+            "table": "bookable_asset_status",
+            "name": "begins"
+          }
+        }
       },
       {
         "ordinal": 4,
-        "name": "ends!: PgDateTime",
+        "name": "ends: PgDateTime",
         "type_info": "Timestamptz",
-        "origin": "Expression"
+        "origin": {
+          "Table": {
+            "table": "bookable_asset_status",
+            "name": "ends"
+          }
+        }
       },
       {
         "ordinal": 5,
-        "name": "appointment_id?",
+        "name": "appointment_id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
-            "table": "bookable_appointments",
-            "name": "id"
+            "table": "bookable_asset_status",
+            "name": "appointment_id"
           }
         }
       }
     ],
     "parameters": {
-      "Left": [
-        "Uuid",
-        "Uuid"
-      ]
+      "Left": []
     },
     "nullable": [
-      false,
-      false,
-      null,
-      null,
-      null,
-      false
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
     ]
   },
-  "hash": "24683d44cfe06e984f07d6c0ddb9cb7a7d4fa766fd39032c761adb9bec50deab"
+  "hash": "57b765c689497db447a0b8f593ded88112d990e2053485b06432b20f9437fdf4"
 }

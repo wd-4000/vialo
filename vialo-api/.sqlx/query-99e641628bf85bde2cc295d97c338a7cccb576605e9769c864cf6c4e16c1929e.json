@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE bookable_appointments SET activated = NOW() WHERE id = $1 AND account_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "99e641628bf85bde2cc295d97c338a7cccb576605e9769c864cf6c4e16c1929e"
+}

@@ -16,7 +16,7 @@ pub enum BookableStatus {
     Maintenance,
 }
 
-#[derive(Serialize, Clone, ToSchema)]
+#[derive(Serialize, Clone, PartialEq, ToSchema)]
 pub struct BookableAssetStatus {
     pub id: i32,
     pub asset_type_id: i32,
@@ -37,6 +37,28 @@ pub struct BookableAssetTranslatedWithStatus {
     pub begins: Option<DateTime<Utc>>,
     pub ends: Option<PgDateTime>,
     pub appointment_id: Option<uuid::Uuid>,
+}
+
+#[derive(Serialize, Clone, PartialEq, ToSchema)]
+pub struct BookableQueueEntry {
+    pub appointment_id: uuid::Uuid,
+    #[schema(format = DateTime)]
+    pub begins: Option<DateTime<Utc>>,
+    pub ends: Option<PgDateTime>,
+    /// NULL for a maintenance block, or a booker with no current lease.
+    pub room: Option<String>,
+    pub maintenance: bool,
+}
+
+/// The queue for one asset, split into the three buckets the board shows:
+/// finished, running, scheduled
+#[derive(Serialize, Clone, PartialEq, ToSchema)]
+pub struct BookableAssetQueue {
+    pub id: i32,
+    pub asset_type_id: i32,
+    pub previous: Vec<BookableQueueEntry>,
+    pub current: Option<BookableQueueEntry>,
+    pub upcoming: Vec<BookableQueueEntry>,
 }
 
 #[derive(Serialize, ToSchema)]

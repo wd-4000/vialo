@@ -66,6 +66,30 @@ pub struct UiConfig {
     pub privacy_policy_url: String,
 }
 
+/// Credential for a fixed device (e.g. the laundry kiosk) that reads bookable
+/// data without being an account. It's in config right now but I'm thinking of
+/// replacing it with a device table.
+#[derive(Deserialize, Clone)]
+pub struct KioskConfig {
+    pub token: String,
+    pub asset_types: Vec<i32>,
+}
+
+impl KioskConfig {
+    pub fn matches(&self, token: &str) -> bool {
+        self.token == token
+    }
+
+    pub fn allows(&self, asset_type_id: i32) -> bool {
+        self.asset_types.contains(&asset_type_id)
+    }
+}
+
+#[derive(Deserialize, Clone)]
+pub struct BookablesConfig {
+    pub kiosk: Option<KioskConfig>,
+}
+
 #[derive(Deserialize)]
 pub struct Config {
     pub proxy: Option<String>,
@@ -79,6 +103,7 @@ pub struct Config {
     pub auth: AuthConfig,
     pub org: OrgConfig,
     pub ui: UiConfig,
+    pub bookables: Option<BookablesConfig>,
 
     #[cfg(feature = "email")]
     pub email: EmailApiConfig,
