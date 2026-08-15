@@ -37,7 +37,6 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
                 .delete(asset_types::delete),
         )
         .route("/appointments", get(appointments::list))
-        .route("/queues", get(handlers::list_queues))
         .route("/connectors", get(connectors::list).post(connectors::post))
         .route(
             "/connectors/{id}",
@@ -71,6 +70,7 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         ))
         .route("/", get(handlers::list_bookables))
         .route("/types", get(asset_types::list))
+        .route("/queues", get(handlers::list_queues))
         .route("/{id}", get(handlers::get_bookable))
         .route("/{id}/quick-unlock", post(handlers::quick_unlock))
 }
