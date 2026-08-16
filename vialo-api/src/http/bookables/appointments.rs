@@ -36,6 +36,7 @@ pub struct BookableAppointmentFilterOptions {
     pub account_id: IdOrMeOrAllQuery,
     pub to: Option<DateTime<Utc>>,
     pub search: Option<String>,
+    pub asset_types: Option<Vec<i32>>,
     #[serde(default)]
     pub include_cancelled: bool,
 }
@@ -408,7 +409,7 @@ pub async fn list(
             ba.activated,
             ba.maintenance
         FROM
-            bookable_appointments ba LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true {#account} {#from} {#to} {#cancelled} ORDER BY during LIMIT {limit} OFFSET {offset}"#,
+            bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true {#account} {#asset_types} {#from} {#to} {#cancelled} ORDER BY during LIMIT {limit} OFFSET {offset}"#,
             #account_info = match(&resolved_account_id){
                   IdOrAllQuery::All => r#"jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account: AccountEmbed","#,
                   _ => r#"null AS "account: AccountEmbed","#
@@ -417,8 +418,12 @@ pub async fn list(
                 IdOrAllQuery::All => "",
                 IdOrAllQuery::Id(account) => "AND account_id = {account}",
             },
+            #asset_types = match (opts.asset_types) {
+                Some(at) => "AND b.asset_type_id = ANY({at:Vec<i32>})",
+                None => "",
+            },
             #from = match (opts.from) {
-                Some(from) => "AND upper(ba.during) >= {from} ",
+                Some(from) => "AND coalesce(upper(ba.during), 'infinity'::timestamptz) >= {from} ",
                 None => ""
             },
             #to = match (opts.to) {
