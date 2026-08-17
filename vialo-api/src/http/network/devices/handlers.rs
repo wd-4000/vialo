@@ -1,5 +1,6 @@
 use crate::{
     AppState,
+    helpers::random,
     helpers::{
         ResponseVariant,
         encryption::{self, Encrypted},
@@ -14,15 +15,12 @@ use crate::{
             models::{CredentialModelWithPassword, NetAuth, NetworkListModel},
         },
         util::{
-            JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans, is_unique_violation,
+            JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
+            is_unique_violation,
             models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery, IdOrMeQuery},
         },
     },
     permissions::check_app_role,
-};
-use rand::{
-    distr::{Alphanumeric, SampleString},
-    rng,
 };
 use utoipa::{IntoParams, ToSchema};
 
@@ -208,9 +206,9 @@ pub async fn post_device(
 
             // Generate a new credential if not found
             if credential.is_none() {
-                let username: String = Alphanumeric.sample_string(&mut rng(), 8);
+                let username: String = random::unambiguous_string(8);
 
-                let password: String = Alphanumeric.sample_string(&mut rng(), 16);
+                let password: String = random::unambiguous_string(16);
                 let password_encrypted = encryption::encrypt(&password)?;
 
                 credential = Some(

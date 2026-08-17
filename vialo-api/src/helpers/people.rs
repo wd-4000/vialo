@@ -1,10 +1,6 @@
-use crate::helpers::encryption;
+use crate::{helpers::encryption, helpers::random};
 use anyhow::Result;
-use rand::{
-    RngExt,
-    distr::{Alphanumeric, SampleString},
-    rng,
-};
+use rand::{RngExt, rng};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, Transaction};
@@ -24,7 +20,7 @@ pub async fn generate_amenities_login(
 ) -> Result<AmenitiesLogin> {
     let (username, pin) = {
         let mut rng = rng();
-        let username = Alphanumeric.sample_string(&mut rng, 8);
+        let username = random::unambiguous_string(8);
         let pin: String = (0..6)
             .map(|_| char::from(b'0' + rng.random_range(0..10u8)))
             .collect();
