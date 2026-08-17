@@ -1,5 +1,4 @@
 use serde::{Deserialize, Deserializer};
-use utoipa::ToSchema;
 use utoipa::openapi::{
     ObjectBuilder, OneOfBuilder, RefOr, Schema,
     schema::{SchemaType, Type},

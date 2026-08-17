@@ -20,8 +20,6 @@ pub mod posts;
 pub mod rate_limit;
 pub mod util;
 
-use rand::prelude::*;
-
 use super::AppState;
 
 pub async fn create_router(app_state: Arc<AppState>) -> Router {

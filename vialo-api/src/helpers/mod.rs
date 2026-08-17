@@ -11,6 +11,7 @@ mod patch_option;
 pub mod people;
 mod pg_date;
 mod pg_date_time;
+pub mod random;
 pub use {bounded_string::*, i18n::*, patch_option::*, pg_date::*, pg_date_time::*};
 
 pub fn find_upward(filename: &str) -> Option<PathBuf> {
