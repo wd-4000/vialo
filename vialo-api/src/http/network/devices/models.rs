@@ -78,7 +78,6 @@ pub struct NetworkCredentialEmbed {
     #[serde(serialize_with = "encryption::serialize_exposed_opt")]
     pub password: Option<Encrypted<String>>,
     pub account_id: Uuid,
-    pub network_id: Uuid,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
     pub network: Option<NetworkListModel>,
 }
