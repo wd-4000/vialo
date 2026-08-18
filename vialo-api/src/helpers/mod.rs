@@ -11,8 +11,11 @@ mod patch_option;
 pub mod people;
 mod pg_date;
 mod pg_date_time;
+mod radius_attribute;
 pub mod random;
-pub use {bounded_string::*, i18n::*, patch_option::*, pg_date::*, pg_date_time::*};
+pub use {
+    bounded_string::*, i18n::*, patch_option::*, pg_date::*, pg_date_time::*, radius_attribute::*,
+};
 
 pub fn find_upward(filename: &str) -> Option<PathBuf> {
     let mut dir = std::env::current_dir().ok()?;
