@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT nc.password,\n               nc.id AS cred_id,\n               nt.auto_add_on_auth,\n               nt.multi_device\n        FROM net_cred nc\n        JOIN net_networks nt ON nc.network_id = nt.id\n        JOIN net_realm_assignments nra ON nc.account_id = nra.account_id\n        JOIN net_realms nr_user ON nr_user.id = nra.realm_id\n        JOIN net_devices nd ON nc.id = nd.cred_id\n        LEFT JOIN net_realms nr_device ON nr_device.id = nd.realm_id\n        WHERE nc.network_id = $1\n          AND nc.id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "password",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "net_cred",
+            "name": "password"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "cred_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "net_cred",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "auto_add_on_auth",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "auto_add_on_auth"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "multi_device",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "multi_device"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d21535639044c13a6b8928729382a4f1ac366ddf19917984419ddaabdc215d44"
+}
