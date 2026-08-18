@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT nc.password,\n               nc.id AS cred_id,\n               nr.vlan,\n               nt.auto_add_on_auth,\n               nt.multi_device\n        FROM net_cred nc\n        JOIN net_networks nt ON nc.network_id = nt.id\n        JOIN net_realm_assignments nra ON nc.account_id = nra.account_id\n        JOIN net_realms nr ON nr.id = nra.realm_id\n        WHERE nc.network_id = $1\n          AND nt.auth = 'username_password'::net_auth\n          AND nc.username = $2\n        ",
+  "query": "\n                SELECT nc.password,\n                       nc.id AS cred_id,\n                       COALESCE(nr_device.vlan, nr_user.vlan) AS vlan, -- Handle device VLAN override\n                       nt.auto_add_on_auth,\n                       nt.multi_device\n                FROM net_cred nc\n                JOIN net_networks nt ON nc.network_id = nt.id\n                JOIN net_realm_assignments nra ON nc.account_id = nra.account_id\n                JOIN net_realms nr_user ON nr_user.id = nra.realm_id\n                JOIN net_devices nd ON nc.id = nd.cred_id\n                LEFT JOIN net_realms nr_device ON nr_device.id = nd.realm_id\n                WHERE nc.network_id = $1\n                  AND nt.auth = 'username_password'::net_auth\n                  AND nc.username = $2\n                ",
   "describe": {
     "columns": [
       {
@@ -29,12 +29,7 @@
         "ordinal": 2,
         "name": "vlan",
         "type_info": "Int4",
-        "origin": {
-          "Table": {
-            "table": "net_realms",
-            "name": "vlan"
-          }
-        }
+        "origin": "Expression"
       },
       {
         "ordinal": 3,
@@ -68,10 +63,10 @@
     "nullable": [
       true,
       false,
-      true,
+      null,
       false,
       false
     ]
   },
-  "hash": "f633e268340e8acc4b1b51f5cc3ea4068ec4ecb4d5351d05f520633e0c84dc53"
+  "hash": "bfc3e6c60c86d38e8ec35752460116bfaf64de4b0cb67e722a07e8a861be36f4"
 }

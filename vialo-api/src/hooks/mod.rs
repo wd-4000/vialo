@@ -33,7 +33,14 @@ use super::AppState;
 pub async fn create_router(app_state: Arc<AppState>) -> Router {
     Router::new()
         .route("/hooks/update_identity", post(update_identity))
-        .route("/radius/auth/{network_id}", post(radius::auth))
+        .route(
+            "/radius/networks/{network_id}/authorize",
+            post(radius::authorize),
+        )
+        .route(
+            "/radius/networks/{network_id}/post-auth",
+            post(radius::post_auth),
+        )
         .layer(
             TraceLayer::new_for_http()
                 // Create our own span for the request and include the matched path. The matched
