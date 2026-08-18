@@ -1,5 +1,3 @@
-use std::ops::Deref;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use axum::{
@@ -8,46 +6,14 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use mac_address::MacAddress;
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
-use utoipa::{IntoResponses, ToSchema};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::helpers::{self, grab_authd_conn_subsystem};
+use crate::helpers::{self, RadiusAttributeValue, grab_authd_conn_subsystem};
 use crate::http::util::{JsonE, VialoError};
 use crate::{AppState, http::network::mac::MacAddressWrapper};
-
-/// A single RADIUS attribute value as sent by FreeRADIUS rlm_rest.
-/// They arrive as `{"type": "...", "value": ["..."]}`, we just preserve value\[0\]
-#[derive(Debug, ToSchema)]
-pub struct RadiusAttributeValue<T = String>(T);
-
-impl<T> Deref for RadiusAttributeValue<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        &self.0
-    }
-}
-
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for RadiusAttributeValue<T> {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        /// Wire shape — unknown fields (e.g. `type`) are ignored.
-        #[derive(Deserialize)]
-        struct Wire<T> {
-            value: Vec<T>,
-        }
-
-        let value = Wire::<T>::deserialize(deserializer)?
-            .value
-            .into_iter()
-            .next()
-            .ok_or_else(|| de::Error::custom("RADIUS attribute `value` array is empty"))?;
-
-        Ok(RadiusAttributeValue(value))
-    }
-}
 
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "lowercase")]

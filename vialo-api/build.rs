@@ -7,13 +7,13 @@ fn main() {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let out_dir = std::env::var("OUT_DIR").unwrap();
 
-    let paths = format!(
-        "{}/src/http, {}/src/hooks",
-        manifest_dir, manifest_dir
-    );
+    // The public API and the hooks API are served on separate listeners, so they
+    // get separate documents — the UIs must never see the hooks contract.
+    let public_paths = format!("{}/src/http", manifest_dir);
+    let hooks_paths = format!("{}/src/hooks", manifest_dir);
 
     let content = format!(
-        r#"#[utoipauto(paths = "{paths}")]
+        r#"#[utoipauto(paths = "{public_paths}")]
 #[derive(OpenApi)]
 #[openapi(
     modifiers(&FixTheseUglyTagsNow),
@@ -27,6 +27,22 @@ pub struct ApiDoc;
 
 pub fn openapi_doc() -> utoipa::openapi::OpenApi {{
     ApiDoc::openapi()
+}}
+
+#[utoipauto(paths = "{hooks_paths}")]
+#[derive(OpenApi)]
+#[openapi(
+    modifiers(&FixTheseUglyTagsNow),
+    info(
+        title = "Vialo Hooks API",
+        version = env!("CARGO_PKG_VERSION"),
+        description = "Internal endpoints called by FreeRADIUS and Kratos, served on a separate listener."
+    )
+)]
+pub struct HooksApiDoc;
+
+pub fn hooks_openapi_doc() -> utoipa::openapi::OpenApi {{
+    HooksApiDoc::openapi()
 }}
 "#,
     );
