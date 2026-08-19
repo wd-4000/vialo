@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT ipv4_addr AS \"ipv4_addr: IpNetwork\"\n            FROM net_ip_assignments\n            WHERE realm_id = $1 AND device_id = $2\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ipv4_addr: IpNetwork",
+        "type_info": "Inet",
+        "origin": {
+          "Table": {
+            "table": "net_ip_assignments",
+            "name": "ipv4_addr"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7d330707b649da18811ca6607f046f823f2494385f63391d7cdab964f881fbad"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE net_ip_assignments SET (device_id, expires) = ($1, NOW() + make_interval(secs => $3))\n             WHERE host(ipv4_addr) = host($2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Inet",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0df41142fc8f1967c91cf9da6789e4cd771535edf2723e1aa253b63809a9871b"
+}

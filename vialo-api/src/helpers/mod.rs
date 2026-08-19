@@ -1,7 +1,6 @@
 use crate::http::util::VialoError;
 use serde::{self, Serialize};
 use sqlx::{PgPool, Postgres, pool::PoolConnection};
-use std::path::PathBuf;
 use utoipa::ToSchema;
 
 pub mod bounded_string;
@@ -16,19 +15,6 @@ pub mod random;
 pub use {
     bounded_string::*, i18n::*, patch_option::*, pg_date::*, pg_date_time::*, radius_attribute::*,
 };
-
-pub fn find_upward(filename: &str) -> Option<PathBuf> {
-    let mut dir = std::env::current_dir().ok()?;
-    loop {
-        let candidate = dir.join(filename);
-        if candidate.exists() {
-            return Some(candidate);
-        }
-        if !dir.pop() {
-            return None;
-        }
-    }
-}
 
 /// Utility enum for handling response variants while keeping type safety
 /// Didn't feel like adding ``either``

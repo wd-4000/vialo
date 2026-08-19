@@ -135,20 +135,6 @@ fn granted(o: ClaimOutcome) -> Ipv4Addr {
     }
 }
 
-#[test]
-fn circuit_id_mode_parses() {
-    assert_eq!("off".parse::<CircuitIdMode>().unwrap(), CircuitIdMode::Off);
-    assert_eq!(
-        "ascii".parse::<CircuitIdMode>().unwrap(),
-        CircuitIdMode::Ascii
-    );
-    assert_eq!(
-        "binary".parse::<CircuitIdMode>().unwrap(),
-        CircuitIdMode::BinaryU16
-    );
-    assert!("nonsense".parse::<CircuitIdMode>().is_err());
-}
-
 // A device holding a lease must get the *same* IP back on re-discover, not a
 // second allocation that trips the device_id UNIQUE constraint (lockout bug).
 #[sqlx::test(migrations = "../vialo-api/migrations")]

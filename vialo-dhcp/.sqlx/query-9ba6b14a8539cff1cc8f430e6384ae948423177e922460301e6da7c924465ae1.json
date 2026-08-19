@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE net_ip_assignments\n                SET (device_id, expires) = ($1, NOW() + make_interval(secs => $4))\n                WHERE host(ipv4_addr) = host($2) AND realm_id = $3\n                  AND ((device_id IS NULL AND (expires IS NULL OR expires <= NOW()))\n                       OR (device_id IS NOT NULL AND expires <= NOW()))\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Inet",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9ba6b14a8539cff1cc8f430e6384ae948423177e922460301e6da7c924465ae1"
+}

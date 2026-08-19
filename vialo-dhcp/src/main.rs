@@ -1,52 +1,13 @@
-use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
-use std::time::Duration;
 
-use anyhow::Result;
-use clap::Parser;
+use anyhow::{Context, Result};
 use dora_core::Server;
 use dora_core::dhcproto::v4;
 use dora_core::pnet::datalink;
 use dora_core::tokio;
 use dora_core::tracing::info;
 use sqlx::postgres::PgPoolOptions;
-use vialo_dhcp::{CircuitIdMode, VialoDhcp};
-
-#[derive(Parser)]
-#[command(name = "vialo-dhcp", about = "Vialo DHCP server")]
-struct Cli {
-    /// Postgres database URL
-    #[arg(long, env)]
-    database_url: String,
-
-    /// DHCP server listen address (default 0.0.0.0:67)
-    #[arg(long, env, default_value = "0.0.0.0:67")]
-    listen: SocketAddr,
-
-    /// Server identifier IP — must be an IP on the listen interface
-    #[arg(long, env)]
-    siaddr: Ipv4Addr,
-
-    /// Comma-separated interface names to bind. Empty = bind all interfaces.
-    #[arg(long, env, default_value = "")]
-    interfaces: String,
-
-    /// Lease duration in seconds (T1/renew and T2/rebind are derived from it).
-    #[arg(long, env, default_value_t = 10800)]
-    lease_time: u64,
-
-    /// How long a declined address stays quarantined, in seconds.
-    #[arg(long, env, default_value_t = 3600)]
-    probation: u64,
-
-    /// How to read a VLAN from the option 82 Agent Circuit ID: off, ascii, or binary.
-    #[arg(long, env, default_value = "ascii")]
-    circuit_id_vlan: CircuitIdMode,
-
-    /// Maximum size of the Postgres connection pool.
-    #[arg(long, env, default_value_t = 5)]
-    pg_max_connections: u32,
-}
+use vialo_dhcp::{VialoDhcp, config::Config};
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -55,7 +16,11 @@ fn main() -> Result<()> {
         )
         .init();
 
-    let cli = Cli::parse();
+    // The `[dhcp]` section of vialo.toml, shared with the rest of the stack.
+    // The database URL stays in the environment: it's a secret, and vialo-api
+    // reads it the same way.
+    let cfg = vialo_common::load::<Config>()?.dhcp;
+    let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -63,7 +28,7 @@ fn main() -> Result<()> {
 
     rt.block_on(async move {
         let pool = PgPoolOptions::new()
-            .max_connections(cli.pg_max_connections)
+            .max_connections(cfg.pg_max_connections)
             // Attribute every connection's writes (e.g. net_devices.last_seen) to the
             // `dhcp` subsystem so the audit trigger (migration 20) permits them.
             .after_connect(|conn, _meta| {
@@ -74,18 +39,17 @@ fn main() -> Result<()> {
                     Ok(())
                 })
             })
-            .connect(&cli.database_url)
+            .connect(&database_url)
             .await
             .expect("failed to connect to postgres");
 
         // Enumerate interfaces
-        let ifaces: Vec<_> = if cli.interfaces.is_empty() {
+        let ifaces: Vec<_> = if cfg.interfaces.is_empty() {
             datalink::interfaces()
         } else {
-            let names: Vec<&str> = cli.interfaces.split(',').map(|s| s.trim()).collect();
             datalink::interfaces()
                 .into_iter()
-                .filter(|i| names.contains(&i.name.as_str()))
+                .filter(|i| cfg.interfaces.contains(&i.name))
                 .collect()
         };
 
@@ -103,7 +67,7 @@ fn main() -> Result<()> {
         // `bin` crate wires those up).
         let dora_cfg = dora_core::config::cli::Config {
             config_path: PathBuf::from("/dev/null"),
-            v4_addr: cli.listen,
+            v4_addr: cfg.listen,
             v6_addr: "[::]:547".parse().unwrap(),
             external_api: "[::]:3333".parse().unwrap(),
             timeout: 3,
@@ -118,16 +82,16 @@ fn main() -> Result<()> {
 
         let plugin = VialoDhcp::new(
             pool,
-            cli.siaddr,
-            Duration::from_secs(cli.lease_time),
-            Duration::from_secs(cli.probation),
-            cli.circuit_id_vlan,
+            cfg.siaddr,
+            cfg.lease(),
+            cfg.probation(),
+            cfg.circuit_id_vlan,
         );
 
         let mut server = Server::<v4::Message>::new(dora_cfg, ifaces)?;
         server.plugin(plugin);
 
-        info!(listen = %cli.listen, siaddr = %cli.siaddr, "starting DHCP server");
+        info!(listen = %cfg.listen, siaddr = %cfg.siaddr, "starting DHCP server");
 
         server
             .start(async {

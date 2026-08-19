@@ -1,5 +1,7 @@
-# Applies to builds of vialo-api/Dockerfile.ci (context = workspace root).
+# Applies to builds of vialo-dhcp/Dockerfile (context = workspace root).
 # Allowlist: only the workspace manifests and member crates are build inputs.
+# vialo-api is here for its manifest — cargo will not load the workspace
+# without it — not because anything of it is compiled.
 *
 !Cargo.toml
 !Cargo.lock
@@ -10,7 +12,12 @@
 vialo-api/Cargo.lock
 vialo-api/Dockerfile*
 vialo-api/debian
+vialo-api/.sqlx
+vialo-api/base-ui
+vialo-api/migrations
+vialo-api/sampledata
 vialo-common/Cargo.lock
+vialo-dhcp/Cargo.lock
 vialo-dhcp/Dockerfile*
 vialo-dhcp/debian
 vialo-dhcp/compose.yaml

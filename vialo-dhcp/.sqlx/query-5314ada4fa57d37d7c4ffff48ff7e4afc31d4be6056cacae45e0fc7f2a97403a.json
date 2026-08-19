@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT ipv4_addr AS \"ipv4_addr: IpNetwork\"\n            FROM net_ip_assignments\n            WHERE realm_id = $1\n              AND ((device_id IS NULL AND (expires IS NULL OR expires <= NOW()))\n                   OR (device_id IS NOT NULL AND expires <= NOW()))\n            ORDER BY (device_id IS NULL) DESC, ipv4_addr\n            LIMIT 1\n            FOR UPDATE SKIP LOCKED\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ipv4_addr: IpNetwork",
+        "type_info": "Inet",
+        "origin": {
+          "Table": {
+            "table": "net_ip_assignments",
+            "name": "ipv4_addr"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5314ada4fa57d37d7c4ffff48ff7e4afc31d4be6056cacae45e0fc7f2a97403a"
+}

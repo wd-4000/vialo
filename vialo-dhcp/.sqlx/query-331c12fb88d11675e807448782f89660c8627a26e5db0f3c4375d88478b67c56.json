@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE net_ip_assignments SET (device_id, expires) = (NULL, NULL)\n             WHERE device_id = $1 AND realm_id != $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "331c12fb88d11675e807448782f89660c8627a26e5db0f3c4375d88478b67c56"
+}

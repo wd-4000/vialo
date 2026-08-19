@@ -1,6 +1,7 @@
 use std::net::Ipv4Addr;
-use std::str::FromStr;
 use std::time::Duration;
+
+pub mod config;
 
 use anyhow::{Context, Result};
 use dora_core::async_trait;
@@ -10,32 +11,23 @@ use dora_core::server::context::MsgContext;
 use dora_core::tracing::{debug, info, warn};
 use futures::TryStreamExt;
 use rtnetlink::packet_route::link::{InfoData, InfoKind, InfoVlan, LinkAttribute, LinkInfo};
+use serde::Deserialize;
 use sqlx::PgPool;
 use sqlx::types::ipnetwork::IpNetwork;
 use uuid::Uuid;
 
-/// How to derive a VLAN hint from the option 82 Agent Circuit ID.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How to derive a VLAN hint from the option 82 Agent Circuit ID
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CircuitIdMode {
     /// Ignore the circuit ID.
     Off,
-    /// ASCII "vlan.module.port" (Cisco-style) — leading digit run is the VLAN.
+    /// ASCII "vlan.module.port" (Cisco-style), leading digit is the VLAN.
+    #[default]
     Ascii,
     /// First two bytes as a big-endian u16.
+    #[serde(rename = "binary")]
     BinaryU16,
-}
-
-impl FromStr for CircuitIdMode {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "off" => Ok(Self::Off),
-            "ascii" => Ok(Self::Ascii),
-            "binary" => Ok(Self::BinaryU16),
-            _ => anyhow::bail!("expected one of: off, ascii, binary"),
-        }
-    }
 }
 
 /// Realm network parameters required to hand out a lease.
@@ -101,7 +93,7 @@ impl VialoDhcp {
         }
     }
 
-    /// Build the response skeleton — same as `util::new_msg` in dora's MsgType.
+    /// Build the response skeleton (same as `util::new_msg` in dora's MsgType)
     fn build_response(&self, req: &Message) -> Message {
         let mut msg = Message::new_with_id(
             req.xid(),
@@ -120,7 +112,7 @@ impl VialoDhcp {
         msg
     }
 
-    /// Extract a VLAN hint from option 82 Circuit-ID according to `circuit_id_mode`.
+    /// Extract a VLAN hint from option 82
     fn vlan_from_opts(&self, opts: &v4::DhcpOptions) -> Option<i32> {
         if self.circuit_id_mode == CircuitIdMode::Off {
             return None;
@@ -189,7 +181,7 @@ impl Plugin<Message> for VialoDhcp {
             }
             Some(MessageType::Request) => {
                 // A REQUEST carrying another server's identifier means the client
-                // selected a different server — we must stay silent (RFC 2131 §4.3.2).
+                // selected a different server. We must stay silent
                 if let Some(DhcpOption::ServerIdentifier(sid)) =
                     req_opts.get(OptionCode::ServerIdentifier)
                     && *sid != self.siaddr
@@ -622,7 +614,7 @@ fn mac_to_macaddr(mac: &[u8]) -> Result<mac_address::MacAddress> {
 }
 
 /// Ask the kernel via netlink for the VLAN ID of a VLAN-type interface.
-/// Returns `None` for non-VLAN interfaces, netlink failures, etc. — the
+/// Returns `None` for non-VLAN interfaces, netlink failures, etc. The
 /// caller treats `None` as "no VLAN hint" and falls back to unfiltered lookup.
 async fn vlan_of_ifindex(ifindex: u32) -> Option<i32> {
     let (conn, handle, _) = rtnetlink::new_connection().ok()?;

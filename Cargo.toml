@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["vialo-api", "vialo-dhcp"]
+members = ["vialo-api", "vialo-common", "vialo-dhcp"]
 
 # Incremental profile for faster builds
 # Select with the PROFILE build arg: `PROFILE: fast` under build.args

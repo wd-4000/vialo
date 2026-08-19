@@ -7,6 +7,10 @@ Wants=network-online.target
 [Service]
 Type=exec
 ExecStart=/usr/bin/vialo-dhcp
+# Services start in /, so the binary's upward search for vialo.toml would only
+# ever reach /vialo.toml. Listed before EnvironmentFile= so the env file can
+# still override it.
+Environment=VIALO_CONFIG=/etc/vialo/vialo.toml
 EnvironmentFile=-/etc/vialo/dhcp.env
 Restart=on-failure
 RestartSec=5s

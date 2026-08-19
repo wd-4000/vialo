@@ -21,7 +21,7 @@ use vialo_api::{
     AppState, EventChannels, KratosConfigs,
     bookables::{BookableChannel, BookableQueueChannel},
     config::{AuthConfig, Config},
-    helpers::{encryption, find_upward, grab_authd_conn_subsystem},
+    helpers::{encryption, grab_authd_conn_subsystem},
     http::util::grab_trans,
 };
 
@@ -203,19 +203,13 @@ async fn main() {
     }
 
     // Load config
-    let config_path = find_upward("vialo.toml")
-        .expect("Could not find vialo.toml in current directory or any parent");
-
-    let config_file = std::fs::read_to_string(&config_path).expect("Error reading vialo.toml");
-    let config: Config = toml::from_str(&config_file)
-        .map_err(|e| {
-            let location = e.span().map_or(String::new(), |span| {
-                let line = config_file[..span.start].matches('\n').count() + 1;
-                format!(" around line {}", line)
-            });
-            format!("{} in vialo.toml{}", e.message(), location)
-        })
-        .expect("Error reading config");
+    let config: Config = match vialo_common::load() {
+        Ok(config) => config,
+        Err(err) => {
+            error!("{err:#}");
+            std::process::exit(1);
+        }
+    };
 
     // Load encryption key
     let encryption_key: chacha20poly1305::Key = if let Ok(s) = std::env::var("ENCRYPTION_KEY") {

@@ -50,6 +50,8 @@ and how to run the app locally.
 vialo/
 ├── compose.yaml      # Docker
 ├── vialo-api/        # Rust backend (generic)
+├── vialo-common/     # Config loading shared by the Rust binaries
+├── vialo-dhcp/       # DHCP server (dora-based)
 └── postgres/         # Custom PostgreSQL image
 ```
 

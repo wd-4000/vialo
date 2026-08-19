@@ -1,8 +1,23 @@
 # Configuration
 
-vialo-api is configured through a `vialo.toml` file and environment variables.
-At startup the app searches upward from the working directory for `vialo.toml`
-(using `find_upward`).
+vialo-api and vialo-dhcp are configured through a single `vialo.toml` file and
+environment variables. Each binary reads only the sections it needs and ignores
+the rest, so one file serves the whole stack.
+
+Both find the file the same way (`vialo-common::load`):
+
+1. `$VIALO_CONFIG`, if set, is used as an explicit path.
+2. Otherwise the binary searches upward from its working directory for
+   `vialo.toml`.
+
+Services start in `/`, so the upward search would only ever find `/vialo.toml`.
+Both systemd units therefore set `VIALO_CONFIG=/etc/vialo/vialo.toml`
+themselves; the env files can override it, but normally don't mention it.
+
+Secrets (`DATABASE_URL`, `ENCRYPTION_KEY`) stay in the environment files, which
+are read by PID 1 at mode 0600. `vialo.toml` itself has to be readable by the
+service user, and both units use `DynamicUser=yes`, so mode 0644 root:root is
+the straightforward choice — keep secrets out of it.
 
 ## Address format
 
@@ -58,6 +73,10 @@ unsubscribe = "https://example.com/unsubscribe/"
 post = "https://example.com/posts/"
 board = "https://example.com/boards/"
 preferences = "https://example.com/preferences/"
+
+[dhcp]              # read by vialo-dhcp, ignored by vialo-api
+siaddr = "192.0.2.1"
+interfaces = ["eth0"]
 ```
 
 ### `[public]`
@@ -123,11 +142,32 @@ Note: the PPSK/UniFi subsystem also respects this setting.
 | `email.url.board` | yes | Base URL for links to boards. |
 | `email.url.preferences` | yes | Base URL for email preference management. |
 
+### `[dhcp]` (read by `vialo-dhcp`)
+
+Unknown keys in this section are rejected rather than ignored: a typo would
+otherwise silently leave the default in place.
+
+| Key | Required | Default | Description |
+|---|---|---|---|
+| `siaddr` | yes | — | Server identifier IP. Must be an IP on the listen interface. |
+| `listen` | no | `0.0.0.0:67` | DHCP listen address (UDP). |
+| `interfaces` | no | `[]` | Interface names to bind. Empty binds all; pin a single one in production, which is what enables `SO_BINDTODEVICE`. |
+| `lease_time` | no | `10800` | Lease duration in seconds. T1 = lease/2, T2 = lease × 7/8. |
+| `probation` | no | `3600` | How long a declined address stays quarantined, in seconds. |
+| `circuit_id_vlan` | no | `ascii` | Option 82 Circuit ID VLAN parsing: `off`, `ascii`, `binary`. |
+| `pg_max_connections` | no | `5` | Maximum Postgres connection pool size. |
+
+`DATABASE_URL` comes from the environment — see
+`vialo/vialo-dhcp/debian/dhcp.env.example` for a template. Each service keeps
+its own env file so that the API's secrets stay out of the environment of the
+process parsing packets off the wire.
+
 ## Environment variables
 
 | Variable | Required | Description |
 |---|---|---|
-| `DATABASE_URL` | yes | PostgreSQL connection string. Supports Unix sockets via `host=/path/to/socket` or by omitting the host. |
+| `DATABASE_URL` | yes | PostgreSQL connection string. Supports Unix sockets via `host=/path/to/socket` or by omitting the host. Read by both binaries. |
+| `VIALO_CONFIG` | no | Explicit path to `vialo.toml`, skipping the upward search. Read by both binaries; the systemd units set it to `/etc/vialo/vialo.toml`. |
 | `ENCRYPTION_KEY` | in production | 32 bytes as 64 hex characters. Encrypts credentials and PPSK passwords at rest. In dev, a hardcoded default is used. |
 | `ENCRYPTION_KEY_PATH` | alternative | Path to a file containing the encryption key. Mutually exclusive with `ENCRYPTION_KEY`. |
 | `EMAIL_URL` | with `email` feature | SMTP URL (`smtp://host:25`) or `sendmail://` to use the local sendmail binary. |
@@ -135,26 +175,6 @@ Note: the PPSK/UniFi subsystem also respects this setting.
 | `PRINTER_PASSWORD` | with `printer` feature | Admin password for the printer API. |
 | `ORY_KRATOS_ADMIN_URL` | with Kratos auth | Kratos admin API base URL (used for identity deletion requests). Supports `unix://` prefix for Unix socket connections. |
 | `INITIAL_ADMIN_EMAIL` | no | If set and no accounts exist yet, the first person with this email to sign up becomes an admin. |
-
-## Feature flags
-
-## DHCP server (`vialo-dhcp`)
-
-The DHCP server is a standalone binary with its own CLI. All options can also
-be set via environment variables (uppercase, hyphens replaced with underscores).
-
-| Flag | Env | Default | Description |
-|---|---|---|---|
-| `--database-url` | `DATABASE_URL` | (required) | PostgreSQL connection string. |
-| `--listen` | `LISTEN` | `0.0.0.0:67` | DHCP listen address (UDP). |
-| `--siaddr` | `SIADDR` | (required) | Server identifier IP. Must be an IP on the listen interface. |
-| `--interfaces` | `INTERFACES` | all | Comma-separated interface names to bind. Empty binds all. |
-| `--lease-time` | `LEASE_TIME` | `10800` | Lease duration in seconds. T1 = lease/2, T2 = lease × 7/8. |
-| `--probation` | `PROBATION` | `3600` | How long a declined address stays quarantined, in seconds. |
-| `--circuit-id-vlan` | `CIRCUIT_ID_VLAN` | `ascii` | Option 82 Circuit ID VLAN parsing: `off`, `ascii`, `binary`. |
-| `--pg-max-connections` | `PG_MAX_CONNECTIONS` | `5` | Maximum Postgres connection pool size. |
-
-See `vialo/vialo-dhcp/debian/dhcp.env.example` for a template.
 
 ## Feature flags (vialo-api)
 

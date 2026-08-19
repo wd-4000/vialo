@@ -1,6 +1,8 @@
 services:
   build:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     working_dir: /workspace/vialo
     command: sleep infinity
     stop_grace_period: 1s
