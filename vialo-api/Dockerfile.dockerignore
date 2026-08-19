@@ -4,11 +4,13 @@
 !Cargo.toml
 !Cargo.lock
 !vialo-api
+!vialo-common
 !vialo-dhcp
 # Non-build inputs inside the allowed directories
 vialo-api/Cargo.lock
 vialo-api/Dockerfile*
 vialo-api/debian
+vialo-common/Cargo.lock
 vialo-dhcp/Dockerfile*
 vialo-dhcp/debian
 vialo-dhcp/compose.yaml

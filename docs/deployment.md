@@ -195,12 +195,40 @@ realm IP pools.
 The systemd unit at `vialo/vialo-dhcp/debian/service` applies the same
 sandboxing as vialo-api (`DynamicUser=yes`, `ProtectSystem=strict`, etc.).
 
-### Env
+### Config
 
-Copy `vialo/vialo-dhcp/debian/dhcp.env.example` to `/etc/vialo/dhcp.env`.
-`SIADDR` must be set to an IP address on the listen interface.
+The server reads the `[dhcp]` section of the same `vialo.toml` as vialo-api.
+`siaddr` must be set to an IP address on the listen interface.
+
+Copy `vialo/vialo-dhcp/debian/dhcp.env.example` to `/etc/vialo/dhcp.env` for
+`DATABASE_URL`; the unit points the binary at the config file itself. It runs
+under `DynamicUser`, so
+`/etc/vialo/vialo.toml` must be readable by an unknown UID — mode 0644,
+with secrets left in the env file (0600, read by PID 1).
 
 The DHCP server shares the same Postgres database as vialo-api.
+
+### Container
+
+`compose.dhcp.yaml` builds `vialo/vialo-dhcp/Dockerfile` (a scratch image, ~3 MB)
+and runs it alongside the rest of the stack:
+
+```sh
+docker compose -f compose.yaml -f compose.dhcp.yaml up -d
+```
+
+It is a separate overlay rather than part of the base stack because bringing it
+up binds UDP/67 and starts answering DHCP on whatever LAN the host is plugged
+into.
+
+The container needs `network_mode: host` — clients broadcast from `0.0.0.0` and
+the VLAN lookup reads netlink, neither of which survives a bridge network. That
+in turn means Postgres has to be reachable on the host, so the overlay
+publishes it on `127.0.0.1:5432` and points `DATABASE_URL` there.
+
+Prefer the Debian package where you can: the systemd unit sandboxes the process
+far more tightly than the container does, which only drops capabilities down to
+`NET_BIND_SERVICE` and `NET_RAW`.
 
 ### VLAN scoping
 
@@ -208,7 +236,7 @@ The server reads MAC addresses and VLAN hints to look up devices in the
 `net_device_info` view. VLANs come from one of two sources, in priority order:
 
 1. **Option 82 Agent Circuit ID**: parsed from the DHCP relay agent, format
-   configured via `CIRCUIT_ID_VLAN` (`ascii` for Cisco-style, `binary` for a
+   configured via `circuit_id_vlan` (`ascii` for Cisco-style, `binary` for a
    2-byte tag, or `off` to ignore).
 2. **Interface**: for packets arriving on a VLAN subinterface, the kernel
    netlink interface provides the VLAN ID.

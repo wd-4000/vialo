@@ -17,6 +17,22 @@ post = "https://xyz.example.com/post/"
 board = "https://xyz.example.com/board/"
 preferences = "https://xyz.example.com/prefs/"
 
+# vialo-dhcp. DATABASE_URL stays in the environment.
+[dhcp]
+# Server identifier IP — must be an IP on the listen interface.
+siaddr = "192.0.2.1"
+# Interfaces to bind. Empty binds all of them; pin a single one in production,
+# which is what enables SO_BINDTODEVICE.
+interfaces = []
+#listen = "0.0.0.0:67"
+# Lease duration in seconds. T1/renew and T2/rebind are derived from it.
+#lease_time = 10800
+# How long a declined address stays quarantined, in seconds.
+#probation = 3600
+# Option 82 Agent Circuit ID VLAN parsing: off, ascii, or binary.
+#circuit_id_vlan = "ascii"
+#pg_max_connections = 5
+
 [auth]
 type = "mock"
 uuid = "1d63a916-36f9-4a14-9f9f-730b1fd58c12"

@@ -4987,7 +4987,6 @@ dependencies = [
  "sqlx-conditional-queries",
  "strum",
  "tokio",
- "toml",
  "tower-http 0.7.0",
  "tracing",
  "tracing-subscriber",
@@ -4995,8 +4994,18 @@ dependencies = [
  "utoipa",
  "utoipauto",
  "uuid",
+ "vialo-common",
  "xml_dom",
  "yaml-rust2",
+]
+
+[[package]]
+name = "vialo-common"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "toml",
 ]
 
 [[package]]
@@ -5004,14 +5013,15 @@ name = "vialo-dhcp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap",
  "dora-core",
  "futures",
  "mac_address",
  "rtnetlink",
+ "serde",
  "sqlx",
  "tracing-subscriber",
  "uuid",
+ "vialo-common",
 ]
 
 [[package]]

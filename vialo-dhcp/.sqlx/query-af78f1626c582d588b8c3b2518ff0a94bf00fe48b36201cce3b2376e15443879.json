@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE net_ip_assignments\n            SET expires = NOW()\n            WHERE device_id = $1\n            RETURNING ipv4_addr AS \"ipv4_addr: IpNetwork\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ipv4_addr: IpNetwork",
+        "type_info": "Inet",
+        "origin": {
+          "Table": {
+            "table": "net_ip_assignments",
+            "name": "ipv4_addr"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "af78f1626c582d588b8c3b2518ff0a94bf00fe48b36201cce3b2376e15443879"
+}
