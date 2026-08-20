@@ -82,6 +82,7 @@ BEGIN
         DO UPDATE SET (realm_id, device_id) = (NEW.id, NULL);
     ELSIF TG_OP = 'DELETE' OR NEW.ipv4_subnet IS NULL THEN
         DELETE FROM net_ip_assignments WHERE realm_id = OLD.id;
+        RETURN OLD;
     END IF;
 
     RETURN NEW;
