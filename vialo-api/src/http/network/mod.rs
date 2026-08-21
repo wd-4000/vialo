@@ -26,10 +26,12 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     let manager_routes = Router::new()
         .route(
             "/networks/{id}",
-            get(networks::get_network).put(networks::put_network).delete(networks::delete_network),
+            get(networks::get_network)
+                .put(networks::put_network)
+                .delete(networks::delete_network),
         )
         .route("/networks", post(networks::post_network))
-        .route("/realms", get(realms::list_realms))
+        .route("/realms", get(realms::list_realms).post(realms::post_realm))
         .route("/realms/set_default", post(realms::set_default_realm))
         .route("/realms/{id}", put(realms::put_realm))
         .route("/credentials", get(credentials::list_credentials))
