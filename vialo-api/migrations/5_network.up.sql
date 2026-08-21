@@ -129,10 +129,11 @@ CREATE OR REPLACE FUNCTION expand_cidr (p_cidr cidr, p_exclude inet[]) RETURNS i
 DECLARE
     r inet[];
     latest inet := p_cidr;
+    excl text[] := ARRAY(SELECT host(e) FROM unnest(p_exclude) e WHERE e IS NOT NULL);
 BEGIN
     WHILE p_cidr >>= (latest + 2) LOOP
         latest = latest + 1;
-        IF array_position(p_exclude, latest) IS NULL THEN
+        IF NOT (host(latest) = ANY (excl)) THEN
             r = r || latest;
         END IF;
 
