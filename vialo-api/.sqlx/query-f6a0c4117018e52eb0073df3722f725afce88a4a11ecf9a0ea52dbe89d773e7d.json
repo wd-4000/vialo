@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE net_realms SET ipv4_subnet = coalesce($1, ipv4_subnet), ipv4_nat = coalesce($2, ipv4_nat), ipv6_prefix = coalesce($3, ipv6_prefix), vlan = coalesce($4, vlan), ipv4_router = coalesce($5, ipv4_router), ipv4_dns = coalesce($6, ipv4_dns) WHERE id = $7",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Cidr",
+        "Inet",
+        "Cidr",
+        "Int4",
+        "Inet",
+        "Inet",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f6a0c4117018e52eb0073df3722f725afce88a4a11ecf9a0ea52dbe89d773e7d"
+}
