@@ -194,7 +194,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
     ba.activated,
     cs.expiry_refund_percent as "expiry_refund_percent!",
     ap.full_name,
-    ap.email as "email!",
+    ap.email,
     get_i18n_string(bast.name_i18n, $1) as "asset_name?"
     FROM bookable_appointments ba
     CROSS JOIN LATERAL (
@@ -240,6 +240,11 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
             .await?;
         }
         trans.commit().await?;
+
+        let Some(email) = appointment.email else {
+            continue;
+        };
+
         if app_state
             .event_channels
             .expired_appointments_tx
@@ -247,11 +252,9 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
                 id: appointment.id,
                 account_id: appointment.account_id,
                 full_name: appointment.full_name,
-                email: appointment.email,
+                email,
                 asset_name: appointment.asset_name.unwrap_or_else(|| "Unknown".into()),
-                credits_refunded: appointment.credits.unwrap_or(0)
-                    * appointment.expiry_refund_percent as i32
-                    / 100,
+                credits_refunded: refund_credits,
             })
             .is_err()
         {
