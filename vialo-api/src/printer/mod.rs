@@ -110,31 +110,23 @@ async fn restore_printer_account(
     .await?;
 
     let (email, username, pin_encrypted) = match account {
-        Some(account) => {
-            match (
-                account.email,
-                account.amenities_username,
-                account.amenities_pin,
-            ) {
-                (Some(email), Some(username), Some(pin)) => (email, username, pin),
-                _ => {
-                    let dedup = format!("cannot_restore_{account_id}");
-                    add_health_event(
-                        &mut *conn,
-                        Subsystem::Printer,
-                        "cannot_restore",
-                        Some(json!({"account_id": account_id, "reason": "missing_credentials"})),
-                        50,
-                        false,
-                        Some(&dedup),
-                    )
-                    .await;
-                    anyhow::bail!(
-                        "Cannot restore printer account {account_id}: missing email/username/PIN"
-                    );
-                }
+        Some(account) => match (account.amenities_username, account.amenities_pin) {
+            (Some(username), Some(pin)) => (account.email, username, pin),
+            _ => {
+                let dedup = format!("cannot_restore_{account_id}");
+                add_health_event(
+                    &mut *conn,
+                    Subsystem::Printer,
+                    "cannot_restore",
+                    Some(json!({"account_id": account_id, "reason": "missing_credentials"})),
+                    50,
+                    false,
+                    Some(&dedup),
+                )
+                .await;
+                anyhow::bail!("Cannot restore printer account {account_id}: missing username/PIN");
             }
-        }
+        },
         None => {
             let dedup = format!("cannot_restore_{account_id}");
             add_health_event(
@@ -661,7 +653,6 @@ pub async fn main(
                             .fetch_one(&mut *conn)
                             .await?;
 
-                            let email = account.email.context("User must have email")?;
                             let username = account
                                 .amenities_username
                                 .context("User must have an amenities username")?;
@@ -680,8 +671,9 @@ pub async fn main(
 
                             match context {
                                 None => {
-                                    let printer_id =
-                                        printer.create_user(email, username.clone(), pin).await?;
+                                    let printer_id = printer
+                                        .create_user(account.email, username.clone(), pin)
+                                        .await?;
 
                                     sqlx::query!("INSERT INTO subsystem_printer_context (id, printer_id, printer_username, bw, color) VALUES ($1,$2,$3,$4,$5)", account_id, printer_id as i32, username, 0,0).execute(&mut *conn).await?;
                                 }

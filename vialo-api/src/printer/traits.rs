@@ -19,7 +19,7 @@ pub trait PrinterApi {
     ) -> Result<u16, anyhow::Error>;
     async fn create_user(
         &mut self,
-        address: String,
+        address: Option<String>,
         username: String,
         password: String,
     ) -> Result<u16, anyhow::Error>;
