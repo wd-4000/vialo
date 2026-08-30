@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            account_role_exists($1, 'bookable_manager') AS \"is_manager!\",\n            coalesce((\n                SELECT array_agg(DISTINCT p.asset_type_id)\n                FROM bookable_asset_type_group_perms p\n                LEFT JOIN account_group_memberships agm\n                    ON agm.group_id = p.group_id AND agm.account_id = $1\n                WHERE p.perm >= $2 AND (p.group_id IS NULL OR agm.account_id IS NOT NULL)\n            ), '{}'::int[]) AS \"asset_types!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_manager!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "asset_types!",
+        "type_info": "Int4Array",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "bookable_perm",
+            "kind": {
+              "Enum": [
+                "view",
+                "book",
+                "admin"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "fd2520494c7d7762418eee78d0c885a13ebe7ceb7499bb7657d19be3dfaae09f"
+}

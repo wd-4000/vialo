@@ -4,7 +4,9 @@ use super::models::{
     BoardPostIdModel, BookableAssetQueue, BookableAssetTranslatedAllLanguages,
     BookableAssetTranslatedWithStatus, BookableStatus,
 };
-use super::permissions::{BookablePerm, require_asset_type_perm};
+use super::permissions::{
+    BookableCaller, BookablePerm, require_asset_type_perm, require_asset_type_perm_by_asset,
+};
 use crate::http::util::{clamp_pagination, grab_authd_conn_user, grab_trans};
 use crate::{
     helpers::grab_authd_conn_subsystem,
@@ -19,10 +21,9 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use axum_extra::TypedHeader;
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
-use sqlx::query;
+use sqlx::{query, query_scalar};
 use sqlx_conditional_queries::conditional_query_as;
 use std::i64;
 use std::sync::Arc;
@@ -81,27 +82,11 @@ pub async fn list_bookables(
 pub async fn list_queues(
     Query(opts): Query<BookableFilterOptions>,
     State(data): State<Arc<AppState>>,
-    Extension(user_o): Extension<Option<User>>,
-    authorization: Option<TypedHeader<headers::Authorization<headers::authorization::Bearer>>>,
+    caller: BookableCaller,
 ) -> Result<impl IntoResponse, VialoError> {
-    // Either a valid kiosk credential, an account with 'book', or nothing.
-    let kiosk = authorization.and_then(|TypedHeader(h)| {
-        let token = h.0.token();
-        data.config
-            .bookables
-            .as_ref()?
-            .kiosk
-            .as_ref()
-            .filter(|k| k.matches(token))
-            .cloned()
-    });
-
-    let (account_id, kiosk_types) = if let Some(kiosk) = kiosk {
-        (None, Some(kiosk.asset_types))
-    } else if let Some(user) = user_o {
-        (Some(user.id), None)
-    } else {
-        return Err(VialoError::Forbidden());
+    let (account_id, kiosk_types) = match caller {
+        BookableCaller::Kiosk(kiosk) => (None, Some(kiosk.asset_types)),
+        BookableCaller::Account(id) => (Some(id), None),
     };
 
     let rows = query!(
@@ -154,12 +139,28 @@ pub async fn list_queues(
 pub async fn quick_unlock(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
-    Extension(user_o): Extension<Option<User>>,
+    caller: BookableCaller,
 ) -> Result<impl IntoResponse, VialoError> {
-    let mut conn = if let Some(user) = user_o {
-        grab_authd_conn_user(&data.db, user.id).await?
-    } else {
-        grab_authd_conn_subsystem(&data.db, "bookable").await?
+    // Either a valid kiosk credential, an account with 'book' or nothing.
+    let mut conn = match caller {
+        BookableCaller::Kiosk(kiosk) => {
+            let asset_type_id =
+                query_scalar!("SELECT asset_type_id FROM bookable_assets WHERE id = $1", id)
+                    .fetch_optional(&data.db)
+                    .await?
+                    .ok_or(VialoError::NotFound())?;
+
+            if !kiosk.allows(asset_type_id) {
+                return Err(VialoError::Forbidden());
+            }
+
+            grab_authd_conn_subsystem(&data.db, "bookable").await?
+        }
+        BookableCaller::Account(user_id) => {
+            require_asset_type_perm_by_asset(user_id, id, BookablePerm::Book, &data.db).await?;
+
+            grab_authd_conn_user(&data.db, user_id).await?
+        }
     };
 
     let res = query!(
