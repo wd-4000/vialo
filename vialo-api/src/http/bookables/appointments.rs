@@ -1,4 +1,6 @@
-use super::permissions::{BookablePerm, require_asset_type_perm};
+use super::permissions::{
+    AssetTypeScope, BookableCaller, BookablePerm, require_asset_type_perm, resolve_asset_type_scope,
+};
 use crate::bookables::CancellationReason;
 use crate::helpers::{PgDateTime, encryption, grab_authd_conn_subsystem};
 use crate::http::history::models::Subsystem;
@@ -6,7 +8,6 @@ use crate::http::util::models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery};
 use crate::http::util::{
     JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
 };
-use crate::permissions::{AppRole, check_app_role};
 use crate::{AppState, health};
 use axum::extract::{ConnectInfo, Path};
 use axum::{
@@ -15,7 +16,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
-use axum_extra::{TypedHeader, extract::Query};
+use axum_extra::extract::Query;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{query, query_scalar};
@@ -66,50 +67,37 @@ pub struct KioskActivateBody {
 pub async fn activate(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
-    Extension(user_o): Extension<Option<User>>,
-    authorization: Option<TypedHeader<headers::Authorization<headers::authorization::Bearer>>>,
     headers: HeaderMap,
     connect_info: Option<Extension<ConnectInfo<SocketAddr>>>,
+    caller: BookableCaller,
     body: Option<Json<KioskActivateBody>>,
 ) -> Result<impl IntoResponse, VialoError> {
-    // A valid kiosk credential: activate on behalf of the appointment's owner
-    let kiosk = authorization.and_then(|TypedHeader(h)| {
-        let token = h.0.token();
-        data.config
-            .bookables
-            .as_ref()?
-            .kiosk
-            .as_ref()
-            .filter(|k| k.matches(token))
-            .cloned()
-    });
+    let user_id = match caller {
+        // A valid kiosk credential: activate on behalf of the appointment's owner
+        BookableCaller::Kiosk(kiosk) => {
+            let Some(Json(body)) = body else {
+                return Err(VialoError::Forbidden());
+            };
+            let Some(pin) = body.pin else {
+                return Err(VialoError::Forbidden());
+            };
 
-    if let Some(kiosk) = kiosk {
-        let Some(Json(body)) = body else {
-            return Err(VialoError::Forbidden());
-        };
-        let Some(pin) = body.pin else {
-            return Err(VialoError::Forbidden());
-        };
+            // The PIN is brute-forceable, so we throttle it per IP.
+            data.rate_limiters
+                .check_kiosk_pin(&headers, connect_info.as_deref())?;
 
-        // The PIN is brute-forceable, so e throttle it per IP.
-        data.rate_limiters
-            .check_kiosk_pin(&headers, connect_info.as_deref())?;
-
-        return kiosk_activate(&data, id, &kiosk, &pin).await;
-    }
-
-    let Some(user) = user_o else {
-        return Err(VialoError::Forbidden());
+            return kiosk_activate(&data, id, &kiosk, &pin).await;
+        }
+        BookableCaller::Account(user_id) => user_id,
     };
 
     // Implicit permission check in the query
-    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+    let mut conn = grab_authd_conn_user(&data.db, user_id).await?;
 
     let res = query!(
         "UPDATE bookable_appointments SET activated = NOW() WHERE id = $1 AND account_id = $2",
         id,
-        user.id
+        user_id
     )
     .execute(&mut *conn)
     .await?;
@@ -389,11 +377,10 @@ pub async fn list(
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
 
-    // Permission check in case we receive an account ID different from the current account
+    let user_id = user.id;
     let resolved_account_id = opts.account_id.resolve(user.id);
-    if resolved_account_id != IdOrAllQuery::Id(user.id) {
-        check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
-    }
+    // Permission filter
+    let scope = resolve_asset_type_scope(user_id, BookablePerm::Admin, &data.db).await?;
 
     let record = conditional_query_as!(
         BookableAppointmentType,
@@ -409,14 +396,20 @@ pub async fn list(
             ba.activated,
             ba.maintenance
         FROM
-            bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true {#account} {#asset_types} {#from} {#to} {#cancelled} ORDER BY during LIMIT {limit} OFFSET {offset}"#,
+            bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true
+            {#permission} {#account} {#asset_types} {#from} {#to} {#cancelled} ORDER BY ba.during, ba.id LIMIT {limit} OFFSET {offset}"#,
             #account_info = match(&resolved_account_id){
                   IdOrAllQuery::All => r#"jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account: AccountEmbed","#,
                   _ => r#"null AS "account: AccountEmbed","#
             },
+            #permission = match (scope) {
+                AssetTypeScope::All => "",
+                AssetTypeScope::Only(scope_asset_types) => "AND (ba.account_id = {user_id} OR b.asset_type_id = ANY({scope_asset_types:Vec<i32>}))",
+                AssetTypeScope::None => "AND ba.account_id = {user_id}",
+            },
             #account = match (&resolved_account_id) {
                 IdOrAllQuery::All => "",
-                IdOrAllQuery::Id(account) => "AND account_id = {account}",
+                IdOrAllQuery::Id(account) => "AND ba.account_id = {account}",
             },
             #asset_types = match (opts.asset_types) {
                 Some(at) => "AND b.asset_type_id = ANY({at:Vec<i32>})",
@@ -437,6 +430,51 @@ pub async fn list(
 
     )
     .fetch_all(&data.db)
+    .await?;
+
+    Ok((StatusCode::OK, Json(record)))
+}
+
+#[derive(Deserialize, Debug, Default, IntoParams)]
+pub struct BookableAppointmentGetOptions {
+    #[serde(default)]
+    pub account_info: bool,
+}
+
+#[utoipa::path(get, path = "/bookables/appointments/{id}", params(
+    BookableAppointmentGetOptions
+), responses((status = 200, description = "OK", body=BookableAppointmentType)))]
+pub async fn get(
+    Query(opts): Query<BookableAppointmentGetOptions>,
+    Path(id): Path<Uuid>,
+    Extension(user): Extension<User>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    let user_id = user.id;
+
+    let record = conditional_query_as!(
+        BookableAppointmentType,
+        r#"SELECT
+            ba.id,
+            ba.asset_id,
+            ba.transaction_id,
+            {#account_info}
+            lower(ba.during) as begins,
+            coalesce(upper(ba.during), '+infinity'::timestamptz) as "ends!: PgDateTime",
+            ba.cancelled_at,
+            ba.cancellation_reason as "cancellation_reason: CancellationReason",
+            ba.activated,
+            ba.maintenance
+        FROM
+            bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id
+            LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE ba.id = {id} AND (ba.account_id = {user_id} OR account_bookable_perm_exists({user_id}, b.asset_type_id, 'admin'::bookable_perm))"#,
+            #account_info = match(opts.account_info){
+                 true => r#"jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account: AccountEmbed","#,
+                false => r#"null AS "account: AccountEmbed","#
+            }
+
+    )
+    .fetch_one(&data.db)
     .await?;
 
     Ok((StatusCode::OK, Json(record)))

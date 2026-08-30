@@ -33,6 +33,7 @@ impl_jsonb_embed!(TakenSlots);
 pub async fn taken_slots(
     Query(opts): Query<TakenSlotQuery>,
     State(data): State<Arc<AppState>>,
+    Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
     let asset_types = opts.asset_type_id.filter(|v| !v.is_empty());
     let asset_ids = opts.asset_id.filter(|v| !v.is_empty());
@@ -43,13 +44,15 @@ pub async fn taken_slots(
                 (SELECT COALESCE(array_agg(id), ARRAY[]::int[])
                  FROM bookable_assets
                  WHERE ($1::int[] IS NULL OR asset_type_id = ANY($1))
-                   AND ($2::int[] IS NULL OR id = ANY($2))),
+                   AND ($2::int[] IS NULL OR id = ANY($2))
+                   AND account_bookable_perm_exists($5, asset_type_id, 'view'::bookable_perm)),
                 $3, $4)
         ) d"#,
         asset_types.as_deref(),
         asset_ids.as_deref(),
         opts.from,
-        opts.to
+        opts.to,
+        user.id
     )
     .fetch_one(&data.db)
     .await?;
@@ -91,6 +94,7 @@ pub struct SlotSchemaResponse {
 pub async fn slot_schemas(
     Query(opts): Query<SlotSchemaQuery>,
     State(data): State<Arc<AppState>>,
+    Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
     let langs = opts
         .lang
@@ -99,6 +103,7 @@ pub async fn slot_schemas(
     let asset_types = opts.asset_type_id.filter(|v| !v.is_empty());
 
     let asset_ids = opts.asset_id.filter(|v| !v.is_empty());
+    let user_id = user.id;
     let assets = conditional_query_as!(
         BookableAssetTranslated,
         r#"SELECT
@@ -108,12 +113,14 @@ pub async fn slot_schemas(
            bd.asset_type_id as "asset_type_id!",
            status as "status!: BookableStatus"
        FROM
-           bookable_asset_status bd WHERE TRUE {#asset_type} {#asset_id}"#,
+           bookable_asset_status bd
+       WHERE account_bookable_perm_exists({user_id}, bd.asset_type_id, 'view'::bookable_perm)
+       {#asset_type} {#asset_id}"#,
            #asset_type = match(asset_types){
                  Some(a) => "AND asset_type_id = ANY({a:Vec<i32>})",
                  None => ""
            },
-           #asset_id = match(asset_ids.clone()){
+           #asset_id = match(asset_ids){
                  Some(b) => "AND id = ANY({b:Vec<i32>})",
                  None => ""
            }
@@ -121,7 +128,8 @@ pub async fn slot_schemas(
     .fetch_all(&data.db)
     .await?;
 
-    let asset_ids: Vec<i32> = asset_ids.unwrap_or_else(|| assets.iter().map(|j| j.id).collect());
+    // Reuse allowed assets
+    let asset_ids: Vec<i32> = assets.iter().map(|j| j.id).collect();
 
     let page_query = query_as!(
         SchemaPages,

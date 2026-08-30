@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select coalesce(jsonb_object_agg(d.date, d.assets), '{}'::jsonb) as \"taken!: TakenSlots\" from (\n            SELECT * from get_taken_slots(\n                (SELECT COALESCE(array_agg(id), ARRAY[]::int[])\n                 FROM bookable_assets\n                 WHERE ($1::int[] IS NULL OR asset_type_id = ANY($1))\n                   AND ($2::int[] IS NULL OR id = ANY($2))\n                   AND account_bookable_perm_exists($5, asset_type_id, 'view'::bookable_perm)),\n                $3, $4)\n        ) d",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "taken!: TakenSlots",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4Array",
+        "Int4Array",
+        "Date",
+        "Date",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ab70140e2484a0136f5634a48c807a31c03f48e897fa9c2cd67f374e61b5b2d3"
+}

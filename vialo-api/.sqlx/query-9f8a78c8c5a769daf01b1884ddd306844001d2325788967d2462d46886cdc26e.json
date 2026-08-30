@@ -1,0 +1,137 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true\n             AND ba.account_id = $1 AND b.asset_type_id = ANY($2) AND coalesce(upper(ba.during), 'infinity'::timestamptz) >= $3  AND UPPER(ba.during) <= $4  AND ba.cancelled_at IS NULL ORDER BY ba.during, ba.id LIMIT $5 OFFSET $6",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "bookable_appointments",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "asset_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bookable_appointments",
+            "name": "asset_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "transaction_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "bookable_appointments",
+            "name": "transaction_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "account: AccountEmbed",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "begins",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "ends!: PgDateTime",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "cancelled_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "bookable_appointments",
+            "name": "cancelled_at"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "cancellation_reason: CancellationReason",
+        "type_info": {
+          "Custom": {
+            "name": "bookable_appointment_cancellation_reason",
+            "kind": {
+              "Enum": [
+                "expired",
+                "user",
+                "admin"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "bookable_appointments",
+            "name": "cancellation_reason"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "activated",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "bookable_appointments",
+            "name": "activated"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "maintenance",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "bookable_appointments",
+            "name": "maintenance"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4Array",
+        "Timestamptz",
+        "Timestamptz",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null,
+      null,
+      null,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "9f8a78c8c5a769daf01b1884ddd306844001d2325788967d2462d46886cdc26e"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT asset_type_id FROM bookable_assets WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "asset_type_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bookable_assets",
+            "name": "asset_type_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "56787462a68a32410ea19d56e7c3a9105611b26205c94b99237730e5058aa100"
+}
