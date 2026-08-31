@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,\n            bs.expiry_refund_percent,\n            bs.requires_activation\n        FROM\n            bookable_schemas bs\n        WHERE account_bookable_perm_exists($1, bs.asset_type_id, 'view'::bookable_perm) AND\n        label ILIKE '%' || $2 || '%'\n        LIMIT $3 OFFSET $4",
+  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,\n            bs.expiry_refund_percent,\n            bs.requires_activation\n        FROM\n            bookable_schemas bs\n        WHERE account_bookable_perm_exists($1, bs.asset_type_id, 'view'::bookable_perm) AND\n        bs.asset_type_id = $2 AND\n        label ILIKE '%' || $3 || '%'\n        LIMIT $4 OFFSET $5",
   "describe": {
     "columns": [
       {
@@ -85,6 +85,7 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Int4",
         "Text",
         "Int8",
         "Int8"
@@ -101,5 +102,5 @@
       false
     ]
   },
-  "hash": "7fb143dc7222ccff8a284e82eb23021bf844e01dea6632aa4deec60112883913"
+  "hash": "21272e1369b3257d83ac4e1af0dde74cc8a29deba8092a1d014fc48053855868"
 }

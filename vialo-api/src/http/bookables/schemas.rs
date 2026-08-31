@@ -4,19 +4,20 @@ use super::permissions::{
 };
 use crate::AppState;
 use crate::http::util::grab_authd_conn_user;
-use crate::http::util::{JsonE, SearchableListOptions, User, VialoError, clamp_pagination};
+use crate::http::util::{JsonE, User, VialoError, clamp_pagination};
 use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
 use chrono::TimeDelta;
 use serde::{Deserialize, Serialize};
 use serde_with::{DurationSeconds, serde_as};
+use sqlx::PgConnection;
 use sqlx::postgres::types::PgInterval;
 use sqlx::query;
 use sqlx_conditional_queries::conditional_query_as;
 use std::i64;
 use std::sync::Arc;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct BookableSchema {
@@ -30,7 +31,22 @@ pub struct BookableSchema {
     pub expiry_refund_percent: Option<i16>,
 }
 
-fn validate_schema_fields(body: &BookableSchemaPostOrPut) -> Result<(), VialoError> {
+/// Schema body minus asset_type_id, for schemas created inline with their asset
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct NewSchemaInline {
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
+    pub label: Option<String>,
+    pub schedule: Vec<String>,
+    pub slot_price: Option<i32>,
+    #[serde_as(as = "Option<DurationSeconds<i64>>")]
+    #[schema(value_type = Option<i64>)]
+    pub activation_grace_period: Option<TimeDelta>,
+    pub expiry_refund_percent: Option<i16>,
+    pub requires_activation: bool,
+}
+
+fn validate_schema_fields(body: &NewSchemaInline) -> Result<(), VialoError> {
     if body.slot_price.is_some_and(|v| v < 0) {
         return Err(VialoError::AppError(
             StatusCode::BAD_REQUEST,
@@ -59,9 +75,18 @@ fn validate_schema_fields(body: &BookableSchemaPostOrPut) -> Result<(), VialoErr
     Ok(())
 }
 
-#[utoipa::path(get, path = "/bookables/schemas", params(SearchableListOptions), responses((status = 200, description = "OK", body=Vec<BookableSchema>)))]
+/// Scoped by asset_type_id so a picker can offer only schemas the asset can use.
+#[derive(Deserialize, Debug, Default, IntoParams)]
+pub struct SchemaListOptions {
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+    pub search: Option<String>,
+    pub asset_type_id: Option<i32>,
+}
+
+#[utoipa::path(get, path = "/bookables/schemas", params(SchemaListOptions), responses((status = 200, description = "OK", body=Vec<BookableSchema>)))]
 pub async fn list(
-    Query(opts): Query<SearchableListOptions>,
+    Query(opts): Query<SchemaListOptions>,
     Extension(user_o): Extension<Option<User>>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
@@ -82,8 +107,13 @@ pub async fn list(
         FROM
             bookable_schemas bs
         WHERE account_bookable_perm_exists({user_id_o}, bs.asset_type_id, 'view'::bookable_perm) AND
+        {#asset_type} AND
         {#search}
         LIMIT {limit} OFFSET {offset}"#,
+        #asset_type = match &opts.asset_type_id {
+            Some(t) => "bs.asset_type_id = {t}",
+            None => "TRUE",
+        },
         #search = match &opts.search {
             Some(s) => "label ILIKE '%' || {s} || '%'",
             None => "TRUE",
@@ -164,35 +194,56 @@ pub struct BookableSchemaPostOrPut {
     pub requires_activation: bool,
 }
 
+impl BookableSchemaPostOrPut {
+    fn split(self) -> (i32, NewSchemaInline) {
+        (
+            self.asset_type_id,
+            NewSchemaInline {
+                label: self.label,
+                schedule: self.schedule,
+                slot_price: self.slot_price,
+                activation_grace_period: self.activation_grace_period,
+                expiry_refund_percent: self.expiry_refund_percent,
+                requires_activation: self.requires_activation,
+            },
+        )
+    }
+}
+
+/// Validates and inserts a schema, returning its id. The caller checks permissions.
+pub async fn insert_schema(
+    db: &mut PgConnection,
+    body: NewSchemaInline,
+    asset_type_id: i32,
+) -> Result<i32, VialoError> {
+    validate_schema_fields(&body)?;
+
+    let id = sqlx::query_scalar!(
+        "INSERT INTO bookable_schemas (label, schedule, asset_type_id, slot_price, activation_grace_period, expiry_refund_percent, requires_activation) VALUES ($1, $2::time[], $3, $4, $5, $6, $7) RETURNING id",
+        body.label, body.schedule as Vec<String>, asset_type_id, body.slot_price, body.activation_grace_period.map(PgInterval::try_from)
+          .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?,
+        body.expiry_refund_percent,
+        body.requires_activation,
+    )
+    .fetch_one(&mut *db)
+    .await?;
+
+    Ok(id)
+}
+
 #[utoipa::path(post, path = "/bookables/schemas", request_body = BookableSchemaPostOrPut, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
     JsonE(body): JsonE<BookableSchemaPostOrPut>,
 ) -> Result<impl IntoResponse, VialoError> {
-    validate_schema_fields(&body)?;
-    require_asset_type_perm(
-        Some(user.id),
-        body.asset_type_id,
-        BookablePerm::Admin,
-        &data.db,
-    )
-    .await?;
+    let (asset_type_id, schema) = body.split();
+    require_asset_type_perm(Some(user.id), asset_type_id, BookablePerm::Admin, &data.db).await?;
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+    let id = insert_schema(&mut conn, schema, asset_type_id).await?;
 
-    let record = sqlx::query_as!(
-        BoardPostIdModel,
-        "INSERT INTO bookable_schemas (label, schedule, asset_type_id, slot_price, activation_grace_period, expiry_refund_percent, requires_activation) VALUES ($1, $2::time[], $3, $4, $5, $6, $7) RETURNING id",
-        body.label, body.schedule as Vec<String>, body.asset_type_id, body.slot_price, body.activation_grace_period.map(PgInterval::try_from)
-          .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?,
-        body.expiry_refund_percent,
-        body.requires_activation,
-    )
-    .fetch_one(&mut *conn)
-    .await?;
-
-    Ok((StatusCode::CREATED, Json(record)))
+    Ok((StatusCode::CREATED, Json(BoardPostIdModel { id })))
 }
 
 #[utoipa::path(put, path = "/bookables/schemas/{id}", request_body=BookableSchemaPostOrPut, responses((status = 200, description = "Updated", body=BookableSchema)))]
@@ -202,15 +253,10 @@ pub async fn put(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<BookableSchemaPostOrPut>,
 ) -> Result<impl IntoResponse, VialoError> {
-    validate_schema_fields(&body)?;
+    let (asset_type_id, schema) = body.split();
+    validate_schema_fields(&schema)?;
     require_asset_type_perm_by_schema(user.id, id, BookablePerm::Admin, &data.db).await?;
-    require_asset_type_perm(
-        Some(user.id),
-        body.asset_type_id,
-        BookablePerm::Admin,
-        &data.db,
-    )
-    .await?;
+    require_asset_type_perm(Some(user.id), asset_type_id, BookablePerm::Admin, &data.db).await?;
 
     let existing_appointments = sqlx::query_scalar!(
         r#"SELECT EXISTS (
@@ -251,8 +297,8 @@ pub async fn put(
         expiry_refund_percent,
         requires_activation
         "#,
-        body.label, body.schedule as Vec<String>, body.asset_type_id, body.slot_price, body.activation_grace_period.map(PgInterval::try_from)
-          .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?, body.expiry_refund_percent, body.requires_activation, id
+        schema.label, schema.schedule as Vec<String>, asset_type_id, schema.slot_price, schema.activation_grace_period.map(PgInterval::try_from)
+          .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?, schema.expiry_refund_percent, schema.requires_activation, id
     )
     .fetch_one(&mut *conn)
     .await?;

@@ -7,7 +7,10 @@ use super::models::{
 use super::permissions::{
     BookableCaller, BookablePerm, require_asset_type_perm, require_asset_type_perm_by_asset,
 };
+use super::asset_types::{PostBookableTypeSchema, insert_asset_type};
+use super::schemas::{NewSchemaInline, insert_schema};
 use crate::http::util::{clamp_pagination, grab_authd_conn_user, grab_trans};
+use crate::permissions::{AppRole, check_app_role};
 use crate::{
     helpers::grab_authd_conn_subsystem,
     http::util::{JsonE, User, VialoError, is_unique_violation},
@@ -186,8 +189,30 @@ pub struct PostBookableSchema {
     pub slug: Option<String>,
     pub connector: Option<i32>,
     pub connector_output_id: Option<i32>,
-    pub asset_type_id: i32,
+    /// Exactly one of asset_type_id / new_asset_type must be set.
+    pub asset_type_id: Option<i32>,
+    pub new_asset_type: Option<PostBookableTypeSchema>,
+    /// At most one of schema_id / new_schema may be set.
     pub schema_id: Option<i32>,
+    pub new_schema: Option<NewSchemaInline>,
+}
+
+/// Update carries no schema fields; those go through POST /bookables/{id}/schema_assignments.
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct PutBookableSchema {
+    pub name: I18nMap,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_64")]
+    pub icon: Option<String>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_128")]
+    pub slug: Option<String>,
+    pub connector: Option<i32>,
+    pub connector_output_id: Option<i32>,
+    pub asset_type_id: i32,
+}
+
+enum AssetTypeInput {
+    Existing(i32),
+    New(PostBookableTypeSchema),
 }
 
 #[utoipa::path(post, path = "/bookables", request_body=PostBookableSchema, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
@@ -196,29 +221,67 @@ pub async fn post_bookable(
     Extension(user): Extension<User>,
     JsonE(body): JsonE<PostBookableSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
-    require_asset_type_perm(
-        Some(user.id),
-        body.asset_type_id,
-        BookablePerm::Admin,
-        &data.db,
-    )
-    .await?;
+    let PostBookableSchema {
+        name,
+        icon,
+        slug,
+        connector,
+        connector_output_id,
+        asset_type_id,
+        new_asset_type,
+        schema_id,
+        new_schema,
+    } = body;
+
+    let asset_type = match (asset_type_id, new_asset_type) {
+        (Some(id), None) => AssetTypeInput::Existing(id),
+        (None, Some(t)) => AssetTypeInput::New(t),
+        _ => {
+            return Err(VialoError::AppError(
+                StatusCode::BAD_REQUEST,
+                "exactly one of asset_type_id or new_asset_type must be set".into(),
+            ));
+        }
+    };
+
+    if schema_id.is_some() && new_schema.is_some() {
+        return Err(VialoError::AppError(
+            StatusCode::BAD_REQUEST,
+            "schema_id and new_schema are mutually exclusive".into(),
+        ));
+    }
+
+    // An existing type is gated per-type; creating one needs the global role.
+    match &asset_type {
+        AssetTypeInput::Existing(id) => {
+            require_asset_type_perm(Some(user.id), *id, BookablePerm::Admin, &data.db).await?
+        }
+        AssetTypeInput::New(_) => {
+            check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?
+        }
+    }
+
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
+    let asset_type_id = match asset_type {
+        AssetTypeInput::Existing(id) => id,
+        AssetTypeInput::New(t) => insert_asset_type(&mut trans, t).await?,
+    };
+
     let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name.into()))])
+        super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(name.into()))])
             .await?;
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
         "INSERT INTO bookable_assets (name_i18n, icon, asset_type_id, slug, connector, connector_output_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
         processed_i18n_fields.get("name"),
-        body.icon,
-        body.asset_type_id,
-        body.slug,
-        body.connector,
-        body.connector_output_id,
+        icon,
+        asset_type_id,
+        slug,
+        connector,
+        connector_output_id,
     )
     .fetch_one(&mut *trans)
     .await
@@ -226,7 +289,12 @@ pub async fn post_bookable(
         VialoError::AppError(StatusCode::CONFLICT, "slug_conflict".into())
     } else { e.into() })?;
 
-    if let Some(schema_id) = body.schema_id {
+    let schema_id = match new_schema {
+        Some(s) => Some(insert_schema(&mut trans, s, asset_type_id).await?),
+        None => schema_id,
+    };
+
+    if let Some(schema_id) = schema_id {
         sqlx::query!(
             "INSERT INTO bookable_schema_assignments (begins, schema_id, asset_id) VALUES (CURRENT_DATE, $1, $2)",
             schema_id,
@@ -240,12 +308,12 @@ pub async fn post_bookable(
     Ok((StatusCode::CREATED, Json(record)))
 }
 
-#[utoipa::path(put, path = "/bookables/{id}", request_body=PostBookableSchema, responses((status = 200, description = "Updated", body=BoardPostIdModel)))]
+#[utoipa::path(put, path = "/bookables/{id}", request_body=PutBookableSchema, responses((status = 200, description = "Updated", body=BoardPostIdModel)))]
 pub async fn put_bookable(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
-    JsonE(body): JsonE<PostBookableSchema>,
+    JsonE(body): JsonE<PutBookableSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
