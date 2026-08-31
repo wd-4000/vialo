@@ -8,6 +8,7 @@ use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
+use sqlx::PgConnection;
 use sqlx::query;
 use sqlx::types::JsonValue;
 use sqlx_conditional_queries::conditional_query_as;
@@ -68,6 +69,25 @@ pub struct PostBookableTypeSchema {
     pub name: I18nMap,
 }
 
+/// Inserts an asset type and its name, returning its id. The caller checks permissions.
+pub async fn insert_asset_type(
+    db: &mut PgConnection,
+    body: PostBookableTypeSchema,
+) -> Result<i32, VialoError> {
+    let processed_i18n_fields =
+        super::super::util::insert_i18n_strings(&mut *db, vec![("name", Some(body.name.into()))])
+            .await?;
+
+    let id = sqlx::query_scalar!(
+        "INSERT INTO bookable_asset_types (name_i18n) VALUES ($1) RETURNING id",
+        processed_i18n_fields.get("name")
+    )
+    .fetch_one(&mut *db)
+    .await?;
+
+    Ok(id)
+}
+
 #[utoipa::path(post, path = "/bookables/types", request_body = PostBookableTypeSchema, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
@@ -80,21 +100,10 @@ pub async fn post(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut trans, vec![("name", Some(body.name.into()))])
-            .await?;
+    let id = insert_asset_type(&mut trans, body).await?;
 
-    let record = sqlx::query_as!(
-        BoardPostIdModel,
-        "INSERT INTO bookable_asset_types (name_i18n) VALUES ($1) RETURNING id",
-        processed_i18n_fields.get("name")
-    )
-    .fetch_one(&mut *trans)
-    .await?;
-
-    let device_response = record;
     trans.commit().await?;
-    Ok((StatusCode::CREATED, Json(device_response)))
+    Ok((StatusCode::CREATED, Json(BoardPostIdModel { id })))
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]

@@ -1,4 +1,5 @@
 use super::permissions::{BookablePerm, require_asset_type_perm_by_asset};
+use super::schemas::{NewSchemaInline, insert_schema};
 use axum::{
     Extension, Json,
     extract::{Path, Query, State},
@@ -51,9 +52,22 @@ pub async fn list(
 }
 
 #[derive(Deserialize, ToSchema)]
+pub struct NewSchemaAssignment {
+    pub begins: NaiveDate,
+    /// Exactly one of schema_id / new_schema must be set.
+    pub schema_id: Option<i32>,
+    pub new_schema: Option<NewSchemaInline>,
+}
+
+#[derive(Deserialize, ToSchema)]
 pub struct PostBookableSchemaAssignment {
-    pub assignment: BookableSchemaAssignment,
+    pub assignment: NewSchemaAssignment,
     pub existing_appointment_action: Option<ExistingAppointmentAction>,
+}
+
+enum SchemaInput {
+    Existing(i32),
+    New(NewSchemaInline),
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -71,6 +85,18 @@ pub async fn post(
     JsonE(body): JsonE<PostBookableSchemaAssignment>,
 ) -> Result<impl IntoResponse, VialoError> {
     require_asset_type_perm_by_asset(user.id, id, BookablePerm::Admin, &data.db).await?;
+
+    let schema = match (body.assignment.schema_id, body.assignment.new_schema) {
+        (Some(sid), None) => SchemaInput::Existing(sid),
+        (None, Some(s)) => SchemaInput::New(s),
+        _ => {
+            return Err(VialoError::AppError(
+                StatusCode::BAD_REQUEST,
+                "exactly one of schema_id or new_schema must be set".into(),
+            ));
+        }
+    };
+
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
@@ -120,10 +146,24 @@ pub async fn post(
         }
     }
 
+    let schema_id = match schema {
+        SchemaInput::Existing(sid) => sid,
+        SchemaInput::New(s) => {
+            let asset_type_id = sqlx::query_scalar!(
+                "SELECT asset_type_id FROM bookable_assets WHERE id = $1",
+                id
+            )
+            .fetch_one(&mut *trans)
+            .await?;
+
+            insert_schema(&mut trans, s, asset_type_id).await?
+        }
+    };
+
     sqlx::query!(
         "INSERT INTO bookable_schema_assignments (begins, schema_id, asset_id) VALUES ($1, $2, $3)",
         body.assignment.begins,
-        body.assignment.schema_id,
+        schema_id,
         id
     )
     .execute(&mut *trans)
