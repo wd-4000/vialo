@@ -129,6 +129,7 @@ pub async fn resolve_asset_type_scope<'c, T: PgExecutor<'c>>(
 pub enum BookableCaller {
     Kiosk(crate::config::KioskConfig),
     Account(Uuid),
+    Anonymous,
 }
 
 impl axum::extract::FromRequestParts<Arc<AppState>> for BookableCaller {
@@ -156,12 +157,12 @@ impl axum::extract::FromRequestParts<Arc<AppState>> for BookableCaller {
             return Ok(Self::Kiosk(kiosk.clone()));
         }
 
-        parts
+        Ok(parts
             .extensions
             .get::<Option<User>>()
             .cloned()
             .flatten()
             .map(|user| Self::Account(user.id))
-            .ok_or_else(VialoError::Forbidden)
+            .unwrap_or(Self::Anonymous))
     }
 }

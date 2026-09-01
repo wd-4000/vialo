@@ -1,5 +1,6 @@
 use crate::helpers::{I18nMap, LangVariant, PgDateTime};
 
+use super::asset_types::{PostBookableTypeSchema, insert_asset_type};
 use super::models::{
     BoardPostIdModel, BookableAssetQueue, BookableAssetTranslatedAllLanguages,
     BookableAssetTranslatedWithStatus, BookableStatus,
@@ -7,7 +8,6 @@ use super::models::{
 use super::permissions::{
     BookableCaller, BookablePerm, require_asset_type_perm, require_asset_type_perm_by_asset,
 };
-use super::asset_types::{PostBookableTypeSchema, insert_asset_type};
 use super::schemas::{NewSchemaInline, insert_schema};
 use crate::http::util::{clamp_pagination, grab_authd_conn_user, grab_trans};
 use crate::permissions::{AppRole, check_app_role};
@@ -45,7 +45,7 @@ pub struct BookableFilterOptions {
 pub async fn list_bookables(
     Query(opts): Query<BookableFilterOptions>,
     State(data): State<Arc<AppState>>,
-    Extension(user_o): Extension<Option<User>>,
+    caller: BookableCaller,
 ) -> Result<impl IntoResponse, VialoError> {
     let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
@@ -53,7 +53,11 @@ pub async fn list_bookables(
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
 
-    let user_id_o = user_o.as_ref().map(|u| u.id);
+    let (user_id_o, kiosk_types) = match caller {
+        BookableCaller::Kiosk(kiosk) => (None, kiosk.asset_types),
+        BookableCaller::Account(id) => (Some(id), vec![]),
+        BookableCaller::Anonymous => (None, vec![]),
+    };
 
     let record = conditional_query_as!(
             BookableAssetTranslatedWithStatus,
@@ -68,7 +72,7 @@ pub async fn list_bookables(
                 appointment_id
             FROM
                 bookable_asset_status
-            WHERE account_bookable_perm_exists({user_id_o}, asset_type_id, 'view'::bookable_perm)
+            WHERE (account_bookable_perm_exists({user_id_o}, asset_type_id, 'view'::bookable_perm) OR asset_type_id = ANY({kiosk_types:Vec<i32>}))
             {#asset_type} ORDER BY id LIMIT {limit} OFFSET {offset}"#,
             #asset_type = match (opts.asset_types) {
                 Some(at) => "AND asset_type_id = ANY({at:Vec<i32>})",
@@ -90,6 +94,7 @@ pub async fn list_queues(
     let (account_id, kiosk_types) = match caller {
         BookableCaller::Kiosk(kiosk) => (None, Some(kiosk.asset_types)),
         BookableCaller::Account(id) => (Some(id), None),
+        BookableCaller::Anonymous => return Err(VialoError::Forbidden()),
     };
 
     let rows = query!(
@@ -147,11 +152,13 @@ pub async fn quick_unlock(
     // Either a valid kiosk credential, an account with 'book' or nothing.
     let mut conn = match caller {
         BookableCaller::Kiosk(kiosk) => {
-            let asset_type_id =
-                query_scalar!("SELECT asset_type_id FROM bookable_assets WHERE id = $1", id)
-                    .fetch_optional(&data.db)
-                    .await?
-                    .ok_or(VialoError::NotFound())?;
+            let asset_type_id = query_scalar!(
+                "SELECT asset_type_id FROM bookable_assets WHERE id = $1",
+                id
+            )
+            .fetch_optional(&data.db)
+            .await?
+            .ok_or(VialoError::NotFound())?;
 
             if !kiosk.allows(asset_type_id) {
                 return Err(VialoError::Forbidden());
@@ -163,6 +170,9 @@ pub async fn quick_unlock(
             require_asset_type_perm_by_asset(user_id, id, BookablePerm::Book, &data.db).await?;
 
             grab_authd_conn_user(&data.db, user_id).await?
+        }
+        BookableCaller::Anonymous => {
+            return Err(VialoError::Forbidden());
         }
     };
 

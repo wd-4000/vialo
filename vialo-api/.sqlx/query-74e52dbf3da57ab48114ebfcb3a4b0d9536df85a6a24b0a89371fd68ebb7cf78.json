@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                id as \"id!\",\n                icon,\n                get_i18n_string(name_i18n, $1) AS name,\n                asset_type_id as \"asset_type_id!\",\n                status as \"status!: BookableStatus\",\n                begins,\n                ends as \"ends: PgDateTime\",\n                appointment_id\n            FROM\n                bookable_asset_status\n            WHERE account_bookable_perm_exists($2, asset_type_id, 'view'::bookable_perm)\n            AND asset_type_id = ANY($3) ORDER BY id LIMIT $4 OFFSET $5",
+  "query": "SELECT\n                id as \"id!\",\n                icon,\n                get_i18n_string(name_i18n, $1) AS name,\n                asset_type_id as \"asset_type_id!\",\n                status as \"status!: BookableStatus\",\n                begins,\n                ends as \"ends: PgDateTime\",\n                appointment_id\n            FROM\n                bookable_asset_status\n            WHERE (account_bookable_perm_exists($2, asset_type_id, 'view'::bookable_perm) OR asset_type_id = ANY($3))\n             ORDER BY id LIMIT $4 OFFSET $5",
   "describe": {
     "columns": [
       {
@@ -125,5 +125,5 @@
       true
     ]
   },
-  "hash": "2687715f9b23a40e9011a99f79c709bf858a9f8efca3acbae7f2363e15c9985c"
+  "hash": "74e52dbf3da57ab48114ebfcb3a4b0d9536df85a6a24b0a89371fd68ebb7cf78"
 }
