@@ -89,6 +89,9 @@ pub async fn activate(
             return kiosk_activate(&data, id, &kiosk, &pin).await;
         }
         BookableCaller::Account(user_id) => user_id,
+        BookableCaller::Anonymous => {
+            return Err(VialoError::Forbidden());
+        }
     };
 
     // Implicit permission check in the query
