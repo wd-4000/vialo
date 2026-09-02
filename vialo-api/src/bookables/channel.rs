@@ -11,13 +11,13 @@ use uuid::Uuid;
 pub struct BookableChannel {
     inner: StatusChannel<i32, BookableAssetStatus>,
     db: Pool<Postgres>,
-    kiosk: Option<KioskConfig>,
+    kiosk: Option<Arc<KioskConfig>>,
 }
 
 /// Permission recheck on every event
 async fn auth_filter(
     db: Pool<Postgres>,
-    kiosk: Option<KioskConfig>,
+    kiosk: Option<Arc<KioskConfig>>,
     min_perm: BookablePerm,
     allow_public: bool,
     asset_type_id: i32,
@@ -97,7 +97,7 @@ async fn auth_filter(
 /// Subscribe-time permission check
 async fn auth_allows(
     db: &Pool<Postgres>,
-    kiosk: Option<KioskConfig>,
+    kiosk: Option<Arc<KioskConfig>>,
     min_perm: BookablePerm,
     allow_public: bool,
     asset_type_id: i32,
@@ -116,7 +116,7 @@ async fn auth_allows(
 }
 
 impl BookableChannel {
-    pub fn new(name: String, db: Pool<Postgres>, kiosk: Option<KioskConfig>) -> Self {
+    pub fn new(name: String, db: Pool<Postgres>, kiosk: Option<Arc<KioskConfig>>) -> Self {
         let inner = StatusChannel::new(name);
 
         let filter_db = db.clone();
@@ -166,11 +166,11 @@ impl BookableChannel {
 pub struct BookableQueueChannel {
     inner: StatusChannel<i32, BookableAssetQueue>,
     db: Pool<Postgres>,
-    kiosk: Option<KioskConfig>,
+    kiosk: Option<Arc<KioskConfig>>,
 }
 
 impl BookableQueueChannel {
-    pub fn new(name: String, db: Pool<Postgres>, kiosk: Option<KioskConfig>) -> Self {
+    pub fn new(name: String, db: Pool<Postgres>, kiosk: Option<Arc<KioskConfig>>) -> Self {
         let inner = StatusChannel::new(name);
 
         let filter_db = db.clone();

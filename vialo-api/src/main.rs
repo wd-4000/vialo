@@ -323,18 +323,19 @@ async fn main() {
     let (posts_tx, _) = broadcast::channel::<i32>(256);
     let (expired_appointments_tx, _) =
         broadcast::channel::<vialo_api::bookables::ExpiredAppointmentMessage>(256);
+    let kiosk_config = config
+        .bookables
+        .as_ref()
+        .and_then(|b| b.kiosk.clone())
+        .map(Arc::new);
     let asp = Arc::new(AppState {
         db: pool.clone(),
         event_channels: EventChannels {
-            bookables: BookableChannel::new(
-                "bookables".into(),
-                pool.clone(),
-                config.bookables.as_ref().and_then(|b| b.kiosk.clone()),
-            ),
+            bookables: BookableChannel::new("bookables".into(), pool.clone(), kiosk_config.clone()),
             bookable_queues: BookableQueueChannel::new(
                 "bookables/queues".into(),
                 pool.clone(),
-                config.bookables.as_ref().and_then(|b| b.kiosk.clone()),
+                kiosk_config,
             ),
             posts_tx,
             expired_appointments_tx,
