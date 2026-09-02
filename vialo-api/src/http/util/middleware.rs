@@ -16,7 +16,6 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use axum_extra::extract::CookieJar;
 use ory_kratos_client::apis::frontend_api::to_session;
 use reqwest::StatusCode;
 use serde_json::json;
@@ -51,7 +50,6 @@ pub async fn auth_required(request: Request, next: Next) -> Result<Response, Via
 
 pub async fn auth_middleware(
     State(app_state): State<Arc<AppState>>,
-    jar: CookieJar,
     mut request: Request,
     next: Next,
 ) -> Result<Response, VialoError> {
@@ -77,9 +75,12 @@ pub async fn auth_middleware(
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string());
 
-        if x_session_token.is_none() && jar.get("ory_kratos_session").is_none() {
+        if x_session_token.is_none()
+            && !cookie
+                .as_deref()
+                .is_some_and(|c| c.contains("ory_kratos_session"))
+        {
             request.extensions_mut().insert(AuthError::Unauthorized);
-
             return Ok(next.run(request).await);
         }
         // Call Kratos to validate session
