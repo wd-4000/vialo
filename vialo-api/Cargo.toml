@@ -19,7 +19,7 @@ ppsk = []
 [dependencies]
 
 axum = { version = "0.8.9", features = ["macros", "ws"] }
-axum-extra = { version = "0.12.6", features = ["query", "typed-header", "cookie"] }
+axum-extra = { version = "0.12.6", features = ["query", "typed-header"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 dotenv = "0.15.0"
 serde = { version = "1.0.229", features = ["derive"] }

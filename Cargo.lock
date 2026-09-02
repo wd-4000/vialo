@@ -357,7 +357,6 @@ dependencies = [
  "axum",
  "axum-core",
  "bytes",
- "cookie",
  "form_urlencoded",
  "futures-core",
  "futures-util",
