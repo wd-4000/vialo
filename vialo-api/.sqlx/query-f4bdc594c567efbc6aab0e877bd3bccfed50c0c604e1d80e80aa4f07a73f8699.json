@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                SELECT 1 FROM bookable_asset_type_group_perms\n                WHERE asset_type_id = $1 AND group_id IS NULL AND perm >= $2\n            ) AS \"allowed: bool\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed: bool",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        {
+          "Custom": {
+            "name": "bookable_perm",
+            "kind": {
+              "Enum": [
+                "view",
+                "book",
+                "admin"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f4bdc594c567efbc6aab0e877bd3bccfed50c0c604e1d80e80aa4f07a73f8699"
+}

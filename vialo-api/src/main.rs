@@ -326,7 +326,11 @@ async fn main() {
     let asp = Arc::new(AppState {
         db: pool.clone(),
         event_channels: EventChannels {
-            bookables: BookableChannel::new("bookables".into(), pool.clone()),
+            bookables: BookableChannel::new(
+                "bookables".into(),
+                pool.clone(),
+                config.bookables.as_ref().and_then(|b| b.kiosk.clone()),
+            ),
             bookable_queues: BookableQueueChannel::new(
                 "bookables/queues".into(),
                 pool.clone(),

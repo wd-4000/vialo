@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id AS \"id!\" FROM unnest($2::uuid[]) AS t(id)\n                WHERE account_bookable_perm_exists(id, $1, $3)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "UuidArray",
+        {
+          "Custom": {
+            "name": "bookable_perm",
+            "kind": {
+              "Enum": [
+                "view",
+                "book",
+                "admin"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "833efee666cfa8148f38df38997f0702bc4e544a2886395b04b9b50b599feeb9"
+}
