@@ -4,7 +4,7 @@ use crate::{
     helpers::grab_authd_conn_subsystem,
     http::{
         history::models::Subsystem,
-        util::{UserSuspendedReason, VialoError, grab_trans},
+        util::{AuthError, UserSuspendedReason, VialoError, grab_trans},
     },
 };
 
@@ -16,6 +16,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
+use axum_extra::extract::CookieJar;
 use ory_kratos_client::apis::frontend_api::to_session;
 use reqwest::StatusCode;
 use serde_json::json;
@@ -23,12 +24,21 @@ use std::sync::Arc;
 
 pub async fn auth_required(request: Request, next: Next) -> Result<Response, VialoError> {
     if request.extensions().get::<User>().is_none() {
-        if let Some(user_suspended) = request.extensions().get::<UserSuspendedReason>() {
-            return Err(VialoError::AppErrorWithDetails(
-                StatusCode::FORBIDDEN,
-                "suspended".into(),
-                user_suspended.as_ref().into(),
-            ));
+        match request.extensions().get::<AuthError>() {
+            Some(AuthError::Suspended(user_suspended)) => {
+                return Err(VialoError::AppErrorWithDetails(
+                    StatusCode::FORBIDDEN,
+                    "suspended".into(),
+                    user_suspended.as_ref().into(),
+                ));
+            }
+            Some(other) => {
+                return Err(VialoError::AppError(
+                    StatusCode::UNAUTHORIZED,
+                    other.as_ref().into(),
+                ));
+            }
+            None => {}
         }
         return Err(VialoError::AppError(
             StatusCode::UNAUTHORIZED,
@@ -41,6 +51,7 @@ pub async fn auth_required(request: Request, next: Next) -> Result<Response, Via
 
 pub async fn auth_middleware(
     State(app_state): State<Arc<AppState>>,
+    jar: CookieJar,
     mut request: Request,
     next: Next,
 ) -> Result<Response, VialoError> {
@@ -66,6 +77,11 @@ pub async fn auth_middleware(
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string());
 
+        if x_session_token.is_none() && jar.get("ory_kratos_session").is_none() {
+            request.extensions_mut().insert(AuthError::Unauthorized);
+
+            return Ok(next.run(request).await);
+        }
         // Call Kratos to validate session
         match to_session(
             kratos_frontend,
@@ -88,13 +104,13 @@ pub async fn auth_middleware(
                             if user_record.manually_suspended {
                                 request
                                     .extensions_mut()
-                                    .insert(UserSuspendedReason::ManuallySuspended);
+                                    .insert(AuthError::Suspended(UserSuspendedReason::ManuallySuspended));
                             }
 
                             if user_record.expired.is_some_and(|x| x) {
                                 request
                                     .extensions_mut()
-                                    .insert(UserSuspendedReason::Expired);
+                                    .insert(AuthError::Suspended(UserSuspendedReason::Expired));
                             }
 
                             // All good
@@ -160,7 +176,7 @@ pub async fn auth_middleware(
 
                         request
                             .extensions_mut()
-                            .insert(UserSuspendedReason::NotVerified);
+                            .insert(AuthError::Suspended(UserSuspendedReason::NotVerified));
                     } else {
                         tracing::warn!("Couldn't parse Kratos identity ID: {}", identity.id);
                     }
@@ -168,6 +184,7 @@ pub async fn auth_middleware(
             }
             Err(e) => {
                 tracing::debug!("Invalid Kratos session: {:?}", e);
+                request.extensions_mut().insert(AuthError::InvalidSession);
             }
         }
     }
