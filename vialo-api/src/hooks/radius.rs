@@ -139,6 +139,8 @@ pub(crate) struct RadiusAuthResponse {
     tunnel_medium_type: i32,
     #[serde(rename = "Tunnel-Private-Group-Id")]
     tunnel_private_group_id: i32,
+    #[serde(rename = "Mikrotik-Wireless-VLANID")]
+    mikrotik_wireless_vlanid: i32,
 }
 
 /// RADIUS Authorization: Get a user's password or verify their TLS certificate
@@ -153,7 +155,7 @@ pub(crate) struct RadiusAuthResponse {
     responses(
         (status = 200, description = "Authentication successful, VLAN assigned",
          body = RadiusAuthResponse,
-         example = json!({"control:Cleartext-Password": "the_grungler", "VLAN": 200, "Tunnel-Medium-Type": 6, "Tunnel-Private-Group-Id": 100})),
+         example = json!({"control:Cleartext-Password": "the_grungler", "VLAN": 200, "Tunnel-Medium-Type": 6, "Tunnel-Private-Group-Id": 100, "Mikrotik-Wireless-VLANID": 100})),
         (status = 404, description = "User or network not found",
          example = json!({"Reply-Message": "User not found"}))
     )
@@ -215,6 +217,7 @@ pub(crate) async fn authorize(
                 tunnel_type: "VLAN",
                 tunnel_medium_type: 6,
                 tunnel_private_group_id: vlan,
+                mikrotik_wireless_vlanid: vlan,
             }))
         }
         RadiusAuthMode::Tls => Err(RadiusError {
