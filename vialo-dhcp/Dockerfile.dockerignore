@@ -1,7 +1,6 @@
 # Applies to builds of vialo-dhcp/Dockerfile (context = workspace root).
 # Allowlist: only the workspace manifests and member crates are build inputs.
-# vialo-api is here for its manifest — cargo will not load the workspace
-# without it — not because anything of it is compiled.
+# vialo-api is here for its manifest. Cargo will not load the workspace without
 *
 !Cargo.toml
 !Cargo.lock

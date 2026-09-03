@@ -21,7 +21,7 @@ impl<T> Deref for RadiusAttributeValue<T> {
 
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for RadiusAttributeValue<T> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        /// Wire shape — unknown fields (e.g. `type`) are ignored.
+        /// Wire shape. Unknown fields (e.g. `type`) are ignored.
         #[derive(Deserialize)]
         struct Wire<T> {
             value: Vec<T>,
