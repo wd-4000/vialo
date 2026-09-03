@@ -44,7 +44,7 @@ RUN TARGET_DIR=$(echo $PROFILE | sed 's/^dev$/debug/') && \
 FROM builder AS spec-builder
 RUN TARGET_DIR=$(echo $PROFILE | sed 's/^dev$/debug/') && \
     SQLX_OFFLINE=true cargo build --locked --profile $PROFILE --features migrate -p vialo-api --bin openapi-spec && \
-    target/$TARGET_DIR/openapi-spec /openapi.json
+    target/$TARGET_DIR/openapi-spec /openapi.json /openapi-hooks.json
 
 FROM scratch AS openapi
 COPY --from=spec-builder /openapi.json /
