@@ -2,7 +2,7 @@
  * Exports the OpenAPI specifications to JSON files.
  *
  * The public API and the hooks API are served on separate listeners and get
- * separate documents — only the public one feeds the UIs' generated types.
+ * separate documents. Only the public one feeds the UIs' generated types.
  */
 fn main() {
     let mut args = std::env::args().skip(1);
