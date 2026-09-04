@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT nd.id, nd.label, nd.mac AS \"mac: MacAddressWrapper\", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as \"ipv4_addr?\", (row_to_json(nc)::jsonb || jsonb_build_object('network', row_to_json(nn))) as \"cred: NetworkCredentialEmbed\",\n                    jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account!: AccountEmbed\"\n                    FROM net_devices nd\n                    JOIN net_cred nc ON nc.id = nd.cred_id\n                    JOIN net_networks nn ON nc.network_id = nn.id\n                    LEFT JOIN net_ip_assignments nia ON nia.device_id = nd.id\n                    LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n                    WHERE nd.id = $1",
+  "query": "SELECT nd.id, nd.label, nd.mac AS \"mac: MacAddressWrapper\", nd.mobileconfig, nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as \"ipv4_addr?\", (row_to_json(nc)::jsonb || jsonb_build_object('network', row_to_json(nn))) as \"cred: NetworkCredentialEmbed\",\n        jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account!: AccountEmbed\"\n        FROM net_devices nd\n        JOIN net_cred nc ON nd.cred_id = nc.id\n        JOIN net_networks nn ON nc.network_id = nn.id\n        LEFT JOIN net_ip_assignments nia ON nia.device_id = nd.id\n        LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n        WHERE nc.account_id = $1 AND nd.id = $2",
   "describe": {
     "columns": [
       {
@@ -38,6 +38,17 @@
       },
       {
         "ordinal": 3,
+        "name": "mobileconfig",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "mobileconfig"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
         "name": "cred_id",
         "type_info": "Uuid",
         "origin": {
@@ -48,7 +59,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "last_updated",
         "type_info": "Timestamptz",
         "origin": {
@@ -59,7 +70,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "last_seen",
         "type_info": "Timestamptz",
         "origin": {
@@ -70,7 +81,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "hostname",
         "type_info": "Text",
         "origin": {
@@ -81,7 +92,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "realm_id",
         "type_info": "Uuid",
         "origin": {
@@ -92,7 +103,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "ipv4_addr?",
         "type_info": "Inet",
         "origin": {
@@ -103,13 +114,13 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "cred: NetworkCredentialEmbed",
         "type_info": "Jsonb",
         "origin": "Expression"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "account!: AccountEmbed",
         "type_info": "Jsonb",
         "origin": "Expression"
@@ -117,6 +128,7 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -124,6 +136,7 @@
       false,
       true,
       true,
+      false,
       true,
       true,
       true,
@@ -134,5 +147,5 @@
       null
     ]
   },
-  "hash": "edda710e3398f749722717623c7a14fa776958988056ad795badb64593592651"
+  "hash": "c7a2e4fff400763827a4999f8c24d5c84006d15cf4c7397a5b10f9c49a268930"
 }

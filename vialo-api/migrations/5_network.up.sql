@@ -109,6 +109,7 @@ CREATE TABLE net_devices (
   mac macaddr UNIQUE,
   cred_id uuid REFERENCES net_cred (id) ON DELETE CASCADE,
   realm_id uuid REFERENCES net_realms (id) ON DELETE SET NULL, -- Override for the user realm_id
+  mobileconfig boolean default false NOT NULL, -- Whether the user should be offered a .mobileconfig as the primary option for connecting
   last_updated timestamptz default NOW(),
   last_seen timestamptz
 );

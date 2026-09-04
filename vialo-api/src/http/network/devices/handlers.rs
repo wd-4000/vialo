@@ -78,7 +78,7 @@ pub async fn list_devices(
         }
         IdOrAllQuery::All => {
             let devices = conditional_query_as!(DeviceModelWithAccountEmbed,
-                r#"SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS "mac?: MacAddressWrapper", cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,
+                r#"SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS "mac?: MacAddressWrapper", mobileconfig, cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,
                 jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
                 FROM net_devices nd
                 JOIN net_cred nc ON nd.cred_id = nc.id
@@ -102,12 +102,18 @@ pub enum PostDeviceSchema {
     ForAccount {
         label: String,
         mac: Option<MacAddressWrapper>,
+        #[serde(default)]
+        mobileconfig: bool,
+
         account_id: IdOrMeQuery,
         network_id: i32,
     },
     ForCred {
         label: String,
         mac: Option<MacAddressWrapper>,
+        #[serde(default)]
+        mobileconfig: bool,
+
         cred_id: Uuid,
     },
 }
@@ -127,11 +133,12 @@ pub async fn post_device(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let (final_cred, final_label, final_mac) = match body {
+    let (final_cred, final_label, final_mac, final_mobileconfig) = match body {
         PostDeviceSchema::ForCred {
             cred_id,
             label,
             mac,
+            mobileconfig,
         } => {
             let allowed = sqlx::query_scalar!(
                 r#"SELECT (
@@ -160,13 +167,14 @@ pub async fn post_device(
                 .fetch_one(&mut *trans)
                 .await?;
 
-            (credential, label, mac)
+            (credential, label, mac, mobileconfig)
         }
         PostDeviceSchema::ForAccount {
             label,
             account_id: account_or_me,
             network_id,
             mac,
+            mobileconfig,
         } => {
             let account_id = match account_or_me {
                 IdOrMeQuery::Id(id) => {
@@ -225,14 +233,14 @@ pub async fn post_device(
                 );
             }
 
-            (credential.unwrap(), label, mac)
+            (credential.unwrap(), label, mac, mobileconfig)
         }
     };
 
     let device = sqlx::query_as!(
               DeviceWithRefs,
-              r#"INSERT INTO net_devices (label, mac, cred_id, last_updated) VALUES ($1, $2, $3, NOW()) RETURNING id, label, mac AS "mac: MacAddressWrapper", cred_id, last_updated, last_seen, hostname, realm_id"#,
-       final_label, final_mac.map(|a| a.get_value()), final_cred.id)
+              r#"INSERT INTO net_devices (label, mac, cred_id, mobileconfig, last_updated) VALUES ($1, $2, $3, $4, NOW()) RETURNING id, label, mac AS "mac: MacAddressWrapper", mobileconfig, cred_id, last_updated, last_seen, hostname, realm_id"#,
+       final_label, final_mac.map(|a| a.get_value()), final_cred.id, final_mobileconfig)
           .fetch_one(&mut *trans)
           .await
           .map_err(|e| if is_unique_violation(&e) {
@@ -258,7 +266,7 @@ pub async fn get_device_overview(
 ) -> Result<impl IntoResponse, VialoError> {
     return match sqlx::query_as!(
         DeviceWithRefsAndIpAndAccountAndCredentialEmbed,
-        r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", (row_to_json(nc)::jsonb || jsonb_build_object('network', row_to_json(nn))) as "cred: NetworkCredentialEmbed",
+        r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.mobileconfig, nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", (row_to_json(nc)::jsonb || jsonb_build_object('network', row_to_json(nn))) as "cred: NetworkCredentialEmbed",
         jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
         FROM net_devices nd
         JOIN net_cred nc ON nd.cred_id = nc.id
@@ -287,7 +295,7 @@ pub async fn get_device_overview(
             if is_manager {
                 return match sqlx::query_as!(
                     DeviceWithRefsAndIpAndAccountAndCredentialEmbed,
-                    r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", (row_to_json(nc)::jsonb || jsonb_build_object('network', row_to_json(nn))) as "cred: NetworkCredentialEmbed",
+                    r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.mobileconfig, nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", (row_to_json(nc)::jsonb || jsonb_build_object('network', row_to_json(nn))) as "cred: NetworkCredentialEmbed",
                     jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
                     FROM net_devices nd
                     JOIN net_cred nc ON nc.id = nd.cred_id
@@ -318,6 +326,7 @@ pub struct UpdateDeviceSchema {
     pub label: Option<String>,
     pub mac: Option<MacAddressWrapper>,
     pub cred_id: Option<Uuid>,
+    pub mobileconfig: Option<bool>,
 }
 #[derive(Serialize, ToSchema)]
 pub struct UpdatedDeviceLabelResponse {
@@ -348,10 +357,11 @@ pub async fn update_device(
 
     let device = sqlx::query_as!(
         DeviceWithRefs,
-        r#"UPDATE net_devices SET label = coalesce($1, label), mac = coalesce($2, mac), cred_id = coalesce($3, cred_id) WHERE id = $4 RETURNING  id, label, mac AS "mac: MacAddressWrapper", cred_id, last_updated, last_seen, hostname, realm_id"#,
+        r#"UPDATE net_devices SET label = coalesce($1, label), mac = coalesce($2, mac), cred_id = coalesce($3, cred_id), mobileconfig = coalesce($4, mobileconfig) WHERE id = $5 RETURNING  id, label, mac AS "mac: MacAddressWrapper", mobileconfig, cred_id, last_updated, last_seen, hostname, realm_id"#,
         body.label,
         body.mac.map(|a| a.get_value()),
         body.cred_id,
+        body.mobileconfig,
         id
     )
     .fetch_one(&data.db)

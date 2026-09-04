@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT nd.id, nd.label, nd.mac AS \"mac: MacAddressWrapper\", nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as \"ipv4_addr?\", (row_to_json(nc)::jsonb || jsonb_build_object('network', row_to_json(nn))) as \"cred: NetworkCredentialEmbed\",\n        jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account!: AccountEmbed\"\n        FROM net_devices nd\n        JOIN net_cred nc ON nd.cred_id = nc.id\n        JOIN net_networks nn ON nc.network_id = nn.id\n        LEFT JOIN net_ip_assignments nia ON nia.device_id = nd.id\n        LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n        WHERE nc.account_id = $1 AND nd.id = $2",
+  "query": "SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS \"mac?: MacAddressWrapper\", mobileconfig, cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,\n                jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account!: AccountEmbed\"\n                FROM net_devices nd\n                JOIN net_cred nc ON nd.cred_id = nc.id\n                LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n                 ORDER by nd.id  LIMIT $1 OFFSET $2",
   "describe": {
     "columns": [
       {
@@ -27,50 +27,6 @@
       },
       {
         "ordinal": 2,
-        "name": "mac: MacAddressWrapper",
-        "type_info": "Macaddr",
-        "origin": {
-          "Table": {
-            "table": "net_devices",
-            "name": "mac"
-          }
-        }
-      },
-      {
-        "ordinal": 3,
-        "name": "cred_id",
-        "type_info": "Uuid",
-        "origin": {
-          "Table": {
-            "table": "net_devices",
-            "name": "cred_id"
-          }
-        }
-      },
-      {
-        "ordinal": 4,
-        "name": "last_updated",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "net_devices",
-            "name": "last_updated"
-          }
-        }
-      },
-      {
-        "ordinal": 5,
-        "name": "last_seen",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "net_devices",
-            "name": "last_seen"
-          }
-        }
-      },
-      {
-        "ordinal": 6,
         "name": "hostname",
         "type_info": "Text",
         "origin": {
@@ -81,7 +37,40 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 3,
+        "name": "mac?: MacAddressWrapper",
+        "type_info": "Macaddr",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "mac"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "mobileconfig",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "mobileconfig"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "cred_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "cred_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
         "name": "realm_id",
         "type_info": "Uuid",
         "origin": {
@@ -92,21 +81,37 @@
         }
       },
       {
-        "ordinal": 8,
-        "name": "ipv4_addr?",
-        "type_info": "Inet",
+        "ordinal": 7,
+        "name": "last_updated",
+        "type_info": "Timestamptz",
         "origin": {
           "Table": {
-            "table": "net_ip_assignments",
-            "name": "ipv4_addr"
+            "table": "net_devices",
+            "name": "last_updated"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "last_seen",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "last_seen"
           }
         }
       },
       {
         "ordinal": 9,
-        "name": "cred: NetworkCredentialEmbed",
-        "type_info": "Jsonb",
-        "origin": "Expression"
+        "name": "network_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "net_cred",
+            "name": "network_id"
+          }
+        }
       },
       {
         "ordinal": 10,
@@ -117,8 +122,8 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -126,14 +131,14 @@
       true,
       true,
       true,
+      false,
       true,
       true,
       true,
       true,
-      true,
-      null,
+      false,
       null
     ]
   },
-  "hash": "49d901461fda1f195a07008316f5d028b7b201fe6f9a0bc1ff0f4da0e2562fe9"
+  "hash": "f3664657b2226c7212a51655087f26bede6479330a28eefda32abe957e1bc38b"
 }

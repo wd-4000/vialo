@@ -12,20 +12,11 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Serialize, ToSchema)]
-pub struct DeviceBasic {
-    pub id: Uuid,
-    pub label: Option<String>,
-    pub mac: Option<MacAddressWrapper>,
-    pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
-    pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
-    pub hostname: Option<String>,
-}
-
-#[derive(Serialize, ToSchema)]
 pub struct DeviceWithRefs {
     pub id: Uuid,
     pub label: Option<String>,
     pub mac: Option<MacAddressWrapper>,
+    pub mobileconfig: bool,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
     pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
     pub hostname: Option<String>,
@@ -52,6 +43,7 @@ pub struct DeviceWithRefsAndIp {
     pub id: Uuid,
     pub label: Option<String>,
     pub mac: Option<MacAddressWrapper>,
+    pub mobileconfig: bool,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
     pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
     pub hostname: Option<String>,
@@ -89,6 +81,7 @@ pub struct DeviceWithRefsAndIpAndAccountAndCredentialEmbed {
     pub id: Uuid,
     pub label: Option<String>,
     pub mac: Option<MacAddressWrapper>,
+    pub mobileconfig: bool,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
     pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
     pub hostname: Option<String>,
@@ -109,6 +102,7 @@ pub struct DeviceModelWithAccount {
     pub id: Uuid,
     pub label: Option<String>,
     pub mac: Option<MacAddressWrapper>,
+    pub mobileconfig: bool,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
     pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
     pub hostname: Option<String>,
@@ -123,6 +117,7 @@ pub struct DeviceModelWithAccountEmbed {
     pub id: Uuid,
     pub label: Option<String>,
     pub mac: Option<MacAddressWrapper>,
+    pub mobileconfig: bool,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
     pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
     pub hostname: Option<String>,

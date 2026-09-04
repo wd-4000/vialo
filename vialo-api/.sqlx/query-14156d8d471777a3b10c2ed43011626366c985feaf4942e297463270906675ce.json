@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS \"mac?: MacAddressWrapper\", cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,\n                jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account!: AccountEmbed\"\n                FROM net_devices nd\n                JOIN net_cred nc ON nd.cred_id = nc.id\n                LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n                 ORDER by nd.id  LIMIT $1 OFFSET $2",
+  "query": "UPDATE net_devices SET label = coalesce($1, label), mac = coalesce($2, mac), cred_id = coalesce($3, cred_id), mobileconfig = coalesce($4, mobileconfig) WHERE id = $5 RETURNING  id, label, mac AS \"mac: MacAddressWrapper\", mobileconfig, cred_id, last_updated, last_seen, hostname, realm_id",
   "describe": {
     "columns": [
       {
@@ -27,23 +27,23 @@
       },
       {
         "ordinal": 2,
-        "name": "hostname",
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "net_devices",
-            "name": "hostname"
-          }
-        }
-      },
-      {
-        "ordinal": 3,
-        "name": "mac?: MacAddressWrapper",
+        "name": "mac: MacAddressWrapper",
         "type_info": "Macaddr",
         "origin": {
           "Table": {
             "table": "net_devices",
             "name": "mac"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "mobileconfig",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "mobileconfig"
           }
         }
       },
@@ -60,17 +60,6 @@
       },
       {
         "ordinal": 5,
-        "name": "realm_id",
-        "type_info": "Uuid",
-        "origin": {
-          "Table": {
-            "table": "net_devices",
-            "name": "realm_id"
-          }
-        }
-      },
-      {
-        "ordinal": 6,
         "name": "last_updated",
         "type_info": "Timestamptz",
         "origin": {
@@ -81,7 +70,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 6,
         "name": "last_seen",
         "type_info": "Timestamptz",
         "origin": {
@@ -92,41 +81,48 @@
         }
       },
       {
-        "ordinal": 8,
-        "name": "network_id",
-        "type_info": "Int4",
+        "ordinal": 7,
+        "name": "hostname",
+        "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "net_cred",
-            "name": "network_id"
+            "table": "net_devices",
+            "name": "hostname"
           }
         }
       },
       {
-        "ordinal": 9,
-        "name": "account!: AccountEmbed",
-        "type_info": "Jsonb",
-        "origin": "Expression"
+        "ordinal": 8,
+        "name": "realm_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "realm_id"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
-        "Int8",
-        "Int8"
+        "Text",
+        "Macaddr",
+        "Uuid",
+        "Bool",
+        "Uuid"
       ]
     },
     "nullable": [
       false,
       true,
       true,
-      true,
-      true,
-      true,
-      true,
-      true,
       false,
-      null
+      true,
+      true,
+      true,
+      true,
+      true
     ]
   },
-  "hash": "b3b506e75d253ac4f7d3eadab1222c6fbb5f9315b81cf4a95b78cbb1c0c67603"
+  "hash": "14156d8d471777a3b10c2ed43011626366c985feaf4942e297463270906675ce"
 }
