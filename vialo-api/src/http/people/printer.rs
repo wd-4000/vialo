@@ -17,13 +17,12 @@ use axum_extra::extract::Query;
 use itertools::{Either, Itertools};
 
 use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-#[derive(Serialize, Debug, FromRow, ToSchema)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct PrinterInfo {
     pub id: Uuid,
     pub printer_username: Option<String>,
@@ -32,13 +31,13 @@ pub struct PrinterInfo {
     pub bw: Option<i32>,
 }
 
-#[derive(Serialize, Debug, FromRow)]
+#[derive(Serialize, Debug)]
 pub struct JobWithStatus {
     pub r#type: String,
     pub status: JobStatus,
 }
 
-#[derive(Serialize, Debug, FromRow, ToSchema)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct PrinterListModel {
     pub id: Uuid,
     pub printer_username: Option<String>,

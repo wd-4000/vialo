@@ -7,11 +7,11 @@ use crate::{
     impl_jsonb_embed,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, types::ipnetwork::IpNetwork};
+use sqlx::types::ipnetwork::IpNetwork;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Serialize, FromRow, ToSchema)]
+#[derive(Serialize, ToSchema)]
 pub struct DeviceBasic {
     pub id: Uuid,
     pub label: Option<String>,
@@ -21,7 +21,7 @@ pub struct DeviceBasic {
     pub hostname: Option<String>,
 }
 
-#[derive(Serialize, FromRow, ToSchema)]
+#[derive(Serialize, ToSchema)]
 pub struct DeviceWithRefs {
     pub id: Uuid,
     pub label: Option<String>,
@@ -34,7 +34,7 @@ pub struct DeviceWithRefs {
     pub realm_id: Option<Uuid>,
 }
 
-#[derive(Serialize, FromRow, ToSchema)]
+#[derive(Serialize, ToSchema)]
 pub struct ListDeviceWithRefs {
     pub id: Uuid,
     pub label: Option<String>,
@@ -47,7 +47,7 @@ pub struct ListDeviceWithRefs {
     pub realm_id: Option<Uuid>,
 }
 
-#[derive(Serialize, FromRow, ToSchema)]
+#[derive(Serialize, ToSchema)]
 pub struct DeviceWithRefsAndIp {
     pub id: Uuid,
     pub label: Option<String>,
@@ -84,7 +84,7 @@ pub struct NetworkCredentialEmbed {
 
 impl_jsonb_embed!(NetworkCredentialEmbed);
 
-#[derive(Serialize, FromRow, ToSchema)]
+#[derive(Serialize, ToSchema)]
 pub struct DeviceWithRefsAndIpAndAccountAndCredentialEmbed {
     pub id: Uuid,
     pub label: Option<String>,
@@ -104,7 +104,7 @@ pub struct DeviceWithRefsAndIpAndAccountAndCredentialEmbed {
     pub cred: Option<NetworkCredentialEmbed>,
 }
 
-#[derive(Serialize, FromRow, ToSchema)]
+#[derive(Serialize, ToSchema)]
 pub struct DeviceModelWithAccount {
     pub id: Uuid,
     pub label: Option<String>,
@@ -118,7 +118,7 @@ pub struct DeviceModelWithAccount {
     pub realm_id: Option<Uuid>,
 }
 
-#[derive(Serialize, FromRow, ToSchema)]
+#[derive(Serialize, ToSchema)]
 pub struct DeviceModelWithAccountEmbed {
     pub id: Uuid,
     pub label: Option<String>,

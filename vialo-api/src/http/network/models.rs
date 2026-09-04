@@ -3,7 +3,7 @@ use crate::http::util::models::AccountEmbed;
 use crate::impl_jsonb_embed;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, types::ipnetwork};
+use sqlx::types::ipnetwork;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -23,7 +23,7 @@ pub enum NmsType {
     Mikrotik,
 }
 
-#[derive(FromRow, Serialize, Deserialize, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct NetworkListModel {
     pub id: i32,
     pub label: String,
@@ -70,7 +70,7 @@ pub struct NetworkModel {
     pub nms_links: Vec<NmsLinkModel>,
 }
 
-#[derive(FromRow, Serialize, ToSchema)]
+#[derive(Serialize, ToSchema)]
 pub struct RealmModel {
     pub id: Uuid,
     #[schema(value_type = Option<String>, format = Ipv4)]
@@ -87,7 +87,7 @@ pub struct RealmModel {
     pub vlan: Option<i32>,
 }
 
-#[derive(FromRow, Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct CredentialModelWithPassword {
     pub id: Uuid,
     pub username: Option<String>,
@@ -99,7 +99,7 @@ pub struct CredentialModelWithPassword {
     pub last_updated: Option<DateTime<Utc>>,
 }
 
-#[derive(FromRow, Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct CredentialModelWithAccountEmbed {
     pub id: Uuid,
     pub username: Option<String>,
@@ -108,7 +108,7 @@ pub struct CredentialModelWithAccountEmbed {
     pub account: AccountEmbed, // TODO Make not optional
 }
 
-#[derive(FromRow, Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct CredentialModelWithPasswordAndAccountEmbed {
     pub id: Uuid,
     pub username: Option<String>,

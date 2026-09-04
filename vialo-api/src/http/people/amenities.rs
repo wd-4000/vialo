@@ -14,13 +14,12 @@ use axum::{
     response::IntoResponse,
 };
 use serde::Serialize;
-use sqlx::prelude::FromRow;
 use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// A person's amenities login (printer, kiosk).
-#[derive(Serialize, Debug, FromRow, ToSchema)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct AmenitiesLoginModel {
     pub username: String,
     /// Reversibly encrypted at rest, the printer and kiosk hold it in the clear.

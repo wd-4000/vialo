@@ -30,7 +30,7 @@ use axum::{
 use axum_extra::extract::Query;
 use serde::Serialize;
 use serde_json::json;
-use sqlx::{prelude::FromRow, query, query_scalar};
+use sqlx::{query, query_scalar};
 use sqlx_conditional_queries::conditional_query_as;
 use std::{ops::DerefMut, sync::Arc};
 use tokio::try_join;
@@ -251,7 +251,7 @@ pub async fn get_person_groups(
     Ok(Json(groups))
 }
 
-#[derive(Serialize, Debug, FromRow, ToSchema)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct PersonAppRoleReport {
     pub groups: Option<Vec<GroupEmbed>>,
     pub role: Option<AppRole>,

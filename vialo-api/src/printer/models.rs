@@ -78,7 +78,7 @@ pub enum JobData {
     DeleteAccount { printer_id: i32 },
 }
 
-#[derive(Debug, sqlx::FromRow, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct JobModel {
     pub id: i32,
     pub data: sqlx::types::Json<JobData>,

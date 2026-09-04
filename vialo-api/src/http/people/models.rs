@@ -1,9 +1,6 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use sqlx::{
-    FromRow,
-    types::ipnetwork::{self},
-};
+use sqlx::types::ipnetwork::{self};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -13,7 +10,7 @@ use crate::{
     permissions::{AppRole, GroupRole},
 };
 
-#[derive(Serialize, Debug, FromRow, ToSchema)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct GroupMemberModel {
     pub id: Uuid,
     pub full_name: Option<String>,
@@ -21,7 +18,7 @@ pub struct GroupMemberModel {
     pub role: GroupRole,
 }
 
-#[derive(Serialize, Debug, FromRow, ToSchema)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct CurrentRoomOccupantsViewModel {
     pub id: Option<Uuid>,
     pub auth_id: Option<Uuid>,
@@ -29,7 +26,7 @@ pub struct CurrentRoomOccupantsViewModel {
     pub room: Option<RoomEmbed>,
 }
 
-#[derive(Serialize, Debug, FromRow, ToSchema)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct PeopleLookupModel {
     pub id: Uuid,
     pub full_name: Option<String>,
@@ -37,7 +34,7 @@ pub struct PeopleLookupModel {
 }
 
 // id | label  | email  | created_at | public
-#[derive(Serialize, Debug, FromRow, ToSchema)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct GroupListModel {
     pub id: Uuid,
     pub label: String,
@@ -47,7 +44,7 @@ pub struct GroupListModel {
     pub public: bool,
 }
 
-#[derive(Serialize, Debug, FromRow, ToSchema)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct GroupGetModel {
     pub id: Uuid,
     pub label: String,
@@ -58,13 +55,13 @@ pub struct GroupGetModel {
     pub app_roles: Vec<AppRole>,
 }
 
-#[derive(Serialize, Debug, FromRow, ToSchema)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct GroupStubListModel {
     pub id: Uuid,
     pub label: String,
 }
 
-#[derive(Serialize, Debug, FromRow, ToSchema)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct GroupStubListModelWithRole {
     pub id: Uuid,
     pub label: String,

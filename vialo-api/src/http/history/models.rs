@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use sqlx::{prelude::FromRow, types::JsonValue};
+use sqlx::types::JsonValue;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -39,7 +39,7 @@ pub enum TgOp {
     Delete,
 }
 
-#[derive(Serialize, FromRow)]
+#[derive(Serialize)]
 pub struct SchemaModel {
     pub res: JsonValue,
 }
@@ -53,7 +53,7 @@ pub struct DiffUpdateEntry {
 #[derive(ToSchema)]
 pub struct HistoryEntryDiff(HashMap<String, DiffUpdateEntry>);
 
-#[derive(Serialize, FromRow, ToSchema)]
+#[derive(Serialize, ToSchema)]
 pub struct HistoryEntryModel {
     pub id: i32,
     pub table_name: Option<String>,

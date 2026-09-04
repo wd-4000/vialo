@@ -15,7 +15,7 @@ pub enum JobData {
     Refresh {},
 }
 
-#[derive(Debug, sqlx::FromRow, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct JobModel {
     pub id: i32,
     pub data: sqlx::types::Json<JobData>,
