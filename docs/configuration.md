@@ -142,6 +142,16 @@ Note: the PPSK/UniFi subsystem also respects this setting.
 | `email.url.board` | yes | Base URL for links to boards. |
 | `email.url.preferences` | yes | Base URL for email preference management. |
 
+### `[dev]`
+
+| Key | Required | Default | Description |
+|---|---|---|---|
+| `repair_migration_checksums` | no | `false` | On startup, rewrite the `_sqlx_migrations` checksum of every migration whose file has changed since it was applied. |
+
+This flag makes sqlx stop complaining about migration version mismatches **it does not apply the
+edit to the database.** You have to make the changes yourself (`psql`), then start the API with
+the flag on.
+
 ### `[dhcp]` (read by `vialo-dhcp`)
 
 Unknown keys in this section are rejected rather than ignored: a typo would
@@ -187,4 +197,4 @@ All are enabled by default.
 | `printer` | Printer subsystem (job queue + KM printer API client). |
 | `printer_km` | Konica Minolta printer backend. Requires `printer`. |
 | `ppsk` | UniFi PPSK credential push subsystem. |
-| `migrate` | Runs `sqlx::migrate!()` on startup. You want this unless running migrations separately. |
+| `migrate` | Runs `sqlx::migrate!()` on startup. You want this unless running migrations separately. Also gates `[dev]`. |

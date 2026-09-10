@@ -56,7 +56,9 @@ The API will run on [localhost:8000](http://localhost:8000) by default.
 ### Rust
 - Use `sqlx::query!()` and `sqlx::query_scalar!()` macros. Never use runtime
   `sqlx::query()` so that queries are verified at compile time
-- Run `cargo sqlx prepare` after changes and check `.sqlx` into Git
+- Run `cargo sqlx prepare -- --all-features` after changes and check `.sqlx`
+  into Git. The container builds are offline (`SQLX_OFFLINE=true`) and enable
+  non-default features, so a cache prepared without them is missing queries.
 
 
 ## Where to find things
