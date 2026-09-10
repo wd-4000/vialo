@@ -221,18 +221,32 @@ pub async fn post_device(
 
             // Generate a new credential if not found
             if credential.is_none() {
-                let username: String =
-                    random::unambiguous_string(network.gen_username.unwrap_or(8) as usize);
+                let (username, password) = if let Some(net_auth) = network.auth {
+                    let username = if net_auth == NetAuth::UsernamePassword {
+                        Some(random::unambiguous_string(
+                            network.gen_username.unwrap_or(8) as usize,
+                        ))
+                    } else {
+                        None
+                    };
 
-                let password: String =
-                    random::unambiguous_string(network.gen_password.unwrap_or(16) as usize);
-                let password_encrypted = encryption::encrypt(&password)?;
+                    (
+                        username,
+                        Some(random::unambiguous_string(
+                            network.gen_password.unwrap_or(16) as usize,
+                        )),
+                    )
+                } else {
+                    (None, None)
+                };
+
+                let password_encrypted = password.map(|p| encryption::encrypt(&p)).transpose()?;
 
                 credential = Some(
                     sqlx::query_as!(
                         CredentialModelWithPassword,
                         r#"INSERT INTO net_cred (username, password, account_id, network_id, last_updated) VALUES ($1, $2, $3, $4, NOW()) RETURNING id, username, password AS "password: Encrypted<String>", account_id, network_id, last_updated"#,
-                        username,
+                        username.as_deref(),
                         password_encrypted,
                         account_id,
                         network_id
