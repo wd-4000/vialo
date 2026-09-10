@@ -9,6 +9,9 @@ pub mod http;
 pub mod permissions;
 pub mod ws;
 
+#[cfg(feature = "migrate")]
+pub mod migrations;
+
 #[cfg(feature = "ppsk")]
 pub mod ppsk;
 

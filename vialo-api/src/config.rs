@@ -90,6 +90,14 @@ pub struct BookablesConfig {
     pub kiosk: Option<KioskConfig>,
 }
 
+#[cfg(feature = "migrate")]
+#[derive(Deserialize)]
+pub struct DevConfig {
+    /// Rewrite `_sqlx_migrations` checksums that no longer match the migration
+    #[serde(default)]
+    pub repair_migration_checksums: bool,
+}
+
 #[derive(Deserialize)]
 pub struct Config {
     pub proxy: Option<String>,
@@ -104,6 +112,9 @@ pub struct Config {
     pub org: OrgConfig,
     pub ui: UiConfig,
     pub bookables: Option<BookablesConfig>,
+
+    #[cfg(feature = "migrate")]
+    pub dev: Option<DevConfig>,
 
     #[cfg(feature = "email")]
     pub email: EmailApiConfig,

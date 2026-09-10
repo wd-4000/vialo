@@ -288,7 +288,26 @@ async fn main() {
 
     #[cfg(feature = "migrate")]
     {
-        match migrate!().run(&pool).await {
+        let migrator = migrate!();
+
+        if config
+            .dev
+            .as_ref()
+            .is_some_and(|d| d.repair_migration_checksums)
+        {
+            match vialo_api::migrations::repair_checksums(&pool, &migrator).await {
+                Ok(0) => {}
+                Ok(n) => warn!(
+                    "AVERTISSEMENT ! Repaired {n} migration checksum(s). Apply schema changes by hand"
+                ),
+                Err(err) => {
+                    error!("Pureé ! Failed to repair migration checksums: {:?}", err);
+                    std::process::exit(1);
+                }
+            }
+        }
+
+        match migrator.run(&pool).await {
             Ok(()) => {
                 info!("Applied migrations.");
             }
