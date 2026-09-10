@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO net_cred (id, username, password, account_id, network_id, last_updated)\n                     SELECT c.id, c.username, c.password, $4, $5, NOW()\n                     FROM unnest($1::uuid[], $2::text[], $3::bytea[]) AS c(id, username, password)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "ByteaArray",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "170dd82d7b3ee1ba2e2f81b20005152635545a6be590e8c37294514908aa8b9a"
+}

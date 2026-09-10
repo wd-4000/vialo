@@ -34,7 +34,10 @@ pub struct NetworkListModel {
     pub auth: Option<NetAuth>,
     pub gen_username: Option<i32>,
     pub gen_password: Option<i32>,
+
     pub active: bool,
+    pub migrate_to: Option<i32>,
+
     pub wired: bool,
     pub ssid: Option<String>,
     pub tls_trust: Option<String>,
@@ -53,20 +56,8 @@ pub struct NmsLinkModel {
 
 #[derive(Serialize, ToSchema)]
 pub struct NetworkModel {
-    pub id: i32,
-    pub label: String,
-    pub icon: Option<String>,
-    pub multi_device: bool,
-    pub auto_add_on_auth: bool,
-    pub auto_add_via_dhcp: bool,
-    pub auth: Option<NetAuth>,
-    pub gen_username: Option<i32>,
-    pub gen_password: Option<i32>,
-    pub active: bool,
-    pub wired: bool,
-    pub ssid: Option<String>,
-    pub tls_trust: Option<String>,
-    pub outer_identity: Option<String>,
+    #[serde(flatten)]
+    pub network: NetworkListModel,
     pub nms_links: Vec<NmsLinkModel>,
 }
 

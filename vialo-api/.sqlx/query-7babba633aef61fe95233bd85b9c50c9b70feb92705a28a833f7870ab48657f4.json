@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE net_networks SET\n        label = $2,\n        icon = $3,\n        multi_device = $4,\n        auto_add_on_auth = $5,\n        auto_add_via_dhcp = $6,\n        auth = $7,\n        gen_username = $8,\n        gen_password = $9,\n        active = $10,\n        wired = $11,\n        ssid = $12,\n        tls_trust = $13,\n        outer_identity = $14\n        WHERE id = $1",
+  "query": "UPDATE net_networks SET\n        label = $2,\n        icon = $3,\n        multi_device = $4,\n        auto_add_on_auth = $5,\n        auto_add_via_dhcp = $6,\n        auth = $7,\n        gen_username = $8,\n        gen_password = $9,\n        active = $10,\n        migrate_to = $11,\n        wired = $12,\n        ssid = $13,\n        tls_trust = $14,\n        outer_identity = $15\n        WHERE id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -25,6 +25,7 @@
         "Int4",
         "Int4",
         "Bool",
+        "Int4",
         "Bool",
         "Text",
         "Text",
@@ -33,5 +34,5 @@
     },
     "nullable": []
   },
-  "hash": "e5c72530bf02a4972bdeba9d9b02b5f5545907bf0494f052b911d25f05fffa7a"
+  "hash": "7babba633aef61fe95233bd85b9c50c9b70feb92705a28a833f7870ab48657f4"
 }

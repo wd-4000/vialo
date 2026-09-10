@@ -1,12 +1,14 @@
 use crate::{
     AppState,
-    http::util::{JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, is_unique_violation},
+    http::util::{
+        JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, is_unique_violation,
+    },
     permissions::{AppRole, check_app_role},
 };
 use std::sync::Arc;
 
 use super::{
-    models::{NetAuth, NmsLinkModel, NmsType, NetworkListModel, NetworkModel},
+    models::{NetAuth, NetworkListModel, NetworkModel, NmsLinkModel, NmsType},
     schemas::{NetworkFilterOptions, PostOrPutNetworkSchema},
 };
 
@@ -28,7 +30,7 @@ pub async fn list_networks(
 
     let record = conditional_query_as!(
         NetworkListModel,
-        r#"SELECT id, label, icon, wired, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as "auth: NetAuth", gen_username, gen_password, active, ssid, tls_trust, outer_identity FROM net_networks WHERE TRUE {#wh_search} {#wh_active} LIMIT {limit} OFFSET {offset}"#,
+        r#"SELECT id, label, icon, wired, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as "auth: NetAuth", gen_username, gen_password, active, migrate_to, ssid, tls_trust, outer_identity FROM net_networks WHERE TRUE {#wh_search} {#wh_active} LIMIT {limit} OFFSET {offset}"#,
         #wh_search = match (opts.search){
             Some(src) => "AND label ILIKE '%' || {src} || '%'",
             _ => ""
@@ -52,8 +54,8 @@ pub async fn get_network(
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user, AppRole::NetworkManager, &data.db).await?;
 
-    let row = sqlx::query!(
-        r#"SELECT id, label, icon, wired, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as "auth: NetAuth", gen_username, gen_password, active, ssid, tls_trust, outer_identity FROM net_networks WHERE id = $1"#,
+    let row = sqlx::query_as!(NetworkListModel,
+        r#"SELECT id, label, icon, wired, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as "auth: NetAuth", gen_username, gen_password, active, migrate_to, ssid, tls_trust, outer_identity FROM net_networks WHERE id = $1"#,
         id
     )
     .fetch_optional(&data.db)
@@ -71,23 +73,13 @@ pub async fn get_network(
     .fetch_all(&data.db)
     .await?;
 
-    Ok((StatusCode::OK, Json(NetworkModel {
-        id: row.id,
-        label: row.label,
-        icon: row.icon,
-        wired: row.wired,
-        multi_device: row.multi_device,
-        auto_add_on_auth: row.auto_add_on_auth,
-        auto_add_via_dhcp: row.auto_add_via_dhcp,
-        auth: row.auth,
-        gen_username: row.gen_username,
-        gen_password: row.gen_password,
-        active: row.active,
-        ssid: row.ssid,
-        tls_trust: row.tls_trust,
-        outer_identity: row.outer_identity,
-        nms_links,
-    })))
+    Ok((
+        StatusCode::OK,
+        Json(NetworkModel {
+            network: row,
+            nms_links,
+        }),
+    ))
 }
 
 #[utoipa::path(put, path = "/network/networks/{id}", request_body = PostOrPutNetworkSchema, responses((status = 204, description = "Updated")))]
@@ -111,10 +103,11 @@ pub async fn put_network(
         gen_username = $8,
         gen_password = $9,
         active = $10,
-        wired = $11,
-        ssid = $12,
-        tls_trust = $13,
-        outer_identity = $14
+        migrate_to = $11,
+        wired = $12,
+        ssid = $13,
+        tls_trust = $14,
+        outer_identity = $15
         WHERE id = $1",
         id,
         body.label,
@@ -126,6 +119,7 @@ pub async fn put_network(
         body.gen_username,
         body.gen_password,
         body.active,
+        body.migrate_to,
         body.wired,
         body.ssid,
         body.tls_trust,
@@ -133,21 +127,22 @@ pub async fn put_network(
     )
     .execute(&mut *conn)
     .await
-    .map_err(|e| if is_unique_violation(&e) {
-        VialoError::AppError(StatusCode::CONFLICT, "label_conflict".into())
-    } else { e.into() })?;
+    .map_err(|e| {
+        if is_unique_violation(&e) {
+            VialoError::AppError(StatusCode::CONFLICT, "label_conflict".into())
+        } else {
+            e.into()
+        }
+    })?;
 
     if result.rows_affected() == 0 {
         return Err(VialoError::NotFound());
     }
 
     if let Some(links) = body.nms_links {
-        sqlx::query!(
-            "DELETE FROM net_network_nms_link WHERE network_id = $1",
-            id
-        )
-        .execute(&mut *conn)
-        .await?;
+        sqlx::query!("DELETE FROM net_network_nms_link WHERE network_id = $1", id)
+            .execute(&mut *conn)
+            .await?;
 
         for link in links {
             sqlx::query!(
@@ -196,8 +191,8 @@ pub async fn post_network(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     let network_id = sqlx::query_scalar!(
-        "INSERT INTO net_networks (label, icon, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth, gen_username, gen_password, active, wired, ssid, tls_trust, outer_identity)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        "INSERT INTO net_networks (label, icon, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth, gen_username, gen_password, active, migrate_to, wired, ssid, tls_trust, outer_identity)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
          RETURNING id",
         body.label,
         body.icon,
@@ -208,6 +203,7 @@ pub async fn post_network(
         body.gen_username,
         body.gen_password,
         body.active,
+        body.migrate_to,
         body.wired,
         body.ssid,
         body.tls_trust,

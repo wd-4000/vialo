@@ -89,6 +89,10 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route(
             "/devices/{id}",
             patch(devices::handlers::update_device).delete(devices::handlers::delete_device),
+        )
+        .route(
+            "/devices/{id}/reset-password",
+            post(devices::handlers::reset_password),
         );
 
     Router::new()

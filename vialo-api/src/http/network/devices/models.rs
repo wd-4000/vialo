@@ -95,6 +95,9 @@ pub struct DeviceWithRefsAndIpAndAccountAndCredentialEmbed {
     pub account: AccountEmbed,
 
     pub cred: Option<NetworkCredentialEmbed>,
+    /// Here for deserialization only
+    #[serde(skip_serializing)]
+    pub cred_password: Option<Encrypted<String>>,
 }
 
 #[derive(Serialize, ToSchema)]

@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use axum::handler::Handler;
-
 use axum::{
     Router,
     extract::{MatchedPath, Request},

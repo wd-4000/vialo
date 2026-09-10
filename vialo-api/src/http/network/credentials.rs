@@ -1,7 +1,9 @@
 use crate::{
     AppState,
     helpers::encryption::{self, Encrypted},
-    http::util::{JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, models::AccountEmbed},
+    http::util::{
+        JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, models::AccountEmbed,
+    },
     permissions::{AppRole, check_app_role},
 };
 use std::sync::Arc;
@@ -138,9 +140,17 @@ pub async fn get_mobileconfig(
         password = record.password.map(|p| p.expose()).unwrap_or_default(),
         cred_id = record.id,
         network_id = record.network_id,
-        network_ssid = record.network_ssid.as_deref().unwrap_or(&record.network_label),
-        network_tlstrust = record.tls_trust.as_deref().unwrap_or(&data.config.org.domain),
-        outer_identity = record.outer_identity.unwrap_or_else(|| format!("anonymous@{}", data.config.org.domain)),
+        network_ssid = record
+            .network_ssid
+            .as_deref()
+            .unwrap_or(&record.network_label),
+        network_tlstrust = record
+            .tls_trust
+            .as_deref()
+            .unwrap_or(&data.config.org.domain),
+        outer_identity = record
+            .outer_identity
+            .unwrap_or_else(|| format!("anonymous@{}", data.config.org.domain)),
         org_name = data.config.org.name
     );
     Ok((

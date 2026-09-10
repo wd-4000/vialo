@@ -15,10 +15,14 @@ CREATE TABLE net_networks (
   auth net_auth, -- Auth type (NULL permitted yeah)
   gen_username int, -- Preferences for username/password generation
   gen_password int,
+
   active boolean NOT NULL DEFAULT true, -- New devices/credentials may be added
+  migrate_to int REFERENCES net_networks(id), -- Seamlessly push devices to the new network
+
   ssid text, -- WiFi SSID to use in mobileconfig (NULL = use label)
   tls_trust text, -- TLS trusted server name for EAP (NULL = use org domain)
-  outer_identity text -- EAP outer identity (NULL = anonymous@org.domain)
+  outer_identity text, -- EAP outer identity (NULL = anonymous@org.domain)
+  CHECK (migrate_to IS NULL OR (active AND migrate_to != id))
 );
 
 CREATE TYPE net_nms_type AS ENUM('unifi', 'mikrotik');

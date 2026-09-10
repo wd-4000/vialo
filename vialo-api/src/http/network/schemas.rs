@@ -87,6 +87,7 @@ pub struct PostOrPutNetworkSchema {
     pub gen_username: Option<i32>,
     pub gen_password: Option<i32>,
     pub active: bool,
+    pub migrate_to: Option<i32>,
     #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_32")]
     pub ssid: Option<String>,
     #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]

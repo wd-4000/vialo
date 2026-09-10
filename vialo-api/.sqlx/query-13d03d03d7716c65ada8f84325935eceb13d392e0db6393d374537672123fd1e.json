@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO net_networks (label, icon, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth, gen_username, gen_password, active, wired, ssid, tls_trust, outer_identity)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)\n         RETURNING id",
+  "query": "INSERT INTO net_networks (label, icon, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth, gen_username, gen_password, active, migrate_to, wired, ssid, tls_trust, outer_identity)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)\n         RETURNING id",
   "describe": {
     "columns": [
       {
@@ -36,6 +36,7 @@
         "Int4",
         "Int4",
         "Bool",
+        "Int4",
         "Bool",
         "Text",
         "Text",
@@ -46,5 +47,5 @@
       false
     ]
   },
-  "hash": "a172e108a300c894e7b6fe895af58f199b32daade05c90de3cb0ef575a2d9b1c"
+  "hash": "13d03d03d7716c65ada8f84325935eceb13d392e0db6393d374537672123fd1e"
 }

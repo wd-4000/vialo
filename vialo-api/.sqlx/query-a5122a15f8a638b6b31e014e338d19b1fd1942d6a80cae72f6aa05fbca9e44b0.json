@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE net_cred SET\n                username = CASE WHEN $2::text IS NULL THEN NULL ELSE coalesce(username, $2) END,\n                password = $3, network_id = coalesce($4, network_id), last_updated = NOW()\n                WHERE id = $1 RETURNING username",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_cred",
+            "name": "username"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bytea",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "a5122a15f8a638b6b31e014e338d19b1fd1942d6a80cae72f6aa05fbca9e44b0"
+}
