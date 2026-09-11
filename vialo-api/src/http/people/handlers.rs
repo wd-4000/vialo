@@ -385,7 +385,7 @@ pub async fn get_person_overview(
             .fetch_all(&data.db),
 
     sqlx::query_as!(PersonalNetRealmOverviewModel, "select nr.ipv4_nat, nr.id from net_realm_assignments nra JOIN net_realms nr ON nra.realm_id = nr.id WHERE nra.account_id = $1", id).fetch_all(&data.db),
-    sqlx::query_scalar!("select count(*) from net_devices nd JOIN net_cred nc on nd.cred_id = nc.id WHERE nc.account_id = $1", id).fetch_one(&data.db)
+    sqlx::query_scalar!("select count(*) from net_devices WHERE account_id = $1", id).fetch_one(&data.db)
     );
 
     let (user, groups, contract, transactions, fetch_realms, device_count) = q?;

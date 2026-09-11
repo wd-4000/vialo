@@ -129,7 +129,7 @@ impl From<sqlx::Error> for VialoError {
 }
 
 pub fn is_unique_violation(err: &sqlx::Error) -> bool {
-    matches!(err, sqlx::Error::Database(e) if e.code().as_deref() == Some("23505"))
+    matches!(err, sqlx::Error::Database(e) if matches!(e.code().as_deref(), Some("23505" | "23P01")))
 }
 
 #[derive(Clone, AsRefStr)]

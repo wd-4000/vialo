@@ -186,7 +186,8 @@ pub(crate) async fn authorize(
                 JOIN net_networks nt ON nc.network_id = nt.id
                 JOIN net_realm_assignments nra ON nc.account_id = nra.account_id
                 JOIN net_realms nr_user ON nr_user.id = nra.realm_id
-                JOIN net_devices nd ON nc.id = nd.cred_id
+                LEFT JOIN net_device_creds ndc ON nc.id = ndc.cred_id
+                LEFT JOIN net_devices nd ON ndc.device_id = nd.id
                 LEFT JOIN net_realms nr_device ON nr_device.id = nd.realm_id
                 WHERE nc.network_id = $1
                   AND nt.auth = 'username_password'::net_auth
@@ -261,15 +262,17 @@ pub(crate) async fn post_auth(
         SELECT nc.password,
                nc.id AS cred_id,
                nt.auto_add_on_auth,
-               nt.multi_device
+               nt.multi_device,
+               nc.account_id AS account_id
         FROM net_cred nc
         JOIN net_networks nt ON nc.network_id = nt.id
         JOIN net_realm_assignments nra ON nc.account_id = nra.account_id
         JOIN net_realms nr_user ON nr_user.id = nra.realm_id
-        JOIN net_devices nd ON nc.id = nd.cred_id
+        LEFT JOIN net_device_creds ndc ON nc.id = ndc.cred_id
+        LEFT JOIN net_devices nd ON ndc.device_id = nd.id
         LEFT JOIN net_realms nr_device ON nr_device.id = nd.realm_id
         WHERE nc.network_id = $1
-          AND nc.id = $2
+          AND nc.id = $2 LIMIT 1
         "#,
         network_id,
         body.cred_id,
@@ -280,13 +283,16 @@ pub(crate) async fn post_auth(
     if row.auto_add_on_auth {
         let existing_device_id = if !row.multi_device {
             // Singular device per credential — find the one device for this cred
-            sqlx::query_scalar!("SELECT id FROM net_devices WHERE cred_id = $1", row.cred_id,)
-                .fetch_optional(&mut *trans)
-                .await?
+            sqlx::query_scalar!(
+                "SELECT device_id FROM net_device_creds WHERE cred_id = $1",
+                row.cred_id,
+            )
+            .fetch_optional(&mut *trans)
+            .await?
         } else {
             // Multi-device — find a free slot (device with no MAC yet)
             sqlx::query_scalar!(
-                "SELECT id FROM net_devices WHERE cred_id = $1 AND mac IS NULL",
+                "SELECT device_id FROM net_device_creds WHERE cred_id = $1 AND mac IS NULL",
                 row.cred_id,
             )
             .fetch_optional(&mut *trans)
@@ -295,20 +301,35 @@ pub(crate) async fn post_auth(
 
         if let Some(device_id) = existing_device_id {
             sqlx::query!(
-                "UPDATE net_devices SET (cred_id, mac, hostname) = ($1, $2, NULL) WHERE id = $3",
+                "UPDATE net_device_creds SET (cred_id, mac) = ($1, $2) WHERE device_id = $3 AND network_id = $4",
                 row.cred_id,
                 body.calling_station_id.get_value(),
-                device_id
+                device_id,
+                network_id,
+            )
+            .execute(&mut *trans)
+            .await?;
+            sqlx::query!(
+                "UPDATE net_devices SET hostname = NULL WHERE id = $1",
+                device_id,
             )
             .execute(&mut *trans)
             .await?;
         } else {
+            let device_id = sqlx::query_scalar!(
+                "INSERT INTO net_devices (account_id) VALUES ($1) RETURNING id",
+                row.account_id
+            )
+            .fetch_one(&mut *trans)
+            .await?;
+
             sqlx::query!(
-                "INSERT INTO net_devices (cred_id, mac) VALUES ($1, $2)
-                     ON CONFLICT (mac)
-                     DO UPDATE SET (cred_id, mac, hostname) = ($1, $2, NULL)",
+                "INSERT INTO net_device_creds (device_id, cred_id, network_id, account_id, mac) VALUES ($1, $2, $3, $4, $5)",
+                device_id,
                 row.cred_id,
-                body.calling_station_id.get_value()
+                network_id,
+                row.account_id,
+                body.calling_station_id.get_value(),
             )
             .execute(&mut *trans)
             .await?;

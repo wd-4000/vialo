@@ -15,13 +15,11 @@ use uuid::Uuid;
 pub struct DeviceWithRefs {
     pub id: Uuid,
     pub label: Option<String>,
-    pub mac: Option<MacAddressWrapper>,
     pub mobileconfig: bool,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
     pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
     pub hostname: Option<String>,
 
-    pub cred_id: Option<Uuid>,
     pub realm_id: Option<Uuid>,
 }
 
@@ -29,32 +27,13 @@ pub struct DeviceWithRefs {
 pub struct ListDeviceWithRefs {
     pub id: Uuid,
     pub label: Option<String>,
-    pub mac: Option<MacAddressWrapper>,
+    pub creds: DeviceCredEmbeds,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
     pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
     pub hostname: Option<String>,
-    pub network_id: Option<i32>,
-    pub cred_id: Option<Uuid>,
     pub realm_id: Option<Uuid>,
 }
 
-#[derive(Serialize, ToSchema)]
-pub struct DeviceWithRefsAndIp {
-    pub id: Uuid,
-    pub label: Option<String>,
-    pub mac: Option<MacAddressWrapper>,
-    pub mobileconfig: bool,
-    pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
-    pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
-    pub hostname: Option<String>,
-
-    pub cred_id: Option<Uuid>,
-    pub realm_id: Option<Uuid>,
-    #[schema(value_type = Option<String>, format = Ipv4)]
-    pub ipv4_addr: Option<IpNetwork>,
-}
-
-#[derive(Serialize, Debug, Deserialize, ToSchema)]
 /*
 *   id uuid PRIMARY KEY default gen_random_uuid(),
 username text,
@@ -63,8 +42,44 @@ account_id uuid NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
 network_id int NOT NULL REFERENCES net_networks (id) ON DELETE CASCADE,
 last_updated timestamptz
 */
-pub struct NetworkCredentialEmbed {
+#[derive(Serialize, ToSchema)]
+pub struct DeviceWithRefsAndIpAndAccountAndCredentialEmbed {
     pub id: Uuid,
+    pub label: Option<String>,
+    pub mobileconfig: bool,
+    pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
+    pub hostname: Option<String>,
+
+    pub realm_id: Option<Uuid>,
+
+    pub account: AccountEmbed,
+
+    pub creds: DeviceCredEmbedsFull,
+    /// Here for deserialization only
+    #[serde(skip_serializing)]
+    pub cred_passwords: Vec<Option<Encrypted<String>>>,
+}
+
+/// One credential attached to a device, with the MAC it is registered under.
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct DeviceCredEmbed {
+    pub id: Uuid,
+    pub network_id: i32,
+    pub mac: Option<MacAddressWrapper>,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[serde(transparent)]
+pub struct DeviceCredEmbeds(pub Vec<DeviceCredEmbed>);
+
+impl_jsonb_embed!(DeviceCredEmbeds);
+
+/// One credential attached to a device, with the MAC it is registered under with the full credential details.
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct DeviceCredEmbedFull {
+    pub id: Uuid,
+    pub network_id: i32,
     pub username: Option<String>,
     #[schema(value_type = Option<String>)]
     #[serde(serialize_with = "encryption::serialize_exposed_opt")]
@@ -72,62 +87,29 @@ pub struct NetworkCredentialEmbed {
     pub account_id: Uuid,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
     pub network: Option<NetworkListModel>,
-}
-
-impl_jsonb_embed!(NetworkCredentialEmbed);
-
-#[derive(Serialize, ToSchema)]
-pub struct DeviceWithRefsAndIpAndAccountAndCredentialEmbed {
-    pub id: Uuid,
-    pub label: Option<String>,
-    pub mac: Option<MacAddressWrapper>,
-    pub mobileconfig: bool,
-    pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
-    pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
-    pub hostname: Option<String>,
-
-    pub cred_id: Option<Uuid>,
-    pub realm_id: Option<Uuid>,
 
     #[schema(value_type = Option<String>, format = Ipv4)]
     pub ipv4_addr: Option<IpNetwork>,
-
-    pub account: AccountEmbed,
-
-    pub cred: Option<NetworkCredentialEmbed>,
-    /// Here for deserialization only
-    #[serde(skip_serializing)]
-    pub cred_password: Option<Encrypted<String>>,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct DeviceModelWithAccount {
-    pub id: Uuid,
-    pub label: Option<String>,
     pub mac: Option<MacAddressWrapper>,
-    pub mobileconfig: bool,
-    pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
-    pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
-    pub hostname: Option<String>,
-
-    pub account_id: Option<Uuid>, // TODO Make not optional
-    pub cred_id: Option<Uuid>,
-    pub realm_id: Option<Uuid>,
 }
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[serde(transparent)]
+pub struct DeviceCredEmbedsFull(pub Vec<DeviceCredEmbedFull>);
+
+impl_jsonb_embed!(DeviceCredEmbedsFull);
 
 #[derive(Serialize, ToSchema)]
 pub struct DeviceModelWithAccountEmbed {
     pub id: Uuid,
     pub label: Option<String>,
-    pub mac: Option<MacAddressWrapper>,
     pub mobileconfig: bool,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
     pub last_seen: Option<chrono::DateTime<chrono::Utc>>,
     pub hostname: Option<String>,
-    pub network_id: Option<i32>,
 
     pub account: AccountEmbed,
 
-    pub cred_id: Option<Uuid>,
+    pub creds: DeviceCredEmbeds,
     pub realm_id: Option<Uuid>,
 }

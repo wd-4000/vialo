@@ -55,49 +55,60 @@ CREATE TABLE net_cred (
   password BYTEA,
   account_id uuid NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
   network_id int NOT NULL REFERENCES net_networks (id) ON DELETE CASCADE,
-  last_updated timestamptz
+  last_updated timestamptz,
+  UNIQUE (id, network_id, account_id) -- redundant but needed for the FK in net_device_creds
 );
 
 CREATE INDEX net_cred_idx ON net_cred (network_id, username, password);
 
+CREATE INDEX idx_net_cred_account ON net_cred (account_id); -- accounts cascade here
+
 -- Realms are collections of subnet, nat and ipv6 prefix.
 CREATE TABLE net_realms (
   id uuid PRIMARY KEY default gen_random_uuid(),
-  ipv4_subnet cidr, -- If the cidr is /32 and the nat is null, the device is Un-Natted.
+  ipv4_subnet cidr,
   ipv4_nat inet,
   ipv4_router inet,
   ipv4_dns inet,
   ipv6_prefix cidr,
-  vlan int
+  vlan int,
+  -- /20 = 4094 addresses; a mistyped prefix below that takes minutes to materialise
+  CHECK (ipv4_subnet IS NULL OR masklen(ipv4_subnet) BETWEEN 20 AND 30),
+  EXCLUDE USING gist (ipv4_subnet inet_ops WITH &&) -- No two realms may share an address
 );
 
--- Realm validation + IP pool management
+-- Realm validation + IP pool management. AFTER, so the CHECK constraints are evaluated
+-- before we expand the subnet, and so the realm row already exists for the FK.
 CREATE OR REPLACE FUNCTION sync_realm_ip () RETURNS TRIGGER AS $$
+DECLARE
+    pool inet[];
 BEGIN
-    IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') AND NEW.ipv4_subnet IS NOT NULL THEN
-        -- Make sure we don't overlap
-        IF ((SELECT EXISTS (SELECT 1 FROM net_realms nr WHERE NEW.ipv4_subnet >>= nr.ipv4_subnet AND id != NEW.id)) OR (SELECT EXISTS (SELECT 1 FROM net_ip_assignments WHERE NEW.ipv4_subnet >>= ipv4_addr AND realm_id != NEW.id))) THEN
+    IF NEW.ipv4_subnet IS NOT NULL THEN
+        -- Realm-vs-realm overlap is handled by the exclusion constraint; this catches
+        -- pool rows that somehow outlived their realm's subnet.
+        IF EXISTS (SELECT 1 FROM net_ip_assignments WHERE NEW.ipv4_subnet && ipv4_addr AND realm_id != NEW.id) THEN
             RAISE EXCEPTION 'overlap';
         END IF;
 
-        -- Insert/update IP entries. Existing assignments get thrown out.
-        SET CONSTRAINTS net_ip_assignments_realm_id_fkey DEFERRED;
-        INSERT INTO net_ip_assignments (ipv4_addr, realm_id) VALUES (unnest(expand_cidr(NEW.ipv4_subnet, ARRAY[NEW.ipv4_router, NEW.ipv4_dns])), NEW.id) ON CONFLICT (ipv4_addr)
-        DO UPDATE SET (realm_id, device_id) = (NEW.id, NULL);
-    ELSIF TG_OP = 'DELETE' OR NEW.ipv4_subnet IS NULL THEN
-        DELETE FROM net_ip_assignments WHERE realm_id = OLD.id;
-        RETURN OLD;
+        pool := expand_cidr(NEW.ipv4_subnet, ARRAY[NEW.ipv4_router, NEW.ipv4_dns]);
+
+        -- Retire entries that left the pool: subnet moved, or router/dns now excludes them
+        DELETE FROM net_ip_assignments WHERE realm_id = NEW.id AND NOT (ipv4_addr = ANY (pool));
+
+        -- Insert/update IP entries. Addresses still in the pool keep their occupant.
+        INSERT INTO net_ip_assignments (ipv4_addr, realm_id) VALUES (unnest(pool), NEW.id) ON CONFLICT (ipv4_addr)
+        DO UPDATE SET realm_id = NEW.id;
+    ELSE
+        DELETE FROM net_ip_assignments WHERE realm_id = NEW.id;
     END IF;
 
-    RETURN NEW;
+    RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
 
-create trigger tg_sync_realm_ip before insert
-or
-update
-or delete on net_realms for each row
-execute FUNCTION sync_realm_ip ();
+-- Realm deletion is handled by the net_ip_assignments FK cascade.
+CREATE TRIGGER tg_sync_realm_ip AFTER INSERT OR UPDATE ON net_realms
+  FOR EACH ROW EXECUTE FUNCTION sync_realm_ip ();
 
 CREATE TABLE net_realm_assignments (
   account_id uuid NOT NULL REFERENCES accounts (id) ON DELETE CASCADE, -- TODO/KEEPTODO: Make sure this is handled gracefully and in a legally compliant manner.
@@ -108,31 +119,53 @@ CREATE TABLE net_realm_assignments (
 -- Network devices
 CREATE TABLE net_devices (
   id uuid PRIMARY KEY default gen_random_uuid(),
+  account_id uuid NOT NULL REFERENCES accounts (id) ON DELETE CASCADE, -- Owner; every cred on the device must match
   label text,
   hostname text,
-  mac macaddr UNIQUE,
-  cred_id uuid REFERENCES net_cred (id) ON DELETE CASCADE,
   realm_id uuid REFERENCES net_realms (id) ON DELETE SET NULL, -- Override for the user realm_id
   mobileconfig boolean default false NOT NULL, -- Whether the user should be offered a .mobileconfig as the primary option for connecting
   last_updated timestamptz default NOW(),
-  last_seen timestamptz
+  last_seen timestamptz,
+  UNIQUE (id, account_id) -- redundant but needed for the FK in net_device_creds
 );
 
-CREATE INDEX idx_net_devices_cred ON net_devices (cred_id);
-
 CREATE INDEX idx_net_devices_realm ON net_devices (realm_id);
+CREATE INDEX idx_net_devices_account ON net_devices (account_id); -- accounts cascade here
+
+CREATE TABLE net_device_creds (
+  device_id uuid,
+  cred_id uuid NOT NULL,
+  network_id int NOT NULL,
+  account_id uuid NOT NULL, -- Pinned to both ends, so a device's creds can't span accounts
+  mac macaddr,
+  PRIMARY KEY (device_id, cred_id),
+  FOREIGN KEY (device_id, account_id) REFERENCES net_devices (id, account_id) ON DELETE CASCADE,
+  FOREIGN KEY (cred_id, network_id, account_id) REFERENCES net_cred (id, network_id, account_id) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT unique_mac_network UNIQUE (mac, network_id),
+  -- A MAC belongs to exactly one device, but may repeat across that device's creds
+  EXCLUDE USING gist (mac WITH =, device_id WITH <>)
+);
+
+-- Needed by net_cred FK cascade
+CREATE INDEX idx_net_device_creds_cred ON net_device_creds (cred_id, network_id);
 
 -- IP address assignments
 CREATE TABLE net_ip_assignments (
   ipv4_addr inet PRIMARY KEY,
   realm_id uuid NOT NULL REFERENCES net_realms (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE, -- Realm this IP resides in. Essentially the IP pool.
-  device_id uuid UNIQUE REFERENCES net_devices (id) ON DELETE CASCADE, -- Device that this IP is currently occupied by
-  expires timestamptz -- Lease expiration date and time
+  device_id uuid, -- Device attachment that this IP is currently occupied by
+  cred_id uuid,
+  expires timestamptz, -- Lease expiration date and time. 'infinity' = static reservation
+  FOREIGN KEY (device_id, cred_id) REFERENCES net_device_creds (device_id, cred_id) ON DELETE CASCADE,
+  UNIQUE (device_id, cred_id)
 );
+
+-- Helps the realm cascade/rebuild and the free address scan (expires IS NULL OR expires <= NOW())
+CREATE INDEX idx_net_ip_assignments_realm ON net_ip_assignments (realm_id, expires);
 
 CREATE OR REPLACE FUNCTION expand_cidr (p_cidr cidr, p_exclude inet[]) RETURNS inet[] LANGUAGE plpgsql AS $$
 DECLARE
-    r inet[];
+    r inet[] := '{}';
     latest inet := p_cidr;
     excl text[] := ARRAY(SELECT host(e) FROM unnest(p_exclude) e WHERE e IS NOT NULL);
 BEGIN
@@ -147,19 +180,29 @@ BEGIN
 END;
 $$;
 
+-- Probably don't use in any Rust because it will destroy performance
 CREATE VIEW net_device_info AS
 SELECT
   nd.id,
   nd.label,
   nd.hostname,
-  nd.mac,
-  nd.cred_id,
-  nc.network_id,
+  c.mac,
+  c.cred_id,
+  c.network_id,
   COALESCE(nd.realm_id, nra.realm_id) AS realm_id,
   nd.last_updated,
-  nia.ipv4_addr
+  c.ipv4_addr
 FROM
   net_devices nd
-  JOIN net_cred nc ON nc.id = nd.cred_id
-  LEFT JOIN net_realm_assignments nra ON nc.account_id = nra.account_id
-  LEFT JOIN net_ip_assignments nia ON nd.id = nia.device_id;
+  LEFT JOIN net_realm_assignments nra ON nra.account_id = nd.account_id
+  LEFT JOIN LATERAL (
+    SELECT
+      ARRAY_AGG(ndc.mac ORDER BY ndc.cred_id) AS mac,
+      ARRAY_AGG(ndc.cred_id ORDER BY ndc.cred_id) AS cred_id,
+      ARRAY_AGG(ndc.network_id ORDER BY ndc.cred_id) AS network_id,
+      ARRAY_AGG(nia.ipv4_addr ORDER BY ndc.cred_id) AS ipv4_addr
+    FROM net_device_creds ndc
+      LEFT JOIN net_ip_assignments nia
+        ON nia.device_id = ndc.device_id AND nia.cred_id = ndc.cred_id
+    WHERE ndc.device_id = nd.id
+  ) c ON true;

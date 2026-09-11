@@ -69,9 +69,9 @@ async fn seed_realm_no_router(pool: &PgPool, subnet: &str, vlan: i32) -> Uuid {
     .unwrap()
 }
 
-/// Insert a registered device (account → network → cred → device) with its
-/// realm set directly, so `net_device_info` resolves a realm for it.
-async fn seed_device(pool: &PgPool, m: MacAddress, realm_id: Uuid) -> Uuid {
+/// Insert a registered device (account → network → cred → device → attachment)
+/// with its realm set directly, so `lookup_device` resolves a realm for it.
+async fn seed_device(pool: &PgPool, m: MacAddress, realm_id: Uuid) -> AttachmentId {
     let mut c = attributed(pool).await;
     let account = sqlx::query_scalar!("INSERT INTO accounts (full_name) VALUES ('t') RETURNING id")
         .fetch_one(&mut *c)
@@ -93,15 +93,74 @@ async fn seed_device(pool: &PgPool, m: MacAddress, realm_id: Uuid) -> Uuid {
     .fetch_one(&mut *c)
     .await
     .unwrap();
-    sqlx::query_scalar!(
-        "INSERT INTO net_devices (cred_id, mac, realm_id) VALUES ($1, $2, $3) RETURNING id",
-        cred,
-        m as MacAddress,
+    let device = sqlx::query_scalar!(
+        "INSERT INTO net_devices (account_id, realm_id) VALUES ($1, $2) RETURNING id",
+        account,
         realm_id,
     )
     .fetch_one(&mut *c)
     .await
-    .unwrap()
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO net_device_creds (device_id, cred_id, network_id, account_id, mac)
+            VALUES ($1, $2, $3, $4, $5)",
+        device,
+        cred,
+        network,
+        account,
+        m as MacAddress,
+    )
+    .execute(&mut *c)
+    .await
+    .unwrap();
+    AttachmentId {
+        device_id: device,
+        cred_id: cred,
+    }
+}
+
+/// Attach a second credential with its own network and MAC to an existing device.
+async fn seed_attachment(pool: &PgPool, device: AttachmentId, m: MacAddress) -> AttachmentId {
+    let mut c = attributed(pool).await;
+    let account = sqlx::query_scalar!(
+        "SELECT account_id FROM net_devices WHERE id = $1",
+        device.device_id,
+    )
+    .fetch_one(&mut *c)
+    .await
+    .unwrap();
+    let network = sqlx::query_scalar!(
+        "INSERT INTO net_networks (label, wired, multi_device, auto_add_on_auth, auto_add_via_dhcp)
+            VALUES ($1, false, false, false, false) RETURNING id",
+        format!("net-{m}"),
+    )
+    .fetch_one(&mut *c)
+    .await
+    .unwrap();
+    let cred = sqlx::query_scalar!(
+        "INSERT INTO net_cred (account_id, network_id) VALUES ($1, $2) RETURNING id",
+        account,
+        network,
+    )
+    .fetch_one(&mut *c)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO net_device_creds (device_id, cred_id, network_id, account_id, mac)
+            VALUES ($1, $2, $3, $4, $5)",
+        device.device_id,
+        cred,
+        network,
+        account,
+        m as MacAddress,
+    )
+    .execute(&mut *c)
+    .await
+    .unwrap();
+    AttachmentId {
+        device_id: device.device_id,
+        cred_id: cred,
+    }
 }
 
 async fn move_device(pool: &PgPool, device_id: Uuid, realm_id: Uuid) {
@@ -127,6 +186,18 @@ async fn row_device(pool: &PgPool, ip: &str) -> Option<Uuid> {
     .unwrap()
 }
 
+/// Whether the row for `ip` is currently leased (expiry in the future).
+async fn row_leased(pool: &PgPool, ip: Ipv4Addr) -> bool {
+    sqlx::query_scalar!(
+        r#"SELECT COALESCE(expires > NOW(), false) AS "leased!"
+           FROM net_ip_assignments WHERE host(ipv4_addr) = host($1)"#,
+        IpNetwork::from(std::net::IpAddr::V4(ip)),
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
 fn granted(o: ClaimOutcome) -> Ipv4Addr {
     match o {
         ClaimOutcome::Granted(ip) => ip,
@@ -136,7 +207,7 @@ fn granted(o: ClaimOutcome) -> Ipv4Addr {
 }
 
 // A device holding a lease must get the *same* IP back on re-discover, not a
-// second allocation that trips the device_id UNIQUE constraint (lockout bug).
+// second allocation that trips the (device_id, cred_id) UNIQUE constraint (lockout bug).
 #[sqlx::test(migrations = "../vialo-api/migrations")]
 async fn discover_is_sticky(pool: PgPool) {
     let d = dhcp(pool.clone());
@@ -176,7 +247,7 @@ async fn concurrent_claims_never_share_an_ip(pool: PgPool) {
 }
 
 // Moving a device to a new realm must not leave its old assignment dangling
-// (which would trip device_id UNIQUE on the new grant).
+// (which would trip (device_id, cred_id) UNIQUE on the new grant).
 #[sqlx::test(migrations = "../vialo-api/migrations")]
 async fn realm_move_clears_stale_assignment(pool: PgPool) {
     let d = dhcp(pool.clone());
@@ -187,7 +258,7 @@ async fn realm_move_clears_stale_assignment(pool: PgPool) {
     let ip_a = granted(d.claim_ip(realm_a, dev, None, false).await.unwrap());
     assert_eq!(ip_a, Ipv4Addr::new(10, 210, 0, 3));
 
-    move_device(&pool, dev, realm_b).await;
+    move_device(&pool, dev.device_id, realm_b).await;
     let ip_b = granted(d.claim_ip(realm_b, dev, None, false).await.unwrap());
     assert_eq!(ip_b, Ipv4Addr::new(10, 211, 0, 3));
     assert_eq!(
@@ -217,7 +288,7 @@ async fn request_enforces_assigned_ip(pool: PgPool) {
     );
 }
 
-// RELEASE keeps the device↔IP binding so the address stays sticky.
+// RELEASE keeps the device-to-IP binding so the address stays sticky.
 #[sqlx::test(migrations = "../vialo-api/migrations")]
 async fn release_keeps_binding(pool: PgPool) {
     let d = dhcp(pool.clone());
@@ -227,7 +298,7 @@ async fn release_keeps_binding(pool: PgPool) {
     let ip = granted(d.claim_ip(realm, dev, None, false).await.unwrap());
     assert_eq!(d.end_lease(dev).await.unwrap(), Some(ip));
     // Binding preserved: the row is still attributed to the device...
-    assert_eq!(row_device(&pool, "10.200.0.3").await, Some(dev));
+    assert_eq!(row_device(&pool, "10.200.0.3").await, Some(dev.device_id));
     // ...and a re-discover hands the same address back.
     assert_eq!(
         granted(d.claim_ip(realm, dev, None, false).await.unwrap()),
@@ -255,6 +326,30 @@ async fn decline_quarantines_ip(pool: PgPool) {
         d.claim_ip(realm, d2, None, false).await.unwrap(),
         ClaimOutcome::Unavailable
     ));
+}
+
+// Leases are per attachment: a device on two networks draws two addresses, and
+// releasing one leaves the other alone.
+#[sqlx::test(migrations = "../vialo-api/migrations")]
+async fn attachments_lease_independently(pool: PgPool) {
+    let d = dhcp(pool.clone());
+    let realm = seed_realm(&pool, "10.203.0.0/29", "10.203.0.1", "10.203.0.2", 203).await;
+    let wifi = seed_device(&pool, mac(1), realm).await;
+    let eth = seed_attachment(&pool, wifi, mac(2)).await;
+
+    let ip_wifi = granted(d.claim_ip(realm, wifi, None, false).await.unwrap());
+    let ip_eth = granted(d.claim_ip(realm, eth, None, false).await.unwrap());
+    assert_ne!(
+        ip_wifi, ip_eth,
+        "one device's two attachments must not share an address"
+    );
+
+    assert_eq!(d.end_lease(wifi).await.unwrap(), Some(ip_wifi));
+    assert!(!row_leased(&pool, ip_wifi).await);
+    assert!(
+        row_leased(&pool, ip_eth).await,
+        "releasing one attachment must not end the other's lease"
+    );
 }
 
 #[sqlx::test(migrations = "../vialo-api/migrations")]

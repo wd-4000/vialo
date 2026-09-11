@@ -38,23 +38,25 @@ struct NetConfig {
     subnet_mask: Ipv4Addr,
 }
 
-/// A registered device and its realm, as seen by `net_device_info`.
+/// A registered device attachment (one credential on one device) and its realm.
 #[derive(Debug)]
 struct Device {
     realm_id: Uuid,
     device_id: Uuid,
-    /// `None` when the realm is missing router or subnet — not servable.
+    /// Leases are per attachment, not per device. A device may hold one per network.
+    cred_id: Uuid,
+    /// `None` when the realm is missing router or subnet, makes it not servable.
     net: Option<NetConfig>,
 }
 
 /// Result of trying to secure an IP for a device.
 ///
 /// `net_ip_assignments` row states:
-/// - free:        device_id NULL,     expires NULL or past
-/// - leased:      device_id NOT NULL, expires in the future
-/// - reclaimable: device_id NOT NULL, expires past (expired lease, sticky until reused)
-/// - quarantined: device_id NULL,     expires in the future (post-DECLINE)
-/// - static:      device_id NOT NULL, expires NULL (never reclaimed)
+/// - free:        device_id NULL, cred_id NULL,     expires NULL or past
+/// - leased:      device_id NOT NULL, cred_id NOT NULL, expires in the future
+/// - reclaimable: device_id NOT NULL, cred_id NOT NULL, expires past (expired lease, sticky until reused)
+/// - quarantined: device_id NULL, cred_id NULL,     expires in the future (post-DECLINE)
+/// - static:      device_id NOT NULL, cred_id NOT NULL, expires infinity (never reclaimed)
 #[derive(Debug)]
 enum ClaimOutcome {
     Granted(Ipv4Addr),
@@ -62,6 +64,13 @@ enum ClaimOutcome {
     Mismatch(Ipv4Addr),
     /// Nothing to hand out (pool full, or the requested IP can't be granted).
     Unavailable,
+}
+
+/// Uniquely identifies a net_device_creds row
+#[derive(Debug, Clone, Copy)]
+struct AttachmentId {
+    device_id: Uuid,
+    cred_id: Uuid,
 }
 
 pub struct VialoDhcp {
@@ -233,7 +242,15 @@ impl VialoDhcp {
         };
 
         let ip = match self
-            .claim_ip(device.realm_id, device.device_id, requested, false)
+            .claim_ip(
+                device.realm_id,
+                AttachmentId {
+                    device_id: device.device_id,
+                    cred_id: device.cred_id,
+                },
+                requested,
+                false,
+            )
             .await?
         {
             ClaimOutcome::Granted(ip) | ClaimOutcome::Mismatch(ip) => ip,
@@ -275,7 +292,15 @@ impl VialoDhcp {
         };
 
         let ip = match self
-            .claim_ip(device.realm_id, device.device_id, Some(requested), true)
+            .claim_ip(
+                device.realm_id,
+                AttachmentId {
+                    device_id: device.device_id,
+                    cred_id: device.cred_id,
+                },
+                Some(requested),
+                true,
+            )
             .await?
         {
             ClaimOutcome::Granted(ip) => ip,
@@ -298,10 +323,10 @@ impl VialoDhcp {
 
     async fn release(&self, ctx: &mut MsgContext<Message>) -> Result<()> {
         let mac = mac_to_macaddr(ctx.msg().chaddr())?;
-        let Some(device_id) = self.device_id_by_mac(mac).await? else {
+        let Some(attachment_id) = self.attachment_id_by_mac(mac).await? else {
             return Ok(());
         };
-        if let Some(ip) = self.end_lease(device_id).await? {
+        if let Some(ip) = self.end_lease(attachment_id).await? {
             debug!(?ip, %mac, "released lease");
         }
         Ok(())
@@ -317,10 +342,10 @@ impl VialoDhcp {
         let declined_ip = *declined_ip;
         let mac = mac_to_macaddr(ctx.msg().chaddr())?;
 
-        let Some(device_id) = self.device_id_by_mac(mac).await? else {
+        let Some(attachment_id) = self.attachment_id_by_mac(mac).await? else {
             return Ok(Action::NoResponse);
         };
-        if self.quarantine_ip(device_id, declined_ip).await? {
+        if self.quarantine_ip(attachment_id, declined_ip).await? {
             info!(%declined_ip, %mac, "declined ip quarantined");
         } else {
             debug!(%declined_ip, %mac, "decline for ip not assigned to sender, ignoring");
@@ -340,15 +365,19 @@ impl VialoDhcp {
     ) -> Result<Option<Device>> {
         let Some(row) = sqlx::query!(
             r#"
-            SELECT ndi.realm_id,
-                   ndi.id AS device_id,
+            SELECT ndc.device_id,
+                   ndc.cred_id,
+                   nr.id AS realm_id,
                    nr.ipv4_router AS "ipv4_router: IpNetwork",
                    nr.ipv4_dns AS "ipv4_dns: IpNetwork",
                    nr.ipv4_subnet AS "ipv4_subnet: IpNetwork"
-            FROM net_device_info ndi
-            JOIN net_realms nr ON nr.id = ndi.realm_id
-            WHERE ndi.mac = $1
+            FROM net_device_creds ndc
+            JOIN net_devices nd ON nd.id = ndc.device_id
+            LEFT JOIN net_realm_assignments nra ON nra.account_id = nd.account_id
+            JOIN net_realms nr ON nr.id = COALESCE(nd.realm_id, nra.realm_id)
+            WHERE ndc.mac = $1
               AND ($2::int IS NULL OR nr.vlan = $2)
+            ORDER BY ndc.cred_id
             LIMIT 1
             "#,
             mac as mac_address::MacAddress,
@@ -368,8 +397,9 @@ impl VialoDhcp {
         };
 
         Ok(Some(Device {
-            realm_id: row.realm_id.context("device has no realm assignment")?,
-            device_id: row.device_id.context("device has no id")?,
+            realm_id: row.realm_id,
+            device_id: row.device_id,
+            cred_id: row.cred_id,
             net: router
                 .zip(subnet_mask)
                 .map(|(router, subnet_mask)| NetConfig {
@@ -380,9 +410,13 @@ impl VialoDhcp {
         }))
     }
 
-    async fn device_id_by_mac(&self, mac: mac_address::MacAddress) -> Result<Option<Uuid>> {
-        Ok(sqlx::query_scalar!(
-            "SELECT id FROM net_devices WHERE mac = $1",
+    async fn attachment_id_by_mac(
+        &self,
+        mac: mac_address::MacAddress,
+    ) -> Result<Option<AttachmentId>> {
+        Ok(sqlx::query_as!(
+            AttachmentId,
+            "SELECT id as device_id, cred_id FROM net_devices JOIN net_device_creds ndc ON net_devices.id = ndc.device_id WHERE mac = $1 ORDER BY ndc.cred_id LIMIT 1",
             mac as mac_address::MacAddress,
         )
         .fetch_optional(&self.pool)
@@ -391,15 +425,16 @@ impl VialoDhcp {
 
     /// End a device's lease while keeping the binding (sticky): the row stays
     /// attributed to the device but becomes reclaimable. Returns the freed IP.
-    async fn end_lease(&self, device_id: Uuid) -> Result<Option<Ipv4Addr>> {
+    async fn end_lease(&self, attachment_id: AttachmentId) -> Result<Option<Ipv4Addr>> {
         let released = sqlx::query_scalar!(
             r#"
             UPDATE net_ip_assignments
             SET expires = NOW()
-            WHERE device_id = $1
+            WHERE device_id = $1 AND cred_id = $2
             RETURNING ipv4_addr AS "ipv4_addr: IpNetwork"
             "#,
-            device_id,
+            attachment_id.device_id,
+            attachment_id.cred_id,
         )
         .fetch_optional(&self.pool)
         .await?;
@@ -410,14 +445,15 @@ impl VialoDhcp {
     /// but keep it out of the pool until probation passes. Only acts when the IP
     /// is actually assigned to `device_id`, so a spoofed decline can't strip other
     /// devices' leases. Returns whether a row was quarantined.
-    async fn quarantine_ip(&self, device_id: Uuid, ip: Ipv4Addr) -> Result<bool> {
+    async fn quarantine_ip(&self, attachment_id: AttachmentId, ip: Ipv4Addr) -> Result<bool> {
         let res = sqlx::query!(
             "UPDATE net_ip_assignments
-             SET (device_id, expires) = (NULL, NOW() + make_interval(secs => $3))
-             WHERE host(ipv4_addr) = host($1) AND device_id = $2",
+             SET (device_id, cred_id, expires) = (NULL, NULL, NOW() + make_interval(secs => $3))
+             WHERE host(ipv4_addr) = host($1) AND device_id = $2 AND cred_id = $4",
             IpNetwork::from(std::net::IpAddr::V4(ip)),
-            device_id,
+            attachment_id.device_id,
             self.probation.as_secs_f64(),
+            attachment_id.cred_id,
         )
         .execute(&self.pool)
         .await?;
@@ -434,34 +470,37 @@ impl VialoDhcp {
     async fn claim_ip(
         &self,
         realm_id: Uuid,
-        device_id: Uuid,
+        attachment_id: AttachmentId,
         requested: Option<Ipv4Addr>,
         enforce_requested: bool,
     ) -> Result<ClaimOutcome> {
         let lease_secs = self.lease.as_secs_f64();
         let mut tx = self.pool.begin().await?;
-
+        let device_id = attachment_id.device_id;
+        let cred_id = attachment_id.cred_id;
         // If the device moved realms, its old assignment lingers (nothing else
-        // clears it) and would trip the device_id UNIQUE constraint below.
+        // clears it) and would trip the (device_id, cred_id) UNIQUE constraint below.
         sqlx::query!(
-            "UPDATE net_ip_assignments SET (device_id, expires) = (NULL, NULL)
-             WHERE device_id = $1 AND realm_id != $2",
+            "UPDATE net_ip_assignments SET (device_id, cred_id, expires) = (NULL, NULL, NULL)
+             WHERE device_id = $1 AND realm_id != $2 AND cred_id = $3",
             device_id,
             realm_id,
+            cred_id,
         )
         .execute(&mut *tx)
         .await?;
 
-        // Existing assignment (any expiry — bindings are sticky): extend it.
+        // Existing assignment (any expiry, bindings are sticky): extend it.
         let existing = sqlx::query_scalar!(
             r#"
             SELECT ipv4_addr AS "ipv4_addr: IpNetwork"
             FROM net_ip_assignments
-            WHERE realm_id = $1 AND device_id = $2
+            WHERE realm_id = $1 AND device_id = $2 AND cred_id = $3
             FOR UPDATE
             "#,
             realm_id,
             device_id,
+            cred_id,
         )
         .fetch_optional(&mut *tx)
         .await?;
@@ -473,10 +512,11 @@ impl VialoDhcp {
             }
             sqlx::query!(
                 "UPDATE net_ip_assignments SET expires = NOW() + make_interval(secs => $3)
-                 WHERE realm_id = $1 AND device_id = $2",
+                 WHERE realm_id = $1 AND device_id = $2 AND cred_id = $4 AND expires IS DISTINCT FROM 'infinity'::timestamptz",
                 realm_id,
                 device_id,
                 lease_secs,
+                cred_id,
             )
             .execute(&mut *tx)
             .await?;
@@ -489,15 +529,15 @@ impl VialoDhcp {
             let claimed = sqlx::query!(
                 r#"
                 UPDATE net_ip_assignments
-                SET (device_id, expires) = ($1, NOW() + make_interval(secs => $4))
+                SET (device_id, expires, cred_id) = ($1, NOW() + make_interval(secs => $4), $5)
                 WHERE host(ipv4_addr) = host($2) AND realm_id = $3
-                  AND ((device_id IS NULL AND (expires IS NULL OR expires <= NOW()))
-                       OR (device_id IS NOT NULL AND expires <= NOW()))
+                  AND (expires IS NULL OR expires <= NOW())
                 "#,
                 device_id,
                 IpNetwork::from(std::net::IpAddr::V4(ip)),
                 realm_id,
                 lease_secs,
+                cred_id,
             )
             .execute(&mut *tx)
             .await?;
@@ -518,8 +558,7 @@ impl VialoDhcp {
             SELECT ipv4_addr AS "ipv4_addr: IpNetwork"
             FROM net_ip_assignments
             WHERE realm_id = $1
-              AND ((device_id IS NULL AND (expires IS NULL OR expires <= NOW()))
-                   OR (device_id IS NOT NULL AND expires <= NOW()))
+              AND (expires IS NULL OR expires <= NOW())
             ORDER BY (device_id IS NULL) DESC, ipv4_addr
             LIMIT 1
             FOR UPDATE SKIP LOCKED
@@ -535,11 +574,12 @@ impl VialoDhcp {
         };
 
         sqlx::query!(
-            "UPDATE net_ip_assignments SET (device_id, expires) = ($1, NOW() + make_interval(secs => $3))
+            "UPDATE net_ip_assignments SET (device_id, expires, cred_id) = ($1, NOW() + make_interval(secs => $3), $4)
              WHERE host(ipv4_addr) = host($2)",
             device_id,
             IpNetwork::from(std::net::IpAddr::V4(ip)),
             lease_secs,
+            cred_id,
         )
         .execute(&mut *tx)
         .await?;

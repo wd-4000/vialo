@@ -9,7 +9,6 @@ use crate::{
         network::{
             devices::models::{
                 DeviceWithRefsAndIpAndAccountAndCredentialEmbed, ListDeviceWithRefs,
-                NetworkCredentialEmbed,
             },
             mac::MacAddressWrapper,
             models::{CredentialModelWithPassword, NetAuth, NetworkListModel},
@@ -26,7 +25,9 @@ use itertools::izip;
 use sqlx::{query, query_as};
 use utoipa::{IntoParams, ToSchema};
 
-use super::models::{DeviceModelWithAccountEmbed, DeviceWithRefs};
+use super::models::{
+    DeviceCredEmbeds, DeviceCredEmbedsFull, DeviceModelWithAccountEmbed, DeviceWithRefs,
+};
 use crate::permissions::AppRole;
 use axum::{
     Extension, Json,
@@ -69,14 +70,15 @@ pub async fn list_devices(
         IdOrAllQuery::Id(account_id) => {
             let devices = conditional_query_as!(
                 ListDeviceWithRefs,
-                r#"SELECT net_devices.id, label, hostname,  mac AS "mac: MacAddressWrapper", cred_id, realm_id, net_devices.last_updated,  net_devices.last_seen, net_cred.network_id FROM net_devices
-                 JOIN net_cred ON cred_id = net_cred.id WHERE account_id = {account_id} {#wh_network} {#wh_cred} {#wh_search} ORDER by net_devices.id LIMIT {limit} OFFSET {offset}"#,
+                r#"SELECT nd.id, label, hostname, realm_id, nd.last_updated,  nd.last_seen, jsonb_agg(jsonb_build_object('id', ndc.cred_id, 'network_id', nc.network_id, 'mac', ndc.mac) ORDER BY ndc.cred_id) AS "creds!: DeviceCredEmbeds"
+                FROM net_devices nd JOIN net_device_creds ndc ON nd.id = ndc.device_id
+                JOIN net_cred nc ON ndc.cred_id = nc.id WHERE ndc.account_id = {account_id} {#wh_network} {#wh_cred} {#wh_search} GROUP BY nd.id ORDER by nd.id LIMIT {limit} OFFSET {offset}"#,
                 #wh_network = match (opts.network) {
-                    Some(network) => "AND net_cred.network_id = ANY({network:Vec<i32>})",
+                    Some(network) => "AND nc.network_id = ANY({network:Vec<i32>})",
                     _ => ""
                 },
                  #wh_cred = match (opts.cred_id) {
-                     Some(cred_id) => "AND cred_id = {cred_id}",
+                     Some(cred_id) => "AND ndc.cred_id = {cred_id}",
                      _ => ""
                  },
                  #wh_search = match (opts.search){
@@ -91,18 +93,21 @@ pub async fn list_devices(
         }
         IdOrAllQuery::All => {
             let devices = conditional_query_as!(DeviceModelWithAccountEmbed,
-                r#"SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS "mac?: MacAddressWrapper", mobileconfig, cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,
-                jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
+    r#"SELECT nd.id, nd.label, nd.hostname, mobileconfig, realm_id, nd.last_updated, nd.last_seen,
+                jsonb_agg(jsonb_build_object('id', ndc.cred_id, 'network_id', nc.network_id, 'mac', ndc.mac) ORDER BY ndc.cred_id) AS "creds!: DeviceCredEmbeds",
+                jsonb_build_object('id', nd.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
                 FROM net_devices nd
-                JOIN net_cred nc ON nd.cred_id = nc.id
-                LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id
-                WHERE TRUE {#wh_network} {#wh_search} ORDER by nd.id  LIMIT {limit} OFFSET {offset}"#,
+                JOIN net_device_creds ndc ON nd.id = ndc.device_id
+                JOIN net_cred nc ON ndc.cred_id = nc.id
+                LEFT JOIN accounts_people ap ON nd.account_id = ap.id LEFT JOIN account_groups ag ON nd.account_id = ag.id
+                WHERE TRUE {#wh_network} {#wh_search} GROUP BY nd.id, ap.id, ag.id
+                ORDER by nd.id LIMIT {limit} OFFSET {offset}"#,
                 #wh_network = match (opts.network) {
                     Some(network) => "AND nc.network_id = ANY({network:Vec<i32>})",
                     _ => ""
                 },
                 #wh_search = match (opts.search){
-                    Some(src) => "AND (nd.label ILIKE '%' || {src} || '%' OR nd.mac::text ILIKE '%' || {src} || '%')",
+                    Some(src) => "AND (nd.label ILIKE '%' || {src} || '%' OR ndc.mac::text ILIKE '%' || {src} || '%')",
                     _ => ""
                 }
               ).fetch_all(&data.db)
@@ -272,13 +277,24 @@ pub async fn post_device(
 
     let device = sqlx::query_as!(
               DeviceWithRefs,
-              r#"INSERT INTO net_devices (label, mac, cred_id, mobileconfig, last_updated) VALUES ($1, $2, $3, $4, NOW()) RETURNING id, label, mac AS "mac: MacAddressWrapper", mobileconfig, cred_id, last_updated, last_seen, hostname, realm_id"#,
-       final_label, final_mac.map(|a| a.get_value()), final_cred.id, final_mobileconfig)
+              r#"INSERT INTO net_devices (label, mobileconfig, account_id, last_updated) VALUES ($1, $2, $3, NOW()) RETURNING id, label, mobileconfig, last_updated, last_seen, hostname, realm_id"#,
+       final_label, final_mobileconfig, final_cred.account_id)
           .fetch_one(&mut *trans)
-          .await
-          .map_err(|e| if is_unique_violation(&e) {
-              VialoError::AppError(StatusCode::CONFLICT, "mac_conflict".into())
-          } else { e.into() })?;
+          .await?;
+
+    sqlx::query!(
+        "INSERT into net_device_creds (network_id, cred_id, device_id, account_id, mac) VALUES ($1, $2, $3, $4, $5)",
+        final_cred.network_id,
+        final_cred.id,
+        device.id,
+        final_cred.account_id,
+        final_mac.map(|a| a.get_value()),
+    )
+    .execute(&mut *trans)
+    .await
+    .map_err(|e| if is_unique_violation(&e) {
+        VialoError::AppError(StatusCode::CONFLICT, "mac_conflict".into())
+    } else { e.into() })?;
 
     trans.commit().await?;
 
@@ -300,16 +316,18 @@ pub async fn get_device_overview(
     let query_the = async |user_opt: Option<Uuid>, id: Uuid| -> Result<_, VialoError> {
         let mut device = conditional_query_as!(
             DeviceWithRefsAndIpAndAccountAndCredentialEmbed,
-            r#"SELECT nd.id, nd.label, nd.mac AS "mac: MacAddressWrapper", nd.mobileconfig, nd.cred_id, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, nia.ipv4_addr as "ipv4_addr?", (row_to_json(nc)::jsonb - 'password' || jsonb_build_object('network', row_to_json(nn))) as "cred: NetworkCredentialEmbed", nc.password as "cred_password: Encrypted<String>",
-            jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
+            r#"SELECT nd.id, nd.label, nd.mobileconfig, nd.last_updated, nd.last_seen, nd.hostname, nd.realm_id, jsonb_agg(jsonb_build_object('network_id', nc.network_id, 'mac', ndc.mac, 'ipv4_addr', nia.ipv4_addr) || row_to_json(nc)::jsonb - 'password' || jsonb_build_object('network', row_to_json(nn)) ORDER BY ndc.cred_id) AS "creds!: DeviceCredEmbedsFull",
+            ARRAY_AGG(nc.password ORDER BY ndc.cred_id) as "cred_passwords!: Vec<Option<Encrypted<String>>>",
+            jsonb_build_object('id', nd.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account!: AccountEmbed"
             FROM net_devices nd
-            JOIN net_cred nc ON nc.id = nd.cred_id
+            JOIN net_device_creds ndc ON nd.id = ndc.device_id
+            JOIN net_cred nc ON nc.id = ndc.cred_id
             JOIN net_networks nn ON nc.network_id = nn.id
-            LEFT JOIN net_ip_assignments nia ON nia.device_id = nd.id
+            LEFT JOIN net_ip_assignments nia ON nia.device_id = ndc.device_id AND nia.cred_id = ndc.cred_id
             {#user}
-             nd.id = {id}"#,
+             nd.id = {id} GROUP BY nd.id, ap.id, ag.id"#,
             #user = match user_opt {
-                Some(user_id) => "JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id WHERE account_id = {user_id} AND",
+                Some(user_id) => "JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id WHERE nd.account_id = {user_id} AND",
                 None => "LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id WHERE",
             }
         )
@@ -317,9 +335,15 @@ pub async fn get_device_overview(
         .await?;
 
         // We need to do this because the JSON deserialization facility for NetworkCredentialEmbed does not decrypt it
-        if let Some(cred) = device.cred.as_mut() {
-            cred.password = device.cred_password.clone();
-        }
+        device
+            .creds
+            .0
+            .iter_mut()
+            .zip(&device.cred_passwords)
+            .for_each(|(cred, password)| {
+                cred.password = password.clone();
+            });
+
         return Ok(device);
     };
 
@@ -338,8 +362,6 @@ pub async fn get_device_overview(
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct UpdateDeviceSchema {
     pub label: Option<String>,
-    pub mac: Option<MacAddressWrapper>,
-    pub cred_id: Option<Uuid>,
     pub mobileconfig: Option<bool>,
 }
 #[derive(Serialize, ToSchema)]
@@ -356,12 +378,12 @@ pub async fn update_device(
     JsonE(body): JsonE<UpdateDeviceSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
     if let Err(_) = sqlx::query!(
-    "SELECT (
-        (SELECT EXISTS (SELECT 1 FROM net_devices JOIN net_cred ON cred_id = net_cred.id WHERE account_id = $1 AND net_devices.id = $2)
-            AND (SELECT EXISTS (SELECT 1 FROM net_cred WHERE account_id = $1 AND id = $3 )))
+        "SELECT (
+        (SELECT EXISTS (SELECT 1 FROM net_devices WHERE account_id = $1 AND net_devices.id = $2))
         OR account_role_exists($1, 'network_manager'::app_role)
     ) AS allowed",
-    user.id, id, body.cred_id
+        user.id,
+        id,
     )
     .fetch_one(&data.db)
     .await
@@ -371,10 +393,8 @@ pub async fn update_device(
 
     let device = sqlx::query_as!(
         DeviceWithRefs,
-        r#"UPDATE net_devices SET label = coalesce($1, label), mac = coalesce($2, mac), cred_id = coalesce($3, cred_id), mobileconfig = coalesce($4, mobileconfig) WHERE id = $5 RETURNING  id, label, mac AS "mac: MacAddressWrapper", mobileconfig, cred_id, last_updated, last_seen, hostname, realm_id"#,
+        r#"UPDATE net_devices SET label = coalesce($1, label), mobileconfig = coalesce($2, mobileconfig) WHERE id = $3 RETURNING  id, label, mobileconfig, last_updated, last_seen, hostname, realm_id"#,
         body.label,
-        body.mac.map(|a| a.get_value()),
-        body.cred_id,
         body.mobileconfig,
         id
     )
@@ -414,9 +434,9 @@ pub struct ResetPasswordResultDevice {
     pub credential: ResetPasswordResultCredential,
 }
 
-#[utoipa::path(post, path = "/network/devices/{id}/reset-password", request_body = ResetPasswordSchema, responses((status = 200, description = "Updated", body=Vec<ResetPasswordResultDevice>)))]
+#[utoipa::path(post, path = "/network/devices/{id}/cred/{cred_id}/reset-password", request_body = ResetPasswordSchema, responses((status = 200, description = "Updated", body=Vec<ResetPasswordResultDevice>)))]
 pub async fn reset_password(
-    Path(id): Path<Uuid>,
+    Path((id, cred_id)): Path<(Uuid, Uuid)>,
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
 
@@ -427,13 +447,14 @@ pub async fn reset_password(
         r#"SELECT (
             (SELECT EXISTS (
                 SELECT 1 FROM net_devices nd
-                JOIN net_cred nc ON nd.cred_id = nc.id
-                WHERE nd.id = $2 AND nc.account_id = $1
+                JOIN net_device_creds ndc ON ndc.device_id = nd.id AND ndc.cred_id = $3
+                WHERE nd.id = $2 AND nd.account_id = $1
             ))
             OR account_role_exists($1, 'network_manager'::app_role)
         ) AS "allowed!: bool""#,
         user.id,
         id,
+        cred_id,
     )
     .fetch_optional(&data.db)
     .await?
@@ -445,14 +466,15 @@ pub async fn reset_password(
 
     // This might be partially the migration network!
     let network = sqlx::query!(
-        r#"SELECT coalesce(t.id, n.id) AS "id!", t.auth AS "auth: NetAuth", t.gen_username, t.gen_password,
-               n.multi_device, n.active, n.migrate_to, nc.account_id, nd.cred_id, nd.label as device_label, t.multi_device as "t_multi_device"
+        r#"SELECT t.id AS "id!", t.auth AS "auth: NetAuth", t.gen_username, t.gen_password,
+               n.multi_device, n.active, n.migrate_to, nd.account_id, nd.label as device_label, t.multi_device as "t_multi_device"
         FROM net_networks n
-        JOIN net_cred nc ON n.id = nc.network_id
-        JOIN net_devices nd ON nc.id = nd.cred_id
+        JOIN net_device_creds ndc ON n.id = ndc.network_id
+        JOIN net_devices nd ON ndc.device_id = nd.id
         JOIN net_networks t ON t.id = coalesce(n.migrate_to, n.id)
-        WHERE nd.id = $1"#,
-        id
+        WHERE ndc.device_id = $1 AND ndc.cred_id = $2"#,
+        id,
+        cred_id
     )
     .fetch_one(&data.db)
     .await?;
@@ -461,13 +483,6 @@ pub async fn reset_password(
         return Err(VialoError::AppError(
             StatusCode::UNPROCESSABLE_ENTITY,
             "network_no_auth".to_string(),
-        ));
-    };
-
-    let Some(cred_id) = network.cred_id else {
-        return Err(VialoError::AppError(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "device_no_cred".to_string(),
         ));
     };
 
@@ -480,7 +495,7 @@ pub async fn reset_password(
 
     let many_devices = network.multi_device
         && sqlx::query_scalar!(
-            r#"SELECT COUNT(*) > 1 AS "many!" FROM net_devices
+            r#"SELECT COUNT(*) > 1 AS "many!" FROM net_device_creds
                WHERE cred_id = $1"#,
             cred_id
         )
@@ -572,7 +587,7 @@ pub async fn reset_password(
             // Per-device credentials. Create new credential for every device we touch.
             query_as!(
                 AffectedDevice,
-                r#"SELECT id, label FROM net_devices WHERE cred_id = $1"#,
+                r#"SELECT id, label FROM net_devices JOIN net_device_creds ndc ON net_devices.id = ndc.device_id WHERE ndc.cred_id = $1"#,
                 cred_id
             )
             .fetch_all(&mut *trans)
@@ -614,11 +629,13 @@ pub async fn reset_password(
     .await?;
 
     query!(
-        "UPDATE net_devices d SET cred_id = p.cred_id, last_updated = NOW()
-                     FROM unnest($1::uuid[], $2::uuid[]) AS p(cred_id, device_id)
-                     WHERE d.id = p.device_id",
+        "UPDATE net_device_creds ncd SET cred_id = p.cred_id, network_id = $2
+            FROM unnest($1::uuid[], $3::uuid[]) AS p(cred_id, device_id)
+            WHERE ncd.device_id = p.device_id AND ncd.cred_id = $4",
         &cred_ids,
+        network.id,
         &affected_devices.iter().map(|d| d.id).collect::<Vec<_>>(),
+        cred_id
     )
     .execute(&mut *trans)
     .await?;
@@ -627,7 +644,7 @@ pub async fn reset_password(
     // (the and not exists clause prevents deleting the cred if it's still in use, especially in SplitThisDevice)
     query!(
         "DELETE FROM net_cred WHERE id = $1
-           AND NOT EXISTS (SELECT 1 FROM net_devices WHERE cred_id = $1)",
+           AND NOT EXISTS (SELECT 1 FROM net_device_creds WHERE cred_id = $1)",
         cred_id,
     )
     .execute(&mut *trans)
@@ -665,8 +682,7 @@ pub async fn delete_device(
         r#"SELECT (
             (SELECT EXISTS (
                 SELECT 1 FROM net_devices nd
-                JOIN net_cred nc ON nd.cred_id = nc.id
-                WHERE nd.id = $2 AND nc.account_id = $1
+                WHERE account_id = $1 AND id = $2
             ))
             OR account_role_exists($1, 'network_manager'::app_role)
         ) AS "allowed: bool""#,

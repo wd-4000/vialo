@@ -115,6 +115,7 @@ DECLARE
     p_subsystem subsystem_type;
     p_tx_id bigint;
     p_bytea_cols text[];
+    p_record_key text;
     -- Columns whose changes carry no value. We Do Not Care
     -- account_people.credit_balance is just materialized from the transactions
     p_noise_cols CONSTANT jsonb := '{
@@ -187,15 +188,22 @@ BEGIN
         END LOOP;
     END IF;
 
+    -- An UPDATE that changes the key column itself leaves a from/to pair here, not a scalar
+    IF jsonb_typeof(p_diff -> TG_ARGV[1]) = 'object' THEN
+        p_record_key := p_diff #>> ARRAY[TG_ARGV[1], 'to'];
+    ELSE
+        p_record_key := COALESCE(p_diff ->> TG_ARGV[1], p_new_data ->> TG_ARGV[1]);
+    END IF;
+
     IF TG_ARGV[0] = 'integer' THEN
         INSERT INTO table_log (table_name, record_id, operation_type, caused_by_account, caused_by_subsystem, diff, transaction_id)
-        VALUES (TG_TABLE_NAME, COALESCE(p_diff ->> TG_ARGV[1], p_new_data->> TG_ARGV[1])::int, CAST(TG_OP as tgop), p_account_id, p_subsystem, p_diff, p_tx_id);
+        VALUES (TG_TABLE_NAME, p_record_key::int, CAST(TG_OP as tgop), p_account_id, p_subsystem, p_diff, p_tx_id);
     ELSIF TG_ARGV[0] = 'text' THEN
         INSERT INTO table_log (table_name, record_text, operation_type, caused_by_account, caused_by_subsystem, diff, transaction_id)
-        VALUES (TG_TABLE_NAME, COALESCE(p_diff ->> TG_ARGV[1], p_new_data->> TG_ARGV[1])::text, CAST(TG_OP as tgop), p_account_id, p_subsystem, p_diff, p_tx_id);
+        VALUES (TG_TABLE_NAME, p_record_key, CAST(TG_OP as tgop), p_account_id, p_subsystem, p_diff, p_tx_id);
     ELSE
         INSERT INTO table_log (table_name, record_uuid, operation_type, caused_by_account, caused_by_subsystem, diff, transaction_id)
-        VALUES (TG_TABLE_NAME, COALESCE(p_diff ->> TG_ARGV[1], p_new_data->> TG_ARGV[1])::uuid, CAST(TG_OP as tgop), p_account_id, p_subsystem, p_diff, p_tx_id);
+        VALUES (TG_TABLE_NAME, p_record_key::uuid, CAST(TG_OP as tgop), p_account_id, p_subsystem, p_diff, p_tx_id);
     END IF;
 
     RETURN NULL;

@@ -121,7 +121,7 @@ pub async fn get_mobileconfig(
          JOIN net_networks n ON nc.network_id = n.id
          LEFT JOIN accounts_people ap ON nc.account_id = ap.id
          LEFT JOIN account_groups ag ON nc.account_id = ag.id
-         LEFT JOIN LATERAL (SELECT label FROM net_devices WHERE cred_id = nc.id LIMIT 1) nd ON NOT n.multi_device
+         LEFT JOIN LATERAL (SELECT label FROM net_devices JOIN net_device_creds ndc ON ndc.device_id = net_devices.id WHERE ndc.cred_id = nc.id LIMIT 1) nd ON NOT n.multi_device
          WHERE nc.id = $1 AND nc.username IS NOT NULL AND nc.password IS NOT NULL"#,
         id
     )
