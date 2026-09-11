@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM net_cred WHERE id = $1\n           AND NOT EXISTS (SELECT 1 FROM net_device_creds WHERE cred_id = $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5890f48bdcd2d4a34b6bbacd87db4be7d6666036f8f6e82a5e0f41dfbb56c382"
+}

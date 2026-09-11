@@ -1,0 +1,115 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT nd.id, nd.label, nd.hostname, mobileconfig, realm_id, nd.last_updated, nd.last_seen,\n                jsonb_agg(jsonb_build_object('id', ndc.cred_id, 'network_id', nc.network_id, 'mac', ndc.mac) ORDER BY ndc.cred_id) AS \"creds!: DeviceCredEmbeds\",\n                jsonb_build_object('id', nd.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account!: AccountEmbed\"\n                FROM net_devices nd\n                JOIN net_device_creds ndc ON nd.id = ndc.device_id\n                JOIN net_cred nc ON ndc.cred_id = nc.id\n                LEFT JOIN accounts_people ap ON nd.account_id = ap.id LEFT JOIN account_groups ag ON nd.account_id = ag.id\n                WHERE TRUE   GROUP BY nd.id, ap.id, ag.id\n                ORDER by nd.id LIMIT $1 OFFSET $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "label"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "hostname",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "hostname"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "mobileconfig",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "mobileconfig"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "realm_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "realm_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "last_updated",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "last_updated"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "last_seen",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "last_seen"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "creds!: DeviceCredEmbeds",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "account!: AccountEmbed",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "acd43af100a5a67ded4b0ffd8dfb2ddd4050cdf4eaad8d179f8950bb52a74489"
+}

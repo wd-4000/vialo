@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE net_device_creds ncd SET cred_id = p.cred_id, network_id = $2\n            FROM unnest($1::uuid[], $3::uuid[]) AS p(cred_id, device_id)\n            WHERE ncd.device_id = p.device_id AND ncd.cred_id = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int4",
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ea6a3a7c53fb888b633d8b3d5040f0c2a2aa7f829e93560780288c6c37c0281d"
+}

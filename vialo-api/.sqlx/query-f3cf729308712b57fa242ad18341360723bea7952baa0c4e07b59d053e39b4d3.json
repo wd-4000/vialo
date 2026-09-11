@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (\n            (SELECT EXISTS (\n                SELECT 1 FROM net_devices nd\n                WHERE account_id = $1 AND id = $2\n            ))\n            OR account_role_exists($1, 'network_manager'::app_role)\n        ) AS \"allowed: bool\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed: bool",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f3cf729308712b57fa242ad18341360723bea7952baa0c4e07b59d053e39b4d3"
+}

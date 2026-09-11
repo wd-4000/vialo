@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE net_device_creds SET (cred_id, mac) = ($1, $2) WHERE device_id = $3 AND network_id = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Macaddr",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "71f56709aec1ded1458101caffca449e249f7d27725c8b8139ed727dd45ef70b"
+}

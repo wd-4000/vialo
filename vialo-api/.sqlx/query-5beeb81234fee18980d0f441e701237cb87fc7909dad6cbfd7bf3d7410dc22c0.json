@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT device_id FROM net_device_creds WHERE cred_id = $1 AND mac IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "device_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "net_device_creds",
+            "name": "device_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5beeb81234fee18980d0f441e701237cb87fc7909dad6cbfd7bf3d7410dc22c0"
+}

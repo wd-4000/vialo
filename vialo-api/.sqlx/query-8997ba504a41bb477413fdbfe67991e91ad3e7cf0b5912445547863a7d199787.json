@@ -1,0 +1,147 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id AS \"id!\", t.auth AS \"auth: NetAuth\", t.gen_username, t.gen_password,\n               n.multi_device, n.active, n.migrate_to, nd.account_id, nd.label as device_label, t.multi_device as \"t_multi_device\"\n        FROM net_networks n\n        JOIN net_device_creds ndc ON n.id = ndc.network_id\n        JOIN net_devices nd ON ndc.device_id = nd.id\n        JOIN net_networks t ON t.id = coalesce(n.migrate_to, n.id)\n        WHERE ndc.device_id = $1 AND ndc.cred_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "auth: NetAuth",
+        "type_info": {
+          "Custom": {
+            "name": "net_auth",
+            "kind": {
+              "Enum": [
+                "username_password",
+                "password"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "auth"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "gen_username",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "gen_username"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "gen_password",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "gen_password"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "multi_device",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "multi_device"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "active",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "active"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "migrate_to",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "migrate_to"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "account_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "account_id"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "device_label",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "label"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "t_multi_device",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "multi_device"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "8997ba504a41bb477413fdbfe67991e91ad3e7cf0b5912445547863a7d199787"
+}
