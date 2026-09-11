@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS \"mac?: MacAddressWrapper\", mobileconfig, cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,\n                jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account!: AccountEmbed\"\n                FROM net_devices nd\n                JOIN net_cred nc ON nd.cred_id = nc.id\n                LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n                 ORDER by nd.id  LIMIT $1 OFFSET $2",
+  "query": "SELECT net_devices.id, label, hostname,  mac AS \"mac: MacAddressWrapper\", cred_id, realm_id, net_devices.last_updated,  net_devices.last_seen, net_cred.network_id FROM net_devices\n                 JOIN net_cred ON cred_id = net_cred.id WHERE account_id = $1  AND cred_id = $2  ORDER by net_devices.id LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -38,7 +38,7 @@
       },
       {
         "ordinal": 3,
-        "name": "mac?: MacAddressWrapper",
+        "name": "mac: MacAddressWrapper",
         "type_info": "Macaddr",
         "origin": {
           "Table": {
@@ -49,17 +49,6 @@
       },
       {
         "ordinal": 4,
-        "name": "mobileconfig",
-        "type_info": "Bool",
-        "origin": {
-          "Table": {
-            "table": "net_devices",
-            "name": "mobileconfig"
-          }
-        }
-      },
-      {
-        "ordinal": 5,
         "name": "cred_id",
         "type_info": "Uuid",
         "origin": {
@@ -70,7 +59,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "name": "realm_id",
         "type_info": "Uuid",
         "origin": {
@@ -81,7 +70,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 6,
         "name": "last_updated",
         "type_info": "Timestamptz",
         "origin": {
@@ -92,7 +81,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 7,
         "name": "last_seen",
         "type_info": "Timestamptz",
         "origin": {
@@ -103,7 +92,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 8,
         "name": "network_id",
         "type_info": "Int4",
         "origin": {
@@ -112,16 +101,12 @@
             "name": "network_id"
           }
         }
-      },
-      {
-        "ordinal": 10,
-        "name": "account!: AccountEmbed",
-        "type_info": "Jsonb",
-        "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
+        "Uuid",
+        "Uuid",
         "Int8",
         "Int8"
       ]
@@ -131,14 +116,12 @@
       true,
       true,
       true,
-      false,
       true,
       true,
       true,
       true,
-      false,
-      null
+      false
     ]
   },
-  "hash": "f3664657b2226c7212a51655087f26bede6479330a28eefda32abe957e1bc38b"
+  "hash": "fe9206d90409a89a2066ad3ac50590a317bac368a441a46b99d4ba5ba5876f30"
 }

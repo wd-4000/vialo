@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS \"mac?: MacAddressWrapper\", mobileconfig, cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,\n                jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account!: AccountEmbed\"\n                FROM net_devices nd\n                JOIN net_cred nc ON nd.cred_id = nc.id\n                LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n                WHERE nd.label ILIKE '%' || $1 || '%' OR nd.mac::text ILIKE '%' || $1 || '%' ORDER by nd.id  LIMIT $2 OFFSET $3",
+  "query": "SELECT nd.id, nd.label, nd.hostname, mac::macaddr AS \"mac?: MacAddressWrapper\", mobileconfig, cred_id, realm_id, nd.last_updated, nd.last_seen, nc.network_id,\n                jsonb_build_object('id', nc.account_id, 'full_name', coalesce(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account!: AccountEmbed\"\n                FROM net_devices nd\n                JOIN net_cred nc ON nd.cred_id = nc.id\n                LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id\n                WHERE TRUE   ORDER by nd.id  LIMIT $1 OFFSET $2",
   "describe": {
     "columns": [
       {
@@ -122,7 +122,6 @@
     ],
     "parameters": {
       "Left": [
-        "Text",
         "Int8",
         "Int8"
       ]
@@ -141,5 +140,5 @@
       null
     ]
   },
-  "hash": "ff63c16d426b71cde78166a655497f2b22bcb76ebd53d84c362ae0d593c51e4f"
+  "hash": "41cb23ea39b22495602f8cdd0d20ef973d2ae7532fc037122bad13df49ebdf1e"
 }

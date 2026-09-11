@@ -30,10 +30,11 @@ use super::models::{DeviceModelWithAccountEmbed, DeviceWithRefs};
 use crate::permissions::AppRole;
 use axum::{
     Extension, Json,
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
+use axum_extra::extract::Query;
 
 use serde::{Deserialize, Serialize};
 use sqlx_conditional_queries::conditional_query_as;
@@ -45,6 +46,7 @@ pub struct DeviceQuerySchema {
     pub page: Option<i64>,
     pub limit: Option<i64>,
     pub search: Option<String>,
+    pub network: Option<Vec<i32>>,
     #[serde(default)]
     pub account_id: IdOrMeOrAllQuery,
     pub cred_id: Option<Uuid>,
@@ -68,13 +70,17 @@ pub async fn list_devices(
             let devices = conditional_query_as!(
                 ListDeviceWithRefs,
                 r#"SELECT net_devices.id, label, hostname,  mac AS "mac: MacAddressWrapper", cred_id, realm_id, net_devices.last_updated,  net_devices.last_seen, net_cred.network_id FROM net_devices
-                 JOIN net_cred ON cred_id = net_cred.id WHERE account_id = {account_id} {#wh_cred} {#wh_search} ORDER by net_devices.id LIMIT {limit} OFFSET {offset}"#,
-                #wh_search = match (opts.search){
-                    Some(src) => "AND (label ILIKE '%' || {src} || '%' OR mac::text ILIKE '%' || {src} || '%')",
+                 JOIN net_cred ON cred_id = net_cred.id WHERE account_id = {account_id} {#wh_network} {#wh_cred} {#wh_search} ORDER by net_devices.id LIMIT {limit} OFFSET {offset}"#,
+                #wh_network = match (opts.network) {
+                    Some(network) => "AND net_cred.network_id = ANY({network:Vec<i32>})",
                     _ => ""
                 },
-                #wh_cred = match (opts.cred_id) {
-                    Some(cred_id) => "AND cred_id = {cred_id}",
+                 #wh_cred = match (opts.cred_id) {
+                     Some(cred_id) => "AND cred_id = {cred_id}",
+                     _ => ""
+                 },
+                 #wh_search = match (opts.search){
+                    Some(src) => "AND (label ILIKE '%' || {src} || '%' OR mac::text ILIKE '%' || {src} || '%')",
                     _ => ""
                 }
         )
@@ -90,9 +96,13 @@ pub async fn list_devices(
                 FROM net_devices nd
                 JOIN net_cred nc ON nd.cred_id = nc.id
                 LEFT JOIN accounts_people ap ON nc.account_id = ap.id LEFT JOIN account_groups ag ON nc.account_id = ag.id
-                {#wh_search} ORDER by nd.id  LIMIT {limit} OFFSET {offset}"#,
+                WHERE TRUE {#wh_network} {#wh_search} ORDER by nd.id  LIMIT {limit} OFFSET {offset}"#,
+                #wh_network = match (opts.network) {
+                    Some(network) => "AND nc.network_id = ANY({network:Vec<i32>})",
+                    _ => ""
+                },
                 #wh_search = match (opts.search){
-                    Some(src) => "WHERE nd.label ILIKE '%' || {src} || '%' OR nd.mac::text ILIKE '%' || {src} || '%'",
+                    Some(src) => "AND (nd.label ILIKE '%' || {src} || '%' OR nd.mac::text ILIKE '%' || {src} || '%')",
                     _ => ""
                 }
               ).fetch_all(&data.db)

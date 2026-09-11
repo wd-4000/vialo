@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT net_devices.id, label, hostname,  mac AS \"mac: MacAddressWrapper\", cred_id, realm_id, net_devices.last_updated,  net_devices.last_seen, net_cred.network_id FROM net_devices\n                 JOIN net_cred ON cred_id = net_cred.id WHERE account_id = $1  AND (label ILIKE '%' || $2 || '%' OR mac::text ILIKE '%' || $2 || '%') ORDER by net_devices.id LIMIT $3 OFFSET $4",
+  "query": "SELECT net_devices.id, label, hostname,  mac AS \"mac: MacAddressWrapper\", cred_id, realm_id, net_devices.last_updated,  net_devices.last_seen, net_cred.network_id FROM net_devices\n                 JOIN net_cred ON cred_id = net_cred.id WHERE account_id = $1 AND net_cred.network_id = ANY($2) AND cred_id = $3 AND (label ILIKE '%' || $4 || '%' OR mac::text ILIKE '%' || $4 || '%') ORDER by net_devices.id LIMIT $5 OFFSET $6",
   "describe": {
     "columns": [
       {
@@ -106,6 +106,8 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Int4Array",
+        "Uuid",
         "Text",
         "Int8",
         "Int8"
@@ -123,5 +125,5 @@
       false
     ]
   },
-  "hash": "751e0f8507678367cb598ab864e06e527407e3e6033ab90cf3cf48680ef5678f"
+  "hash": "db8a3cb93bb9573c96fbaf785752d6e0a157d602dd4462fed664789e8bb442b1"
 }
