@@ -6,7 +6,7 @@ use crate::helpers::{PgDateTime, encryption, grab_authd_conn_subsystem};
 use crate::http::history::models::Subsystem;
 use crate::http::util::models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery};
 use crate::http::util::{
-    JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
+    MaybeJsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
 };
 use crate::{AppState, health};
 use axum::extract::{ConnectInfo, Path};
@@ -188,15 +188,11 @@ async fn kiosk_activate(
     Ok(StatusCode::NO_CONTENT)
 }
 
-fn yes() -> bool {
-    true
-}
-
 #[derive(Serialize, Deserialize, Debug, ToSchema, Default)]
 pub struct CancelAppointmentBody {
     pub cancellation_reason: Option<CancellationReason>,
-    #[serde(default = "yes")]
-    pub process_refund: bool,
+    /// Defaults to true
+    pub process_refund: Option<bool>,
     pub expected_credits: Option<i32>,
 }
 
@@ -206,8 +202,10 @@ pub async fn delete_appointment(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
-    JsonE(body): JsonE<CancelAppointmentBody>,
+    MaybeJsonE(body): MaybeJsonE<CancelAppointmentBody>,
 ) -> Result<impl IntoResponse, VialoError> {
+    let body = body.unwrap_or_default();
+
     let owner_check = query!(
         "SELECT ba.account_id, b.asset_type_id FROM bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id WHERE ba.id = $1",
         id
@@ -350,7 +348,7 @@ pub async fn delete_appointment(
 
     let refund_credits =
         appointment.credits.unwrap_or(0) * appointment.current_refund_percent.unwrap_or(0) / 100;
-    if body.process_refund && refund_credits > 0 {
+    if body.process_refund.unwrap_or(true) && refund_credits > 0 {
         query!(
             "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
             appointment.from_account,
