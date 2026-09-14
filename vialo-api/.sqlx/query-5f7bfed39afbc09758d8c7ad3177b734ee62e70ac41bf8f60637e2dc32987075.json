@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT auto_add_on_auth, auto_add_via_dhcp FROM net_networks WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "auto_add_on_auth",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "auto_add_on_auth"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "auto_add_via_dhcp",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_networks",
+            "name": "auto_add_via_dhcp"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "5f7bfed39afbc09758d8c7ad3177b734ee62e70ac41bf8f60637e2dc32987075"
+}
