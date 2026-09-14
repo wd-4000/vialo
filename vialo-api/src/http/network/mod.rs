@@ -77,6 +77,10 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route("/devices", post(devices::handlers::post_device))
         .route(
+            "/devices/{id}/credentials",
+            post(devices::handlers::post_credential_to_device),
+        )
+        .route(
             "/devices/{id}/credentials/",
             post(devices::handlers::post_credential_to_device),
         )

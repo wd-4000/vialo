@@ -354,6 +354,20 @@ pub async fn post_credential_to_device(
         ));
     }
 
+    let network = sqlx::query!(
+        r#"SELECT auto_add_on_auth, auto_add_via_dhcp FROM net_networks WHERE id = $1"#,
+        body.network_id,
+    )
+    .fetch_one(&data.db)
+    .await?;
+
+    if !(network.auto_add_on_auth || network.auto_add_via_dhcp) && body.mac.is_none() {
+        return Err(VialoError::AppError(
+            StatusCode::BAD_REQUEST,
+            "mac_required".into(),
+        ));
+    }
+
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
