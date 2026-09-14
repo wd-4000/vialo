@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT nd.account_id,\n            (nd.account_id = $1 OR account_role_exists($1, 'network_manager'::app_role)) AS \"allowed!\",\n            EXISTS (SELECT 1 FROM net_device_creds WHERE device_id = nd.id AND network_id = $3) AS \"occupied!\"\n        FROM net_devices nd WHERE nd.id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "account_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "allowed!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "occupied!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "0cda608644e79e4f7e074e3965f6c3c35053a9343ec1e45d707e12061aaf0d25"
+}

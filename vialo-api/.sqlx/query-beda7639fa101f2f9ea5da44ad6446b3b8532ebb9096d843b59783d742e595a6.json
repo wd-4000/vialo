@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM net_device_creds WHERE device_id = $1 AND cred_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "beda7639fa101f2f9ea5da44ad6446b3b8532ebb9096d843b59783d742e595a6"
+}

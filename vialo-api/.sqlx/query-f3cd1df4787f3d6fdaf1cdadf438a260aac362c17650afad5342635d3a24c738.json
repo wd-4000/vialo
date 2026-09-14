@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, label, mobileconfig, last_updated, last_seen, hostname, realm_id FROM net_devices WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "label"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "mobileconfig",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "mobileconfig"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "last_updated",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "last_updated"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "last_seen",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "last_seen"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "hostname",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "hostname"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "realm_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "net_devices",
+            "name": "realm_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "f3cd1df4787f3d6fdaf1cdadf438a260aac362c17650afad5342635d3a24c738"
+}

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use axum::{
     Router,
     middleware::{self},
-    routing::{get, patch, post, put},
+    routing::{delete, get, patch, post, put},
 };
 
 pub mod credentials;
@@ -53,8 +53,9 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         ));
 
     // Per-credential routes: ownership checked inside the handlers.
-    // POST /devices is here because CreatedDeviceResponse always includes a
-    // plaintext credential — it must share the tight credential rate limit.
+    // POST /devices and POST /devices/{id}/credentials/ are here because
+    // CreatedDeviceResponse always includes a plaintext credential — they must
+    // share the tight credential rate limit.
     let credential_routes = Router::new()
         .nest(
             "/credentials/{id}",
@@ -75,6 +76,10 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(devices::handlers::get_device_overview),
         )
         .route("/devices", post(devices::handlers::post_device))
+        .route(
+            "/devices/{id}/credentials/",
+            post(devices::handlers::post_credential_to_device),
+        )
         .route_layer(middleware::from_fn_with_state(
             app_state.clone(),
             rate_limit::credential,
@@ -91,7 +96,11 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             patch(devices::handlers::update_device).delete(devices::handlers::delete_device),
         )
         .route(
-            "/devices/{id}/cred/{cred_id}/reset-password",
+            "/devices/{id}/credentials/{cred_id}",
+            delete(devices::handlers::delete_credential_from_device),
+        )
+        .route(
+            "/devices/{id}/credentials/{cred_id}/reset-password",
             post(devices::handlers::reset_password),
         );
 

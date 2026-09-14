@@ -146,6 +146,74 @@ pub struct CreatedDeviceResponse {
     pub credential: CredentialModelWithPassword,
 }
 
+/// Either finds a credential or makes a new one for a given account and network
+async fn credential_for_account(
+    trans: &mut sqlx::PgConnection,
+    data: &Arc<AppState>,
+    user: &User,
+    account_id: Uuid,
+    network_id: i32,
+) -> Result<CredentialModelWithPassword, VialoError> {
+    let network = sqlx::query_as!(
+        NetworkListModel,
+        r#"SELECT id, label, icon, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as "auth: NetAuth", gen_username, gen_password, active, migrate_to, wired, ssid, tls_trust, outer_identity FROM net_networks WHERE id = $1"#,
+        network_id
+    )
+    .fetch_one(&mut *trans)
+    .await?;
+
+    // Check if the network is active. If not, require NetworkManager role.
+    if !network.active {
+        check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
+    }
+
+    // Check if we already have a credential we can use
+    if network.multi_device
+        && let Some(credential) = sqlx::query_as!(
+            CredentialModelWithPassword,
+            r#"SELECT id, username, password AS "password: Encrypted<String>", account_id, network_id, last_updated from net_cred WHERE account_id = $1 AND network_id = $2"#,
+            account_id,
+            network_id
+        )
+        .fetch_optional(&mut *trans)
+        .await?
+    {
+        return Ok(credential);
+    }
+
+    let (username, password) = if let Some(net_auth) = network.auth {
+        let username = if net_auth == NetAuth::UsernamePassword {
+            Some(random::unambiguous_string(
+                network.gen_username.unwrap_or(8) as usize,
+            ))
+        } else {
+            None
+        };
+
+        (
+            username,
+            Some(random::unambiguous_string(
+                network.gen_password.unwrap_or(16) as usize,
+            )),
+        )
+    } else {
+        (None, None)
+    };
+
+    let password_encrypted = password.map(|p| encryption::encrypt(&p)).transpose()?;
+
+    Ok(sqlx::query_as!(
+        CredentialModelWithPassword,
+        r#"INSERT INTO net_cred (username, password, account_id, network_id, last_updated) VALUES ($1, $2, $3, $4, NOW()) RETURNING id, username, password AS "password: Encrypted<String>", account_id, network_id, last_updated"#,
+        username.as_deref(),
+        password_encrypted,
+        account_id,
+        network_id
+    )
+    .fetch_one(&mut *trans)
+    .await?)
+}
+
 #[utoipa::path(post, path = "/network/devices", request_body = PostDeviceSchema, responses((status = 201, description = "Created", body=CreatedDeviceResponse)))]
 pub async fn post_device(
     State(data): State<Arc<AppState>>,
@@ -208,70 +276,10 @@ pub async fn post_device(
                 IdOrMeQuery::Me => user.id,
             };
 
-            let network = sqlx::query_as!(
-                NetworkListModel,
-                r#"SELECT id, label, icon, multi_device, auto_add_on_auth, auto_add_via_dhcp, auth as "auth: NetAuth", gen_username, gen_password, active, migrate_to, wired, ssid, tls_trust, outer_identity FROM net_networks WHERE id = $1"#,
-                network_id
-            )
-            .fetch_one(&mut *trans)
-            .await?;
+            let credential =
+                credential_for_account(&mut trans, &data, &user, account_id, network_id).await?;
 
-            // Check if the network is active. If not, require NetworkManager role.
-            if !network.active {
-                check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
-            }
-
-            // Check if we already have a credential we can use
-            let mut credential = None;
-            if network.multi_device {
-                credential = sqlx::query_as!(
-                    CredentialModelWithPassword,
-                    r#"SELECT id, username, password AS "password: Encrypted<String>", account_id, network_id, last_updated from net_cred WHERE account_id = $1 AND network_id = $2"#,
-                    account_id,
-                    network_id
-                )
-                .fetch_optional(&mut *trans)
-                .await?;
-            }
-
-            // Generate a new credential if not found
-            if credential.is_none() {
-                let (username, password) = if let Some(net_auth) = network.auth {
-                    let username = if net_auth == NetAuth::UsernamePassword {
-                        Some(random::unambiguous_string(
-                            network.gen_username.unwrap_or(8) as usize,
-                        ))
-                    } else {
-                        None
-                    };
-
-                    (
-                        username,
-                        Some(random::unambiguous_string(
-                            network.gen_password.unwrap_or(16) as usize,
-                        )),
-                    )
-                } else {
-                    (None, None)
-                };
-
-                let password_encrypted = password.map(|p| encryption::encrypt(&p)).transpose()?;
-
-                credential = Some(
-                    sqlx::query_as!(
-                        CredentialModelWithPassword,
-                        r#"INSERT INTO net_cred (username, password, account_id, network_id, last_updated) VALUES ($1, $2, $3, $4, NOW()) RETURNING id, username, password AS "password: Encrypted<String>", account_id, network_id, last_updated"#,
-                        username.as_deref(),
-                        password_encrypted,
-                        account_id,
-                        network_id
-                    )
-                    .fetch_one(&mut *trans)
-                    .await?,
-                );
-            }
-
-            (credential.unwrap(), label, mac, mobileconfig)
+            (credential, label, mac, mobileconfig)
         }
     };
 
@@ -305,6 +313,154 @@ pub async fn post_device(
             credential: final_cred,
         }),
     ))
+}
+
+#[derive(Deserialize, Debug, ToSchema)]
+pub struct PostDeviceCredentialSchema {
+    pub network_id: i32,
+    pub mac: Option<MacAddressWrapper>,
+}
+
+#[utoipa::path(post, path = "/network/devices/{id}/credentials/", request_body = PostDeviceCredentialSchema, responses((status = 201, description = "Created", body=CreatedDeviceResponse)))]
+pub async fn post_credential_to_device(
+    Path(id): Path<Uuid>,
+    State(data): State<Arc<AppState>>,
+    Extension(user): Extension<User>,
+
+    JsonE(body): JsonE<PostDeviceCredentialSchema>,
+) -> Result<impl IntoResponse, VialoError> {
+    // Must be owner or NetworkManager
+    let target = sqlx::query!(
+        r#"SELECT nd.account_id,
+            (nd.account_id = $1 OR account_role_exists($1, 'network_manager'::app_role)) AS "allowed!",
+            EXISTS (SELECT 1 FROM net_device_creds WHERE device_id = nd.id AND network_id = $3) AS "occupied!"
+        FROM net_devices nd WHERE nd.id = $2"#,
+        user.id,
+        id,
+        body.network_id,
+    )
+    .fetch_one(&data.db)
+    .await?;
+
+    if !target.allowed {
+        return Err(VialoError::Forbidden());
+    }
+
+    // Check that this device isn't already in this network
+    if target.occupied {
+        return Err(VialoError::AppError(
+            StatusCode::CONFLICT,
+            "network_conflict".into(),
+        ));
+    }
+
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+    let mut trans = grab_trans(&mut conn).await?;
+
+    // Create/find the credential
+    let credential =
+        credential_for_account(&mut trans, &data, &user, target.account_id, body.network_id)
+            .await?;
+
+    sqlx::query!(
+        "INSERT into net_device_creds (network_id, cred_id, device_id, account_id, mac) VALUES ($1, $2, $3, $4, $5)",
+        credential.network_id,
+        credential.id,
+        id,
+        credential.account_id,
+        body.mac.map(|a| a.get_value()),
+    )
+    .execute(&mut *trans)
+    .await
+    .map_err(|e| if is_unique_violation(&e) {
+        VialoError::AppError(StatusCode::CONFLICT, "mac_conflict".into())
+    } else { e.into() })?;
+
+    let device = sqlx::query_as!(
+        DeviceWithRefs,
+        r#"SELECT id, label, mobileconfig, last_updated, last_seen, hostname, realm_id FROM net_devices WHERE id = $1"#,
+        id
+    )
+    .fetch_one(&mut *trans)
+    .await?;
+
+    trans.commit().await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(CreatedDeviceResponse { device, credential }),
+    ))
+}
+
+#[utoipa::path(delete, path = "/network/devices/{id}/credentials/{cred_id}", responses((status = 204, description = "Deleted")))]
+pub async fn delete_credential_from_device(
+    Path((id, cred_id)): Path<(Uuid, Uuid)>,
+    State(data): State<Arc<AppState>>,
+    Extension(user): Extension<User>,
+) -> Result<impl IntoResponse, VialoError> {
+    // Must own the device OR be a NetworkManager.
+    let allowed = sqlx::query_scalar!(
+        r#"SELECT (
+            (SELECT EXISTS (SELECT 1 FROM net_devices WHERE id = $2 AND account_id = $1))
+            OR account_role_exists($1, 'network_manager'::app_role)
+        ) AS "allowed: bool""#,
+        user.id,
+        id,
+    )
+    .fetch_one(&data.db)
+    .await
+    .map_err(|e| VialoError::Anyhow(e.into()))?
+    .unwrap_or(false);
+
+    if !allowed {
+        return Err(VialoError::Forbidden());
+    }
+
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+    let mut trans = grab_trans(&mut conn).await?;
+
+    let creds = sqlx::query!(
+        r#"SELECT COUNT(*) AS "total!", COUNT(*) FILTER (WHERE cred_id = $2) AS "matching!"
+           FROM net_device_creds WHERE device_id = $1"#,
+        id,
+        cred_id
+    )
+    .fetch_one(&mut *trans)
+    .await?;
+
+    if creds.matching == 0 {
+        return Err(VialoError::NotFound());
+    }
+
+    // A device without credentials is invisible to every listing, so it should be deleted instead
+    if creds.total == 1 {
+        return Err(VialoError::AppError(
+            StatusCode::CONFLICT,
+            "last_credential".into(),
+        ));
+    }
+
+    // IP assignments cascade off the link row
+    sqlx::query!(
+        "DELETE FROM net_device_creds WHERE device_id = $1 AND cred_id = $2",
+        id,
+        cred_id
+    )
+    .execute(&mut *trans)
+    .await?;
+
+    // Clean up the credential if it's no longer in use
+    sqlx::query!(
+        "DELETE FROM net_cred WHERE id = $1
+           AND NOT EXISTS (SELECT 1 FROM net_device_creds WHERE cred_id = $1)",
+        cred_id
+    )
+    .execute(&mut *trans)
+    .await?;
+
+    trans.commit().await?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(get, path = "/network/devices/{id}/overview", responses((status = 200, description = "OK", body=DeviceWithRefsAndIpAndAccountAndCredentialEmbed)))]
@@ -434,7 +590,7 @@ pub struct ResetPasswordResultDevice {
     pub credential: ResetPasswordResultCredential,
 }
 
-#[utoipa::path(post, path = "/network/devices/{id}/cred/{cred_id}/reset-password", request_body = ResetPasswordSchema, responses((status = 200, description = "Updated", body=Vec<ResetPasswordResultDevice>)))]
+#[utoipa::path(post, path = "/network/devices/{id}/credentials/{cred_id}/reset-password", request_body = ResetPasswordSchema, responses((status = 200, description = "Updated", body=Vec<ResetPasswordResultDevice>)))]
 pub async fn reset_password(
     Path((id, cred_id)): Path<(Uuid, Uuid)>,
     State(data): State<Arc<AppState>>,
