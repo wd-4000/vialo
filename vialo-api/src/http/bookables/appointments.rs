@@ -213,7 +213,7 @@ pub async fn delete_appointment(
     .fetch_one(&data.db)
     .await?;
 
-    let mut real_cancellation_reason = CancellationReason::User;
+    let mut is_admin = false;
     if owner_check.account_id != user.id {
         require_asset_type_perm(
             Some(user.id),
@@ -222,10 +222,10 @@ pub async fn delete_appointment(
             &data.db,
         )
         .await?;
-        real_cancellation_reason = CancellationReason::Admin;
+        is_admin = true;
     }
 
-    if real_cancellation_reason != body.cancellation_reason.unwrap_or(CancellationReason::User) {
+    if is_admin && body.cancellation_reason != Some(CancellationReason::Admin) {
         return Err(VialoError::AppError(
             StatusCode::BAD_REQUEST,
             "invalid_cancellation_reason".to_string(),
@@ -335,7 +335,7 @@ pub async fn delete_appointment(
     let result = sqlx::query!(
         "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = $2 WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",
         appointment.id,
-        real_cancellation_reason as CancellationReason
+        body.cancellation_reason.unwrap_or(CancellationReason::User) as CancellationReason
     )
     .execute(&mut *trans).await?;
 
