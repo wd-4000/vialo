@@ -197,7 +197,7 @@ pub struct CancelAppointmentBody {
 }
 
 /// Cancel appointment
-#[utoipa::path(delete, path = "/bookables/appointments/{id}", responses((status = 204, description = "Canceled")))] // no body
+#[utoipa::path(post, path = "/bookables/appointments/{id}/cancel", request_body = CancelAppointmentBody, responses((status = 204, description = "Canceled")))] // no body
 pub async fn delete_appointment(
     Path(id): Path<Uuid>,
     Extension(user): Extension<User>,
