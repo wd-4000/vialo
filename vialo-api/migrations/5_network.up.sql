@@ -63,6 +63,84 @@ CREATE INDEX net_cred_idx ON net_cred (network_id, username, password);
 
 CREATE INDEX idx_net_cred_account ON net_cred (account_id); -- accounts cascade here
 
+CREATE OR REPLACE FUNCTION enqueue_ppsk_refresh () RETURNS void AS $$
+    INSERT INTO subsystem_jobs (subsystem, data, created_at, last_updated, status)
+    VALUES ('ppsk', jsonb_build_object('type', 'refresh'), NOW(), NOW(), 'pending');
+$$ LANGUAGE sql;
+
+-- A cred only reaches the NMS if its network is PPSK and actually linked to one
+CREATE OR REPLACE FUNCTION ppsk_network_linked (p_network_id int) RETURNS boolean AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM net_networks n
+          JOIN net_network_nms_link nnl ON nnl.network_id = n.id
+        WHERE n.id = p_network_id
+          AND n.auth = 'password'
+    );
+$$ LANGUAGE sql STABLE;
+
+CREATE OR REPLACE FUNCTION ppsk_account_has_cred (p_account_id uuid) RETURNS boolean AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM net_cred nc
+        WHERE nc.account_id = p_account_id
+          AND nc.password IS NOT NULL
+          AND ppsk_network_linked (nc.network_id)
+    );
+$$ LANGUAGE sql STABLE;
+
+-- Any cred change on a linked password network needs a refresh
+CREATE OR REPLACE FUNCTION ppsk_cred_sync () RETURNS TRIGGER AS $$
+DECLARE
+    p_changed boolean;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        SELECT EXISTS (
+            SELECT 1 FROM new_rows
+            WHERE password IS NOT NULL AND ppsk_network_linked (network_id)
+        ) INTO p_changed;
+    ELSIF TG_OP = 'DELETE' THEN
+        SELECT EXISTS (
+            SELECT 1 FROM old_rows
+            WHERE password IS NOT NULL AND ppsk_network_linked (network_id)
+        ) INTO p_changed;
+    ELSE
+        -- Fires on any update, so diff what actually gets pushed
+        -- account_id is in there because it picks the VLAN
+        WITH o AS (
+            SELECT account_id, password, network_id FROM old_rows
+            WHERE password IS NOT NULL AND ppsk_network_linked (network_id)
+        ), n AS (
+            SELECT account_id, password, network_id FROM new_rows
+            WHERE password IS NOT NULL AND ppsk_network_linked (network_id)
+        )
+        SELECT EXISTS (TABLE o EXCEPT ALL TABLE n)
+            OR EXISTS (TABLE n EXCEPT ALL TABLE o) INTO p_changed;
+    END IF;
+
+    IF p_changed THEN
+        PERFORM enqueue_ppsk_refresh ();
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- column filter
+CREATE TRIGGER tg_ppsk_cred_insert_sync
+AFTER INSERT ON net_cred
+REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT
+EXECUTE FUNCTION ppsk_cred_sync ();
+
+CREATE TRIGGER tg_ppsk_cred_delete_sync
+AFTER DELETE ON net_cred
+REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT
+EXECUTE FUNCTION ppsk_cred_sync ();
+
+CREATE TRIGGER tg_ppsk_cred_update_sync
+AFTER
+UPDATE ON net_cred
+REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT
+EXECUTE FUNCTION ppsk_cred_sync ();
+
 -- Realms are collections of subnet, nat and ipv6 prefix.
 CREATE TABLE net_realms (
   id uuid PRIMARY KEY default gen_random_uuid(),
@@ -115,6 +193,89 @@ CREATE TABLE net_realm_assignments (
   realm_id uuid NOT NULL REFERENCES net_realms (id) ON DELETE CASCADE,
   PRIMARY KEY (account_id)
 );
+-- reassigning an account can change VLAN without touching net_cred
+CREATE OR REPLACE FUNCTION ppsk_realm_assignment_sync () RETURNS TRIGGER AS $$
+DECLARE
+    p_changed boolean;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        SELECT EXISTS (
+            SELECT 1 FROM new_rows WHERE ppsk_account_has_cred (account_id)
+        ) INTO p_changed;
+    ELSIF TG_OP = 'DELETE' THEN
+        SELECT EXISTS (
+            SELECT 1 FROM old_rows WHERE ppsk_account_has_cred (account_id)
+        ) INTO p_changed;
+    ELSE
+        WITH o AS (
+            SELECT account_id, realm_id FROM old_rows
+            WHERE ppsk_account_has_cred (account_id)
+        ), n AS (
+            SELECT account_id, realm_id FROM new_rows
+            WHERE ppsk_account_has_cred (account_id)
+        )
+        SELECT EXISTS (TABLE o EXCEPT ALL TABLE n)
+            OR EXISTS (TABLE n EXCEPT ALL TABLE o) INTO p_changed;
+    END IF;
+
+    IF p_changed THEN
+        PERFORM enqueue_ppsk_refresh ();
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_ppsk_realm_assignment_insert_sync
+AFTER INSERT ON net_realm_assignments
+REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT
+EXECUTE FUNCTION ppsk_realm_assignment_sync ();
+
+CREATE TRIGGER tg_ppsk_realm_assignment_delete_sync
+AFTER DELETE ON net_realm_assignments
+REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT
+EXECUTE FUNCTION ppsk_realm_assignment_sync ();
+
+CREATE TRIGGER tg_ppsk_realm_assignment_update_sync
+AFTER
+UPDATE ON net_realm_assignments
+REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT
+EXECUTE FUNCTION ppsk_realm_assignment_sync ();
+
+-- Retagging a realm affects every cred assigned to it
+CREATE OR REPLACE FUNCTION ppsk_realm_vlan_sync () RETURNS TRIGGER AS $$
+DECLARE
+    p_changed boolean;
+BEGIN
+    WITH o AS (
+        SELECT id, vlan FROM old_rows r
+        WHERE EXISTS (
+            SELECT 1 FROM net_realm_assignments nra
+            WHERE nra.realm_id = r.id AND ppsk_account_has_cred (nra.account_id)
+        )
+    ), n AS (
+        SELECT id, vlan FROM new_rows r
+        WHERE EXISTS (
+            SELECT 1 FROM net_realm_assignments nra
+            WHERE nra.realm_id = r.id AND ppsk_account_has_cred (nra.account_id)
+        )
+    )
+    SELECT EXISTS (TABLE o EXCEPT ALL TABLE n)
+        OR EXISTS (TABLE n EXCEPT ALL TABLE o) INTO p_changed;
+
+    IF p_changed THEN
+        PERFORM enqueue_ppsk_refresh ();
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_ppsk_realm_vlan_sync
+AFTER
+UPDATE ON net_realms
+REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT
+EXECUTE FUNCTION ppsk_realm_vlan_sync ();
 
 -- Network devices
 CREATE TABLE net_devices (
