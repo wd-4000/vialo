@@ -284,7 +284,7 @@ pub async fn main(
             .fetch_one(&mut *conn)
             .await?
             {
-                info!("It's past 04:00 venue time; enqueueing daily FullSync");
+                info!("Enqueueing daily FullSync");
                 add_task(&mut *conn, JobData::FullSync {}).await?;
             }
 
