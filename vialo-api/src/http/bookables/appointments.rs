@@ -4,11 +4,12 @@ use super::permissions::{
 use crate::bookables::CancellationReason;
 use crate::helpers::{PgDateTime, encryption, grab_authd_conn_subsystem};
 use crate::http::history::models::Subsystem;
+use crate::http::people::models::TransactionStatus;
 use crate::http::util::models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery};
 use crate::http::util::{
     MaybeJsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
 };
-use crate::{AppState, health};
+use crate::{AppState, health, impl_jsonb_embed};
 use axum::extract::{ConnectInfo, Path};
 use axum::{
     Extension, Json,
@@ -42,8 +43,36 @@ pub struct BookableAppointmentFilterOptions {
     pub include_cancelled: bool,
 }
 
+#[derive(Deserialize, Serialize, ToSchema)]
+pub struct TransactionEmbed {
+    pub id: Uuid,
+    pub credits: Option<i32>,
+    pub status: Option<TransactionStatus>,
+}
+
 #[derive(Serialize, ToSchema)]
-pub struct BookableAppointmentType {
+pub struct BookableAppointmentModel {
+    pub id: Uuid,
+    pub asset_id: i32,
+    pub transaction_id: Option<Uuid>,
+    pub account: Option<AccountEmbed>,
+
+    pub transaction: Option<TransactionEmbed>,
+    pub refund_transaction: Option<TransactionEmbed>,
+
+    pub begins: Option<DateTime<Utc>>,
+    pub ends: PgDateTime,
+    pub cancelled_at: Option<DateTime<Utc>>,
+    pub cancellation_reason: Option<CancellationReason>,
+    #[schema(format = DateTime)]
+    pub activated: Option<chrono::DateTime<chrono::Utc>>,
+    pub maintenance: Option<bool>,
+}
+
+impl_jsonb_embed!(TransactionEmbed);
+
+#[derive(Serialize, ToSchema)]
+pub struct BookableAppointmentListModel {
     pub id: Uuid,
     pub asset_id: i32,
     pub transaction_id: Option<Uuid>,
@@ -366,7 +395,7 @@ pub async fn delete_appointment(
 
 #[utoipa::path(get, path = "/bookables/appointments", params(
     BookableAppointmentFilterOptions
-), responses((status = 200, description = "OK", body=Vec<BookableAppointmentType>)))]
+), responses((status = 200, description = "OK", body=Vec<BookableAppointmentListModel>)))]
 pub async fn list(
     Query(opts): Query<BookableAppointmentFilterOptions>,
     Extension(user): Extension<User>,
@@ -384,7 +413,7 @@ pub async fn list(
     let scope = resolve_asset_type_scope(user_id, BookablePerm::Admin, &data.db).await?;
 
     let record = conditional_query_as!(
-        BookableAppointmentType,
+        BookableAppointmentListModel,
         r#"SELECT
             ba.id,
             ba.asset_id,
@@ -440,11 +469,13 @@ pub async fn list(
 pub struct BookableAppointmentGetOptions {
     #[serde(default)]
     pub account_info: bool,
+    #[serde(default)]
+    pub transaction_info: bool,
 }
 
 #[utoipa::path(get, path = "/bookables/appointments/{id}", params(
     BookableAppointmentGetOptions
-), responses((status = 200, description = "OK", body=BookableAppointmentType)))]
+), responses((status = 200, description = "OK", body=BookableAppointmentModel)))]
 pub async fn get(
     Query(opts): Query<BookableAppointmentGetOptions>,
     Path(id): Path<Uuid>,
@@ -454,7 +485,7 @@ pub async fn get(
     let user_id = user.id;
 
     let record = conditional_query_as!(
-        BookableAppointmentType,
+        BookableAppointmentModel,
         r#"SELECT
             ba.id,
             ba.asset_id,
@@ -465,13 +496,23 @@ pub async fn get(
             ba.cancelled_at,
             ba.cancellation_reason as "cancellation_reason: CancellationReason",
             ba.activated,
-            ba.maintenance
+            ba.maintenance,
+            {#transaction_info}
         FROM
             bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id
-            LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE ba.id = {id} AND (ba.account_id = {user_id} OR account_bookable_perm_exists({user_id}, b.asset_type_id, 'admin'::bookable_perm))"#,
+            LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id
+            LEFT JOIN credit_ledger cl ON ba.transaction_id = cl.id
+            LEFT JOIN credit_ledger clr ON clr.refund_of = cl.id
+            WHERE ba.id = {id} AND (ba.account_id = {user_id} OR account_bookable_perm_exists({user_id}, b.asset_type_id, 'admin'::bookable_perm))"#,
             #account_info = match(opts.account_info){
                  true => r#"jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account: AccountEmbed","#,
                 false => r#"null AS "account: AccountEmbed","#
+            },
+            #transaction_info= match(opts.transaction_info){
+                true => r#"CASE WHEN cl.id IS NOT NULL THEN jsonb_build_object('id', cl.id, 'credits', cl.credits, 'status', cl.status) ELSE null END AS "transaction: TransactionEmbed",
+                        CASE WHEN clr.id IS NOT NULL THEN jsonb_build_object('id', clr.id, 'credits', clr.credits, 'status', clr.status) ELSE null END AS "refund_transaction: TransactionEmbed""#,
+                false => r#"null AS "transaction: TransactionEmbed",
+                        null AS "refund_transaction: TransactionEmbed""#,
             }
 
     )
