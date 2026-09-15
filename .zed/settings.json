@@ -15,6 +15,8 @@
         // get more cargo-less diagnostics from rust-analyzer,
         // which might include false-positives (those can be turned off by their names)
         "diagnostics": {},
+        // vialo-dhcp only compiles on linux, causing a cold check everytime
+        "check": { "workspace": false },
       },
     },
   },
