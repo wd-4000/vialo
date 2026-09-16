@@ -47,8 +47,13 @@ pub struct BookableAppointmentFilterOptions {
 pub struct TransactionEmbed {
     pub id: Uuid,
     pub credits: Option<i32>,
-    pub status: Option<TransactionStatus>,
+    pub from_account_id: Option<Uuid>,
+    pub to_account_id: Option<Uuid>,
+    pub status: TransactionStatus,
+    pub created_at: DateTime<Utc>,
 }
+
+impl_jsonb_embed!(TransactionEmbed);
 
 #[derive(Serialize, ToSchema)]
 pub struct BookableAppointmentModel {
@@ -68,8 +73,6 @@ pub struct BookableAppointmentModel {
     pub activated: Option<chrono::DateTime<chrono::Utc>>,
     pub maintenance: Option<bool>,
 }
-
-impl_jsonb_embed!(TransactionEmbed);
 
 #[derive(Serialize, ToSchema)]
 pub struct BookableAppointmentListModel {
@@ -509,8 +512,8 @@ pub async fn get(
                 false => r#"null AS "account: AccountEmbed","#
             },
             #transaction_info= match(opts.transaction_info){
-                true => r#"CASE WHEN cl.id IS NOT NULL THEN jsonb_build_object('id', cl.id, 'credits', cl.credits, 'status', cl.status) ELSE null END AS "transaction: TransactionEmbed",
-                        CASE WHEN clr.id IS NOT NULL THEN jsonb_build_object('id', clr.id, 'credits', clr.credits, 'status', clr.status) ELSE null END AS "refund_transaction: TransactionEmbed""#,
+                true => r#"CASE WHEN cl.id IS NOT NULL THEN jsonb_build_object('id', cl.id, 'from_account_id', cl.from_account, 'to_account_id', cl.to_account, 'credits', cl.credits, 'created_at', cl.created_at, 'status', cl.status) ELSE null END AS "transaction?: TransactionEmbed",
+                        CASE WHEN clr.id IS NOT NULL THEN jsonb_build_object('id', clr.id, 'from_account_id', clr.from_account, 'to_account_id', clr.to_account, 'credits', clr.credits, 'created_at', clr.created_at, 'status', clr.status) ELSE null END AS "refund_transaction?: TransactionEmbed""#,
                 false => r#"null AS "transaction: TransactionEmbed",
                         null AS "refund_transaction: TransactionEmbed""#,
             }
