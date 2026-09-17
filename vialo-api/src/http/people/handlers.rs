@@ -466,7 +466,13 @@ pub async fn add_person(
             created_user.id
         )
         .fetch_one(trans.deref_mut())
-        .await?;
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => {
+                VialoError::AppError(StatusCode::NOT_FOUND, "realm_not_found".to_string())
+            }
+            _ => VialoError::Anyhow(e.into()),
+        })?;
 
         response.as_object_mut().unwrap().insert(
             "network".into(),
