@@ -212,7 +212,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
     JOIN credit_ledger cl ON ba.transaction_id = cl.id
     JOIN accounts_people ap ON ap.id = ba.account_id
     JOIN bookable_assets bast ON bast.id = ba.asset_id
-    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.requires_activation AND cs.expiry_refund_percent IS NOT NULL AND greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period <= NOW()"#,
+    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.requires_activation AND cs.expiry_refund_percent IS NOT NULL AND greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period <= NOW() AND cl.status <> 'refunded'"#,
         &["en".into(), "de".into()],
     )
     .fetch_all(&app_state.db)

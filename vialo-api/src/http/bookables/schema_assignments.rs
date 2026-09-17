@@ -127,7 +127,7 @@ pub async fn post(
                     SELECT cl.from_account, cancelled.transaction_id, cl.credits
                     FROM cancelled
                     JOIN credit_ledger cl ON cl.id = cancelled.transaction_id
-                    WHERE cl.from_account IS NOT NULL AND cl.credits > 0"#,
+                    WHERE cl.from_account IS NOT NULL AND cl.credits > 0 AND cl.status <> 'refunded'"#,
                     body.assignment.begins,
                     id
                 )

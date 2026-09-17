@@ -134,23 +134,39 @@ pub async fn undo(
     Extension(user): Extension<User>,
     MaybeJsonE(body): MaybeJsonE<UndoTransactionSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
+    let transaction = sqlx::query!(
+        r#"SELECT status as "status: TransactionStatus" FROM credit_ledger WHERE id = $1"#,
+        id
+    )
+    .fetch_one(&data.db)
+    .await?;
+
+    if transaction.status == TransactionStatus::Refunded {
+        return Err(VialoError::AppError(
+            StatusCode::BAD_REQUEST,
+            "already_refunded".into(),
+        ));
+    }
+
+    // Check for an associated product. If there are any, figure out what to do
+    let products = sqlx::query_scalar!(
+        r#"SELECT ba.id
+        FROM bookable_appointments ba
+        WHERE transaction_id = $1"#,
+        id
+    )
+    .fetch_all(&data.db)
+    .await?;
+
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    // Check for an associated product. If there is one, figure out what to do
-    let product = sqlx::query!(
-        "SELECT id, asset_id FROM bookable_appointments WHERE transaction_id = $1 LIMIT 1",
-        id
-    )
-    .fetch_optional(&mut *trans)
-    .await?;
-
-    if let Some(product) = product {
+    if products.len() > 0 {
         match body.and_then(|b| b.cancel_associated_product) {
             Some(true) => {
                 sqlx::query!(
-                    "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = 'admin' WHERE id = $1",
-                    product.id
+                    "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = 'admin' WHERE id = ANY($1)",
+                    &products
                 )
                 .execute(&mut *trans)
                 .await?;

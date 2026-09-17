@@ -281,6 +281,7 @@ pub async fn delete_appointment(
           ba.activated,
           coalesce(cl.credits, 0) as credits,
           cl.from_account,
+          cl.status as "status: TransactionStatus",
           ba.maintenance,
           b.asset_type_id,
           COALESCE(p.refund_percent, 0) AS current_refund_percent
@@ -333,33 +334,37 @@ pub async fn delete_appointment(
         ));
     }
 
+    let refund_credits =
+        appointment.credits.unwrap_or(0) * appointment.current_refund_percent.unwrap_or(0) / 100;
+
     if let Some(expected) = body.expected_credits {
-        let actual_credits = appointment.credits.unwrap_or(0);
-        if actual_credits != expected {
+        if refund_credits != expected {
             tracing::error!(
                 "expected_credits: expected {} got {}",
                 expected,
-                actual_credits
+                refund_credits
             );
 
+            let details = serde_json::json!({
+                "expected": expected,
+                "actual": refund_credits,
+                "appointment_id": id,
+            });
             health::add_health_event(
                 &data.db,
                 Subsystem::App,
                 "expected_credits",
-                Some(serde_json::json!({
-                    "expected": expected,
-                    "actual": actual_credits,
-                    "appointment_id": id,
-                })),
+                Some(&details),
                 10,
                 false,
                 None,
             )
             .await;
 
-            return Err(VialoError::AppError(
+            return Err(VialoError::AppErrorWithDetails(
                 StatusCode::CONFLICT,
                 "expected_credits".to_string(),
+                details,
             ));
         }
     }
@@ -378,8 +383,6 @@ pub async fn delete_appointment(
         ));
     }
 
-    let refund_credits =
-        appointment.credits.unwrap_or(0) * appointment.current_refund_percent.unwrap_or(0) / 100;
     if body.process_refund.unwrap_or(true) && refund_credits > 0 {
         query!(
             "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
