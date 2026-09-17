@@ -81,6 +81,7 @@ pub async fn auth_middleware(
                 .is_some_and(|c| c.contains("ory_kratos_session"))
         {
             request.extensions_mut().insert(AuthError::Unauthorized);
+            request.extensions_mut().insert(Option::<User>::None);
             return Ok(next.run(request).await);
         }
         // Call Kratos to validate session
