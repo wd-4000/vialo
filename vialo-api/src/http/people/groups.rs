@@ -1,4 +1,5 @@
 use serde_with::{NoneAsEmptyString, serde_as};
+use sqlx::PgExecutor;
 use utoipa::ToSchema;
 
 use super::{
@@ -10,7 +11,8 @@ use crate::{
     http::{
         people::models::GroupGetModel,
         util::{
-            JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans, is_unique_violation,
+            JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
+            is_unique_violation,
             models::{AccountPersonEmbed, RoomEmbed},
         },
     },
@@ -122,25 +124,57 @@ pub struct GroupMemberReport {
     pub accounts: Option<Vec<AccountPersonEmbed>>,
 }
 
-#[utoipa::path(get, path = "/people/groups/members", params(UserFilterOptions), responses((status = 200, description = "OK", body = Vec<GroupMemberReport>)))]
-pub async fn list_all_group_members(
+#[utoipa::path(get, path = "/people/groups/overview", params(UserFilterOptions), responses((status = 200, description = "OK", body = Vec<GroupMemberReport>)))]
+pub async fn list_all_group_overview(
     Query(opts): Query<UserFilterOptions>,
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
     let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
-    // This might be red in rust-analyzer. Ignore this.
     let record = conditional_query_as!(
         GroupMemberReport,
         r#"SELECT ag.id, ag.label, ag.icon, ag.email, array_agg(jsonb_build_object('id', cro.id, 'full_name', cro.full_name, 'room', (CASE WHEN cro.room_id IS NOT NULL THEN jsonb_build_object('id', cro.room_id, 'label', cro.room_name) ELSE NULL END))) as "accounts: Vec<AccountPersonEmbed>" FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id {#public_only} GROUP BY ag.id LIMIT {limit} OFFSET {offset}"#,
         #public_only = match (check_app_role(user, crate::permissions::AppRole::AccountManager, &data.db).await.is_ok()){
-                true => "",
+                true => "WHERE TRUE",
                 false => "WHERE ag.public = true"
-            }
+            },
 
     )
     .fetch_all(&data.db)
+    .await?;
+
+    Ok((StatusCode::OK, Json(record)))
+}
+
+#[utoipa::path(get, path = "/people/groups/{id}/overview", responses((status = 200, description = "OK", body = GroupMemberReport)))]
+pub async fn get_group_overview(
+    Path(id): Path<Uuid>,
+    Extension(user_o): Extension<Option<User>>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    let is_manager = match &user_o {
+        Some(u) => check_app_role(u.clone(), AppRole::AccountManager, &data.db)
+            .await
+            .is_ok(),
+        None => false,
+    };
+
+    // This might be red in rust-analyzer. Ignore this.
+    let record =   conditional_query_as!(
+        GroupMemberReport,
+        r#"SELECT ag.id, ag.label, ag.icon, ag.email, {#include_members} FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id {#public_only} AND ag.id = {id} GROUP BY ag.id"#,
+        #include_members = match user_o {
+            Some(_) => r#"array_agg(jsonb_build_object('id', cro.id, 'full_name', cro.full_name, 'room', (CASE WHEN cro.room_id IS NOT NULL THEN jsonb_build_object('id', cro.room_id, 'label', cro.room_name) ELSE NULL END))) as "accounts: Vec<AccountPersonEmbed>""#,
+            None => r#"null as "accounts: Vec<AccountPersonEmbed>""#,
+        },
+        #public_only = match is_manager {
+            true => "WHERE TRUE",
+            false => "WHERE ag.public = true",
+        },
+
+    )
+    .fetch_one(&data.db)
     .await?;
 
     Ok((StatusCode::OK, Json(record)))
@@ -257,9 +291,13 @@ pub async fn post_group(
     )
     .fetch_one(&mut *conn)
     .await
-    .map_err(|e| if is_unique_violation(&e) {
-        VialoError::AppError(StatusCode::CONFLICT, "email_conflict".into())
-    } else { e.into() })?;
+    .map_err(|e| {
+        if is_unique_violation(&e) {
+            VialoError::AppError(StatusCode::CONFLICT, "email_conflict".into())
+        } else {
+            e.into()
+        }
+    })?;
 
     Ok(Json(new_group))
 }
@@ -302,9 +340,13 @@ pub async fn put_group(
     )
     .execute(&mut *trans)
     .await
-    .map_err(|e| if is_unique_violation(&e) {
-        VialoError::AppError(StatusCode::CONFLICT, "email_conflict".into())
-    } else { e.into() })?;
+    .map_err(|e| {
+        if is_unique_violation(&e) {
+            VialoError::AppError(StatusCode::CONFLICT, "email_conflict".into())
+        } else {
+            e.into()
+        }
+    })?;
 
     // We want to change app roles
     if let Some(new_app_roles) = body.app_roles {

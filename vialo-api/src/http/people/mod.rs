@@ -8,6 +8,7 @@ use axum::{
 
 use crate::{
     AppState,
+    http::util,
     permissions::{AppRole, require_app_role},
 };
 
@@ -85,7 +86,7 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     // Handlers themselves filter private groups for non-managers.
     let group_read_routes = Router::new()
         .route("/groups", get(groups::list_groups))
-        .route("/groups/members", get(groups::list_all_group_members))
+        .route("/groups/overview", get(groups::list_all_group_overview))
         .route("/groups/{id}", get(groups::get_group))
         .route(
             "/groups/{group_id}/members",
@@ -113,6 +114,7 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/{id}/amenities/generate", post(amenities::generate))
         .route("/me/amenities", get(amenities::get_me));
 
+    // All of these routes save for the group overview route require authentication
     let mut builder = Router::new()
         .merge(me_routes)
         .merge(credit_routes)
@@ -134,6 +136,13 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             .route("/me/printer", get(printer::get_me))
             .route("/{id}/printer/unlink", post(printer::unlink));
     }
+
+    builder = builder
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            util::middleware::auth_required,
+        ))
+        .route("/groups/{id}/overview", get(groups::get_group_overview));
 
     builder
 }
