@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance\n        FROM\n            bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id\n            LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE ba.id = $1 AND (ba.account_id = $2 OR account_bookable_perm_exists($2, b.asset_type_id, 'admin'::bookable_perm))",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance,\n            CASE WHEN cl.id IS NOT NULL THEN jsonb_build_object('id', cl.id, 'from_account_id', cl.from_account, 'to_account_id', cl.to_account, 'credits', cl.credits, 'created_at', cl.created_at, 'status', cl.status) ELSE null END AS \"transaction?: TransactionEmbed\",\n                        CASE WHEN clr.id IS NOT NULL THEN jsonb_build_object('id', clr.id, 'from_account_id', clr.from_account, 'to_account_id', clr.to_account, 'credits', clr.credits, 'created_at', clr.created_at, 'status', clr.status) ELSE null END AS \"refund_transaction?: TransactionEmbed\"\n        FROM\n            bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id\n            LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id\n            LEFT JOIN credit_ledger cl ON ba.transaction_id = cl.id\n            LEFT JOIN credit_ledger clr ON clr.refund_of = cl.id\n            WHERE ba.id = $1 AND (ba.account_id = $2 OR account_bookable_perm_exists($2, b.asset_type_id, 'admin'::bookable_perm))",
   "describe": {
     "columns": [
       {
@@ -39,7 +39,7 @@
       {
         "ordinal": 3,
         "name": "account: AccountEmbed",
-        "type_info": "Jsonb",
+        "type_info": "Text",
         "origin": "Expression"
       },
       {
@@ -108,6 +108,18 @@
             "name": "maintenance"
           }
         }
+      },
+      {
+        "ordinal": 10,
+        "name": "transaction?: TransactionEmbed",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 11,
+        "name": "refund_transaction?: TransactionEmbed",
+        "type_info": "Jsonb",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -126,8 +138,10 @@
       true,
       true,
       true,
-      false
+      false,
+      null,
+      null
     ]
   },
-  "hash": "8aca5d5cda9ec219cbe91cee24d2728ab9f8e616e75590af8697355bc874e6d8"
+  "hash": "17c82f21ca9be5f9f68586c575acfae533134ed02d87edf269417e278631e605"
 }
