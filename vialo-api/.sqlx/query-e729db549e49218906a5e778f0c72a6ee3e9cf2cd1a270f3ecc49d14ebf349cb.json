@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT status as \"status: TransactionStatus\" FROM credit_ledger WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status: TransactionStatus",
+        "type_info": {
+          "Custom": {
+            "name": "transaction_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "done",
+                "refunded"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "credit_ledger",
+            "name": "status"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e729db549e49218906a5e778f0c72a6ee3e9cf2cd1a270f3ecc49d14ebf349cb"
+}

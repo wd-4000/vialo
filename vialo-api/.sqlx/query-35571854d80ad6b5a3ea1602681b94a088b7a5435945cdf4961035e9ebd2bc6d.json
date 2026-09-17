@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = 'admin' WHERE id = ANY($1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "35571854d80ad6b5a3ea1602681b94a088b7a5435945cdf4961035e9ebd2bc6d"
+}
