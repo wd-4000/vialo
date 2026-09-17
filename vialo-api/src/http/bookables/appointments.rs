@@ -337,8 +337,8 @@ pub async fn delete_appointment(
     let refund_credits =
         appointment.credits.unwrap_or(0) * appointment.current_refund_percent.unwrap_or(0) / 100;
 
-    if let Some(expected) = body.expected_credits {
-        if refund_credits != expected {
+    if let Some(expected) = body.expected_credits
+        && refund_credits != expected {
             tracing::error!(
                 "expected_credits: expected {} got {}",
                 expected,
@@ -367,7 +367,6 @@ pub async fn delete_appointment(
                 details,
             ));
         }
-    }
 
     let result = sqlx::query!(
         "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = $2 WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",

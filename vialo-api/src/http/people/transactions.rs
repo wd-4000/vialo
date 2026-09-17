@@ -161,7 +161,7 @@ pub async fn undo(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    if products.len() > 0 {
+    if !products.is_empty() {
         match body.and_then(|b| b.cancel_associated_product) {
             Some(true) => {
                 sqlx::query!(

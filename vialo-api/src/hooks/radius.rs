@@ -338,5 +338,5 @@ pub(crate) async fn post_auth(
 
     trans.commit().await?;
 
-    return Ok(StatusCode::NO_CONTENT);
+    Ok(StatusCode::NO_CONTENT)
 }

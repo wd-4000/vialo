@@ -431,7 +431,7 @@ pub async fn main(
                                             );
                                             let new_printer_id = restore_printer_account(
                                                 &mut printer,
-                                                &mut *conn,
+                                                &mut conn,
                                                 *account_id,
                                             )
                                             .await?;
@@ -700,7 +700,7 @@ pub async fn main(
                                             );
                                             restore_printer_account(
                                                 &mut printer,
-                                                &mut *conn,
+                                                &mut conn,
                                                 *account_id,
                                             )
                                             .await?;

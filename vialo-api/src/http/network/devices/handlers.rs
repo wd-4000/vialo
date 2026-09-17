@@ -514,7 +514,7 @@ pub async fn get_device_overview(
                 cred.password = password.clone();
             });
 
-        return Ok(device);
+        Ok(device)
     };
 
     // Permission check by way of JOIN and fall-through to the account check
@@ -732,7 +732,7 @@ pub async fn reset_password(
         trans.commit().await?;
 
         return Ok(Json(vec![ResetPasswordResultDevice {
-            id: id,
+            id,
             label: network.device_label,
             credential: ResetPasswordResultCredential {
                 id: cred_id,
