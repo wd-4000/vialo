@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT ag.id, ag.label, ag.icon, ag.email, null as \"accounts: Vec<AccountPersonEmbed>\" FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id WHERE ag.public = true AND ag.id = $1 GROUP BY ag.id",
+  "query": "SELECT\n            id,\n            label,\n            email,\n            icon,\n            public,\n            get_i18n_string(description_i18n, $1) AS description\n        FROM account_groups WHERE TRUE  AND label ILIKE '%' || $2 || '%' LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -27,17 +27,6 @@
       },
       {
         "ordinal": 2,
-        "name": "icon",
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "account_groups",
-            "name": "icon"
-          }
-        }
-      },
-      {
-        "ordinal": 3,
         "name": "email",
         "type_info": {
           "Custom": {
@@ -53,15 +42,40 @@
         }
       },
       {
+        "ordinal": 3,
+        "name": "icon",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "icon"
+          }
+        }
+      },
+      {
         "ordinal": 4,
-        "name": "accounts: Vec<AccountPersonEmbed>",
+        "name": "public",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "public"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
         "type_info": "Text",
         "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "TextArray",
+        "Text",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -69,8 +83,9 @@
       false,
       true,
       true,
+      false,
       null
     ]
   },
-  "hash": "6075894a5c7780aa84035051947a42d41c4945c9dce648ad398ddf0b8d194fef"
+  "hash": "472364127efe4b08cafd03dd7153fb33466f768295077d716737c03c20a58e5b"
 }

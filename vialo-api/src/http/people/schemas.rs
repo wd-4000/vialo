@@ -24,20 +24,13 @@ pub struct UserFilterOptions {
     pub resident: Option<bool>,
 }
 
-/*
-{
-  "first_name": "Name",
-  "last_name": "Surname",
-  "email": "bruh@bruh.com",
-  "contract": {
-    "room": "0909",
-    "begins": "2025-02-27",
-    "ends": "2025-02-26"
-  },
-  "label": "",
-  "membership_until": "0222-02-22"
+#[derive(Deserialize, Debug, Default, IntoParams)]
+pub struct GroupFilterOptions {
+    pub lang: Option<Vec<String>>,
+    pub search: Option<String>,
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
 }
-*/
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ContractInfo {

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM account_groups WHERE id = $1 RETURNING description_i18n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "description_i18n",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "description_i18n"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "be3e1e979c52607ff75fadffba1c4d476cd1ee56660f2e22e816623a0a2fc4bf"
+}

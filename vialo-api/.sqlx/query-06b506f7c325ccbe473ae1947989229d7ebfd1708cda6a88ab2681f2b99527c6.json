@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT ag.id, ag.label, ag.email, ag.icon, ag.public,  COALESCE(\n                array_agg(agra.role) FILTER (WHERE agra.role IS NOT NULL),\n                '{}'::app_role[]\n            ) as \"app_roles!: Vec<AppRole>\" FROM account_groups ag LEFT JOIN account_group_app_roles agra ON ag.id = agra.group_id WHERE id = $1 GROUP BY ag.id",
+  "query": "SELECT ag.id, ag.label, ag.email, ag.icon, ag.public, get_i18n_string(ag.description_i18n, $2) AS description, COALESCE(\n                array_agg(agra.role) FILTER (WHERE agra.role IS NOT NULL),\n                '{}'::app_role[]\n            ) as \"app_roles!: Vec<AppRole>\" FROM account_groups ag LEFT JOIN account_group_app_roles agra ON ag.id = agra.group_id WHERE id = $1 GROUP BY ag.id",
   "describe": {
     "columns": [
       {
@@ -65,6 +65,12 @@
       },
       {
         "ordinal": 5,
+        "name": "description",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
         "name": "app_roles!: Vec<AppRole>",
         "type_info": {
           "Custom": {
@@ -95,7 +101,8 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "TextArray"
       ]
     },
     "nullable": [
@@ -104,8 +111,9 @@
       true,
       true,
       false,
+      null,
       null
     ]
   },
-  "hash": "2241f9831336813a687bdb138ee6553378d80cb83406d45ea3165ec83c72e9b8"
+  "hash": "06b506f7c325ccbe473ae1947989229d7ebfd1708cda6a88ab2681f2b99527c6"
 }

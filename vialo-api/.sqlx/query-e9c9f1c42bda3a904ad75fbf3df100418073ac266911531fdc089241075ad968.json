@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO account_groups (label,email,public,icon) VALUES ($1,$2,$3,$4) returning *",
+  "query": "SELECT ag.id, ag.label, ag.icon, ag.email, get_i18n_string(ag.description_i18n, $1) AS description, null as \"accounts: Vec<AccountPersonEmbed>\" FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id WHERE ag.public = true AND ag.id = $2 GROUP BY ag.id",
   "describe": {
     "columns": [
       {
@@ -54,27 +54,21 @@
       },
       {
         "ordinal": 4,
-        "name": "public",
-        "type_info": "Bool",
-        "origin": {
-          "Table": {
-            "table": "account_groups",
-            "name": "public"
-          }
-        }
+        "name": "description",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "accounts: Vec<AccountPersonEmbed>",
+        "type_info": "Text",
+        "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        {
-          "Custom": {
-            "name": "citext",
-            "kind": "Simple"
-          }
-        },
-        "Bool",
-        "Text"
+        "TextArray",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -82,8 +76,9 @@
       false,
       true,
       true,
-      false
+      null,
+      null
     ]
   },
-  "hash": "546989653ba5c5501a180a92332594de456fe84f8a606cd3bee4ea2cdd2399bc"
+  "hash": "e9c9f1c42bda3a904ad75fbf3df100418073ac266911531fdc089241075ad968"
 }

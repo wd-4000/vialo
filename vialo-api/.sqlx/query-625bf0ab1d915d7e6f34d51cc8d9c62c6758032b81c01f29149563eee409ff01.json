@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT ag.id, ag.label, ag.icon, ag.email, null as \"accounts: Vec<AccountPersonEmbed>\" FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id WHERE TRUE AND ag.id = $1 GROUP BY ag.id",
+  "query": "SELECT ag.id, ag.label, ag.icon, ag.email, get_i18n_string(ag.description_i18n, $1) AS description, null as \"accounts: Vec<AccountPersonEmbed>\" FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id WHERE TRUE AND ag.id = $2 GROUP BY ag.id",
   "describe": {
     "columns": [
       {
@@ -54,6 +54,12 @@
       },
       {
         "ordinal": 4,
+        "name": "description",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
         "name": "accounts: Vec<AccountPersonEmbed>",
         "type_info": "Text",
         "origin": "Expression"
@@ -61,6 +67,7 @@
     ],
     "parameters": {
       "Left": [
+        "TextArray",
         "Uuid"
       ]
     },
@@ -69,8 +76,9 @@
       false,
       true,
       true,
+      null,
       null
     ]
   },
-  "hash": "2d5e294d71f7e1d17323c47aab1e8ccd1c886091558811baf6bb0a3f37c779d8"
+  "hash": "625bf0ab1d915d7e6f34d51cc8d9c62c6758032b81c01f29149563eee409ff01"
 }

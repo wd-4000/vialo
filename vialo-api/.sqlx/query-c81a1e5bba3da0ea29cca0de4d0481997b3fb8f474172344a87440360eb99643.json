@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * FROM account_groups WHERE TRUE  AND label ILIKE '%' || $1 || '%' LIMIT $2 OFFSET $3",
+  "query": "INSERT INTO account_groups (label,email,public,icon,description_i18n) VALUES ($1,$2,$3,$4,$5) returning id, label, email, icon, public, get_i18n_string(description_i18n, $6) AS description",
   "describe": {
     "columns": [
       {
@@ -27,17 +27,6 @@
       },
       {
         "ordinal": 2,
-        "name": "icon",
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "account_groups",
-            "name": "icon"
-          }
-        }
-      },
-      {
-        "ordinal": 3,
         "name": "email",
         "type_info": {
           "Custom": {
@@ -53,6 +42,17 @@
         }
       },
       {
+        "ordinal": 3,
+        "name": "icon",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "icon"
+          }
+        }
+      },
+      {
         "ordinal": 4,
         "name": "public",
         "type_info": "Bool",
@@ -62,13 +62,27 @@
             "name": "public"
           }
         }
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Text",
+        "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
         "Text",
-        "Int8",
-        "Int8"
+        {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        },
+        "Bool",
+        "Text",
+        "Int4",
+        "TextArray"
       ]
     },
     "nullable": [
@@ -76,8 +90,9 @@
       false,
       true,
       true,
-      false
+      false,
+      null
     ]
   },
-  "hash": "37ecf4847ce945d81d550661171fd41365637e0539d18878ce262d9d994f1935"
+  "hash": "c81a1e5bba3da0ea29cca0de4d0481997b3fb8f474172344a87440360eb99643"
 }

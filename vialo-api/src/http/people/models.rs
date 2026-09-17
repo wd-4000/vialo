@@ -1,11 +1,12 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use sqlx::types::JsonValue;
 use sqlx::types::ipnetwork::{self};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    helpers::PgDate,
+    helpers::{I18nMap, PgDate},
     http::util::models::{AccountEmbed, AccountPersonEmbed, ProductEmbed, ProductType, RoomEmbed},
     permissions::{AppRole, GroupRole},
 };
@@ -42,6 +43,7 @@ pub struct GroupListModel {
     pub email: Option<String>,
     pub icon: Option<String>,
     pub public: bool,
+    pub description: Option<String>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
@@ -53,6 +55,20 @@ pub struct GroupGetModel {
     pub icon: Option<String>,
     pub public: bool,
     pub app_roles: Vec<AppRole>,
+    pub description: Option<String>,
+}
+
+#[derive(Serialize, Debug, ToSchema)]
+pub struct GroupGetModelAllLanguages {
+    pub id: Uuid,
+    pub label: String,
+    #[schema(format = Email)]
+    pub email: Option<String>,
+    pub icon: Option<String>,
+    pub public: bool,
+    pub app_roles: Vec<AppRole>,
+    #[schema(value_type = Option<I18nMap>)]
+    pub description: Option<JsonValue>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]

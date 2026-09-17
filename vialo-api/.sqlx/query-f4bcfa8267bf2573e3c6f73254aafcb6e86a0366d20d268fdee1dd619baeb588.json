@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE account_groups SET label = $2, email = $3, public = $4, icon = $5,\n            description_i18n = CASE\n                WHEN cardinality($6::text[]) > 0 THEN update_i18n_strings(description_i18n, $6, $7)\n                ELSE description_i18n\n            END\n        WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        },
+        "Bool",
+        "Text",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f4bcfa8267bf2573e3c6f73254aafcb6e86a0366d20d268fdee1dd619baeb588"
+}

@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ag.id, ag.label, ag.email, ag.icon, ag.public, get_i18n_all_string_translations(ag.description_i18n) AS description, COALESCE(\n                array_agg(agra.role) FILTER (WHERE agra.role IS NOT NULL),\n                '{}'::app_role[]\n            ) as \"app_roles!: Vec<AppRole>\" FROM account_groups ag LEFT JOIN account_group_app_roles agra ON ag.id = agra.group_id WHERE id = $1 GROUP BY ag.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "label"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "icon",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "icon"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "public",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "public"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "app_roles!: Vec<AppRole>",
+        "type_info": {
+          "Custom": {
+            "name": "app_role[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "app_role",
+                  "kind": {
+                    "Enum": [
+                      "account_manager",
+                      "credit_manager",
+                      "bookable_manager",
+                      "board_manager",
+                      "home_manager",
+                      "network_manager",
+                      "history_viewer",
+                      "health_viewer"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "08f162a3558ef48a6d87dcf821c15b5135cab0234431a57b6d67a56f8edf6fe6"
+}

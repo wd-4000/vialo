@@ -2,165 +2,6 @@
 CREATE EXTENSION citext;
 
 --
--- Accounts
---
--- Table that stores Ory Kratos identity info
-CREATE TABLE identities (
-  id uuid PRIMARY KEY,
-  full_name text,
-  email text,
-  phone text,
-  room text
-);
-
--- General account info
-CREATE TABLE accounts (
-  id uuid PRIMARY KEY default gen_random_uuid(),
-  full_name text
-);
-
-CREATE TABLE accounts_people (
-  id uuid PRIMARY KEY REFERENCES accounts (id) ON DELETE CASCADE,
-  label text, -- Account purpose (or something else in the future)
-  auth_id uuid REFERENCES identities (id), -- Ory Kratos ID. NULL = Either a virtual user, or just not signed up yet.
-  email citext UNIQUE,
-  membership_start date,
-  membership_end date not null, -- Association membership end. Expired = No access.
-  full_name text,
-  manually_suspended boolean not null default false, -- True = No access to any syiervices.
-  credit_balance int DEFAULT 0, -- NULL = unlimited credits
-  amenities_username text UNIQUE, -- Amenities login username. NULL = not provisioned.
-  amenities_pin BYTEA -- Encrypted amenities login PIN
-);
-
-CREATE INDEX account_auth_idx ON accounts_people (auth_id);
-
--- Account groups
-CREATE TABLE account_groups (
-  id uuid PRIMARY KEY REFERENCES accounts (id),
-  label text NOT NULL, -- Group name
-  icon text,
-  email citext UNIQUE,
-  public bool NOT NULL
-);
-
-CREATE TYPE group_role AS ENUM('member', 'manager');
-
-CREATE TABLE account_group_memberships (
-  account_id uuid NOT NULL REFERENCES accounts_people (id) ON DELETE CASCADE,
-  group_id uuid NOT NULL REFERENCES account_groups (id),
-  role group_role NOT NULL,
-  PRIMARY KEY (account_id, group_id)
-);
-
-CREATE OR REPLACE FUNCTION enforce_account_class () RETURNS TRIGGER AS $$
-DECLARE
-    f_account_id uuid;
-    f_full_name text;
-BEGIN
-    IF (TG_OP = 'UPDATE') THEN
-        IF TG_TABLE_NAME = 'accounts_people' THEN
-            f_full_name := COALESCE(NEW.full_name, NEW.label);
-        ELSE -- account_groups
-            f_full_name := NEW.label;
-        END IF;
-
-        UPDATE accounts SET full_name = f_full_name WHERE id = NEW.id;
-        RETURN NEW;
-    ELSIF (TG_OP = 'INSERT') THEN
-        IF TG_TABLE_NAME = 'accounts_people' THEN
-            f_full_name := COALESCE(NEW.full_name, NEW.label);
-        ELSE -- account_groups
-            f_full_name := NEW.label;
-        END IF;
-
-        insert into accounts (id, full_name) VALUES (COALESCE(NEW.id, gen_random_uuid()), f_full_name) RETURNING id INTO f_account_id;
-        NEW.id := f_account_id;
-
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        DELETE FROM accounts WHERE id = OLD.id;
-        RETURN OLD;
-    END IF;
-
-END;
-$$ LANGUAGE plpgsql;
-
-create trigger tg_account_class
-before insert or update or delete on accounts_people for each row
-execute FUNCTION enforce_account_class ();
-
-create trigger tg_account_class
-before insert or update or delete on account_groups for each row
-execute FUNCTION enforce_account_class ();
-
-CREATE TYPE app_role AS ENUM(
-  'account_manager',
-  'credit_manager',
-  'bookable_manager',
-  'board_manager',
-  'home_manager',
-  'network_manager',
-  'history_viewer',
-  'health_viewer'
-);
-
-CREATE TABLE account_group_app_roles (
-  role app_role,
-  group_id uuid REFERENCES account_groups (id),
-  PRIMARY KEY (group_id, role)
-);
-
---
--- Residents
---
--- Rooms
-CREATE TABLE res_rooms (
-  id uuid PRIMARY KEY default gen_random_uuid(),
-  label text UNIQUE NOT NULL,
-  capacity int CHECK (capacity > 0),
-  vlan int,
-  floor int
-);
-
--- Leases/contracts for the rooms
-CREATE TABLE res_leases (
-  id uuid PRIMARY KEY default gen_random_uuid(),
-  tenant_id uuid NOT NULL REFERENCES accounts_people (id) ON DELETE CASCADE UNIQUE, -- We don't care about old records, so this is unique
-  lessor_id uuid REFERENCES accounts_people (id), -- NULL means StW. Cascade has to be implemented in-app for the case an active contract is attempted to be deleted.
-  room_id uuid NOT NULL REFERENCES res_rooms (id) ON DELETE CASCADE, -- If a room stops existing there isn't much sense in still having contracts for it.
-  begins date NOT NULL,
-  ends date NOT NULL
-);
-
-CREATE VIEW current_room_occupants AS
-SELECT
-  a.id,
-  COALESCE(a.full_name, a.label) AS full_name,
-  r.label AS room_name,
-  r.id AS room_id
-FROM
-  accounts_people a
-  LEFT JOIN res_leases l ON a.id = l.tenant_id
-  LEFT JOIN res_rooms r ON l.room_id = r.id;
-
-CREATE VIEW group_email_recipients AS
-SELECT
-  ap.email AS account_email,
-  ag.email as group_localpart
-FROM
-  accounts_people ap
-  JOIN account_group_memberships agm ON ap.id = agm.account_id
-  JOIN account_groups ag ON ag.id = agm.group_id
-WHERE
-  ap.email IS NOT NULL
-  AND ap.manually_suspended = false
-  AND ap.membership_end >= CURRENT_DATE;
-
---WHERE
---l.begins <= CURRENT_DATE
---AND (l.ends IS NULL OR l.ends >= CURRENT_DATE);
---
 -- Internationalized strings
 --
 -- This table is here just for autoincrement
@@ -327,6 +168,168 @@ BEGIN
     RETURN idx_id;
 END;
 $$;
+
+
+--
+-- Accounts
+--
+-- Table that stores Ory Kratos identity info
+CREATE TABLE identities (
+  id uuid PRIMARY KEY,
+  full_name text,
+  email text,
+  phone text,
+  room text
+);
+
+-- General account info
+CREATE TABLE accounts (
+  id uuid PRIMARY KEY default gen_random_uuid(),
+  full_name text
+);
+
+CREATE TABLE accounts_people (
+  id uuid PRIMARY KEY REFERENCES accounts (id) ON DELETE CASCADE,
+  label text, -- Account purpose (or something else in the future)
+  auth_id uuid REFERENCES identities (id), -- Ory Kratos ID. NULL = Either a virtual user, or just not signed up yet.
+  email citext UNIQUE,
+  membership_start date,
+  membership_end date not null, -- Association membership end. Expired = No access.
+  full_name text,
+  manually_suspended boolean not null default false, -- True = No access to any syiervices.
+  credit_balance int DEFAULT 0, -- NULL = unlimited credits
+  amenities_username text UNIQUE, -- Amenities login username. NULL = not provisioned.
+  amenities_pin BYTEA -- Encrypted amenities login PIN
+);
+
+CREATE INDEX account_auth_idx ON accounts_people (auth_id);
+
+-- Account groups
+CREATE TABLE account_groups (
+  id uuid PRIMARY KEY REFERENCES accounts (id),
+  description_i18n int REFERENCES i18n_index,
+  label text NOT NULL, -- Group name
+  icon text,
+  email citext UNIQUE,
+  public bool NOT NULL
+);
+
+CREATE TYPE group_role AS ENUM('member', 'manager');
+
+CREATE TABLE account_group_memberships (
+  account_id uuid NOT NULL REFERENCES accounts_people (id) ON DELETE CASCADE,
+  group_id uuid NOT NULL REFERENCES account_groups (id),
+  role group_role NOT NULL,
+  PRIMARY KEY (account_id, group_id)
+);
+
+CREATE OR REPLACE FUNCTION enforce_account_class () RETURNS TRIGGER AS $$
+DECLARE
+    f_account_id uuid;
+    f_full_name text;
+BEGIN
+    IF (TG_OP = 'UPDATE') THEN
+        IF TG_TABLE_NAME = 'accounts_people' THEN
+            f_full_name := COALESCE(NEW.full_name, NEW.label);
+        ELSE -- account_groups
+            f_full_name := NEW.label;
+        END IF;
+
+        UPDATE accounts SET full_name = f_full_name WHERE id = NEW.id;
+        RETURN NEW;
+    ELSIF (TG_OP = 'INSERT') THEN
+        IF TG_TABLE_NAME = 'accounts_people' THEN
+            f_full_name := COALESCE(NEW.full_name, NEW.label);
+        ELSE -- account_groups
+            f_full_name := NEW.label;
+        END IF;
+
+        insert into accounts (id, full_name) VALUES (COALESCE(NEW.id, gen_random_uuid()), f_full_name) RETURNING id INTO f_account_id;
+        NEW.id := f_account_id;
+
+        RETURN NEW;
+    ELSIF TG_OP = 'DELETE' THEN
+        DELETE FROM accounts WHERE id = OLD.id;
+        RETURN OLD;
+    END IF;
+
+END;
+$$ LANGUAGE plpgsql;
+
+create trigger tg_account_class
+before insert or update or delete on accounts_people for each row
+execute FUNCTION enforce_account_class ();
+
+create trigger tg_account_class
+before insert or update or delete on account_groups for each row
+execute FUNCTION enforce_account_class ();
+
+CREATE TYPE app_role AS ENUM(
+  'account_manager',
+  'credit_manager',
+  'bookable_manager',
+  'board_manager',
+  'home_manager',
+  'network_manager',
+  'history_viewer',
+  'health_viewer'
+);
+
+CREATE TABLE account_group_app_roles (
+  role app_role,
+  group_id uuid REFERENCES account_groups (id),
+  PRIMARY KEY (group_id, role)
+);
+
+--
+-- Residents
+--
+-- Rooms
+CREATE TABLE res_rooms (
+  id uuid PRIMARY KEY default gen_random_uuid(),
+  label text UNIQUE NOT NULL,
+  capacity int CHECK (capacity > 0),
+  vlan int,
+  floor int
+);
+
+-- Leases/contracts for the rooms
+CREATE TABLE res_leases (
+  id uuid PRIMARY KEY default gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES accounts_people (id) ON DELETE CASCADE UNIQUE, -- We don't care about old records, so this is unique
+  lessor_id uuid REFERENCES accounts_people (id), -- NULL means StW. Cascade has to be implemented in-app for the case an active contract is attempted to be deleted.
+  room_id uuid NOT NULL REFERENCES res_rooms (id) ON DELETE CASCADE, -- If a room stops existing there isn't much sense in still having contracts for it.
+  begins date NOT NULL,
+  ends date NOT NULL
+);
+
+CREATE VIEW current_room_occupants AS
+SELECT
+  a.id,
+  COALESCE(a.full_name, a.label) AS full_name,
+  r.label AS room_name,
+  r.id AS room_id
+FROM
+  accounts_people a
+  LEFT JOIN res_leases l ON a.id = l.tenant_id
+  LEFT JOIN res_rooms r ON l.room_id = r.id;
+
+CREATE VIEW group_email_recipients AS
+SELECT
+  ap.email AS account_email,
+  ag.email as group_localpart
+FROM
+  accounts_people ap
+  JOIN account_group_memberships agm ON ap.id = agm.account_id
+  JOIN account_groups ag ON ag.id = agm.group_id
+WHERE
+  ap.email IS NOT NULL
+  AND ap.manually_suspended = false
+  AND ap.membership_end >= CURRENT_DATE;
+
+--WHERE
+--l.begins <= CURRENT_DATE
+--AND (l.ends IS NULL OR l.ends >= CURRENT_DATE);
 
 ---
 --- Products
