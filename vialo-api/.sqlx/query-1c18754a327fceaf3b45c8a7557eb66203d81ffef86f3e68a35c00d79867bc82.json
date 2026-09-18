@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,\n            bs.expiry_refund_percent,\n            bs.requires_activation\n        FROM\n            bookable_schemas bs\n        WHERE account_bookable_perm_exists($1, bs.asset_type_id, 'view'::bookable_perm) AND\n        TRUE AND\n        label ILIKE '%' || $2 || '%'\n        LIMIT $3 OFFSET $4",
+  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,\n            bs.expiry_refund_percent,\n            bs.requires_activation,\n            COALESCE(cp.cancellation_policy, ARRAY[]::jsonb[]) AS \"cancellation_policy!: Vec<BookableSchemaCancellationPolicy>\"\n        FROM\n            bookable_schemas bs\n        LEFT JOIN LATERAL (\n            SELECT array_agg(jsonb_build_object('min_notice', EXTRACT(EPOCH FROM bscp.min_notice)::bigint, 'refund_percent', bscp.refund_percent)) as cancellation_policy\n            FROM bookable_schema_cancellation_policy bscp\n            WHERE bscp.schema_id = bs.id\n        ) cp ON true\n        WHERE account_bookable_perm_exists($1, bs.asset_type_id, 'view'::bookable_perm) AND\n        bs.asset_type_id = $2 AND\n        label ILIKE '%' || $3 || '%'\n        LIMIT $4 OFFSET $5",
   "describe": {
     "columns": [
       {
@@ -80,11 +80,18 @@
             "name": "requires_activation"
           }
         }
+      },
+      {
+        "ordinal": 8,
+        "name": "cancellation_policy!: Vec<BookableSchemaCancellationPolicy>",
+        "type_info": "JsonbArray",
+        "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
+        "Int4",
         "Text",
         "Int8",
         "Int8"
@@ -98,8 +105,9 @@
       false,
       null,
       true,
-      false
+      false,
+      null
     ]
   },
-  "hash": "a8112ebd9dfd8a0ed720f142981868941200d5d3cd818dc65bc06a42a52005c0"
+  "hash": "1c18754a327fceaf3b45c8a7557eb66203d81ffef86f3e68a35c00d79867bc82"
 }

@@ -2,9 +2,9 @@ use super::models::BoardPostIdModel;
 use super::permissions::{
     BookablePerm, require_asset_type_perm, require_asset_type_perm_by_schema,
 };
-use crate::AppState;
-use crate::http::util::grab_authd_conn_user;
 use crate::http::util::{JsonE, User, VialoError, clamp_pagination};
+use crate::http::util::{grab_authd_conn_user, grab_trans};
+use crate::{AppState, impl_jsonb_embed};
 use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
@@ -19,6 +19,16 @@ use std::i64;
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct BookableSchemaCancellationPolicy {
+    #[serde_as(as = "DurationSeconds<i64>")]
+    #[schema(value_type = i64)]
+    pub min_notice: TimeDelta,
+    pub refund_percent: i16,
+}
+impl_jsonb_embed!(BookableSchemaCancellationPolicy);
+
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct BookableSchema {
     pub id: i32,
@@ -29,6 +39,7 @@ pub struct BookableSchema {
     pub requires_activation: bool,
     pub activation_grace_period: Option<i64>,
     pub expiry_refund_percent: Option<i16>,
+    pub cancellation_policy: Option<Vec<BookableSchemaCancellationPolicy>>,
 }
 
 /// Schema body minus asset_type_id, for schemas created inline with their asset
@@ -44,6 +55,7 @@ pub struct NewSchemaInline {
     pub activation_grace_period: Option<TimeDelta>,
     pub expiry_refund_percent: Option<i16>,
     pub requires_activation: bool,
+    pub cancellation_policy: Option<Vec<BookableSchemaCancellationPolicy>>,
 }
 
 fn validate_schema_fields(body: &NewSchemaInline) -> Result<(), VialoError> {
@@ -68,6 +80,27 @@ fn validate_schema_fields(body: &NewSchemaInline) -> Result<(), VialoError> {
             return Err(VialoError::AppError(
                 StatusCode::BAD_REQUEST,
                 "activation_grace_period or expiry_refund_percent must not be set when requires_activation is false".into(),
+            ));
+        }
+    }
+    if let Some(policy) = &body.cancellation_policy {
+        if policy
+            .iter()
+            .any(|p| p.min_notice < TimeDelta::zero() || !(0..=100).contains(&p.refund_percent))
+        {
+            return Err(VialoError::AppError(
+                StatusCode::BAD_REQUEST,
+                "cancellation_policy".into(),
+            ));
+        }
+        // min_notice is the table's primary key, so duplicates would fail mid-insert
+        let mut notices = policy.iter().map(|p| p.min_notice).collect::<Vec<_>>();
+        notices.sort();
+        notices.dedup();
+        if notices.len() != policy.len() {
+            return Err(VialoError::AppError(
+                StatusCode::BAD_REQUEST,
+                "cancellation_policy min_notice must be unique".into(),
             ));
         }
     }
@@ -103,9 +136,15 @@ pub async fn list(
             bs.slot_price,
             EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,
             bs.expiry_refund_percent,
-            bs.requires_activation
+            bs.requires_activation,
+            COALESCE(cp.cancellation_policy, ARRAY[]::jsonb[]) AS "cancellation_policy!: Vec<BookableSchemaCancellationPolicy>"
         FROM
             bookable_schemas bs
+        LEFT JOIN LATERAL (
+            SELECT array_agg(jsonb_build_object('min_notice', EXTRACT(EPOCH FROM bscp.min_notice)::bigint, 'refund_percent', bscp.refund_percent)) as cancellation_policy
+            FROM bookable_schema_cancellation_policy bscp
+            WHERE bscp.schema_id = bs.id
+        ) cp ON true
         WHERE account_bookable_perm_exists({user_id_o}, bs.asset_type_id, 'view'::bookable_perm) AND
         {#asset_type} AND
         {#search}
@@ -143,9 +182,15 @@ pub async fn get(
             bs.slot_price,
             EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,
             bs.expiry_refund_percent,
-            bs.requires_activation
+            bs.requires_activation,
+            COALESCE(cp.cancellation_policy, ARRAY[]::jsonb[]) AS "cancellation_policy!: Vec<BookableSchemaCancellationPolicy>"
         FROM
             bookable_schemas bs
+        LEFT JOIN LATERAL (
+            SELECT array_agg(jsonb_build_object('min_notice', EXTRACT(EPOCH FROM bscp.min_notice)::bigint, 'refund_percent', bscp.refund_percent)) as cancellation_policy
+            FROM bookable_schema_cancellation_policy bscp
+            WHERE bscp.schema_id = bs.id
+        ) cp ON true
         WHERE bs.id = $1
           AND account_bookable_perm_exists($2, bs.asset_type_id, 'view'::bookable_perm)"#,
         id,
@@ -192,6 +237,7 @@ pub struct BookableSchemaPostOrPut {
     pub activation_grace_period: Option<TimeDelta>,
     pub expiry_refund_percent: Option<i16>,
     pub requires_activation: bool,
+    pub cancellation_policy: Option<Vec<BookableSchemaCancellationPolicy>>,
 }
 
 impl BookableSchemaPostOrPut {
@@ -205,9 +251,47 @@ impl BookableSchemaPostOrPut {
                 activation_grace_period: self.activation_grace_period,
                 expiry_refund_percent: self.expiry_refund_percent,
                 requires_activation: self.requires_activation,
+                cancellation_policy: self.cancellation_policy,
             },
         )
     }
+}
+
+/// Replaces a schema's cancellation policy. None leaves the existing rows alone.
+async fn replace_cancellation_policy(
+    db: &mut PgConnection,
+    schema_id: i32,
+    policy: Option<&[BookableSchemaCancellationPolicy]>,
+) -> Result<(), VialoError> {
+    let Some(policy) = policy else {
+        return Ok(());
+    };
+
+    query!(
+        "DELETE FROM bookable_schema_cancellation_policy WHERE schema_id = $1",
+        schema_id
+    )
+    .execute(&mut *db)
+    .await?;
+
+    if policy.is_empty() {
+        return Ok(());
+    }
+
+    let min_notice = policy
+        .iter()
+        .map(|p| PgInterval::try_from(p.min_notice))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?;
+    let refund_percent = policy.iter().map(|p| p.refund_percent).collect::<Vec<_>>();
+
+    query!("INSERT INTO bookable_schema_cancellation_policy (schema_id, min_notice, refund_percent)
+        SELECT $1 as schema_id, min_notice, refund_percent FROM unnest($2::interval[], $3::smallint[]) AS p(min_notice, refund_percent)",
+        schema_id, &min_notice[..], &refund_percent[..])
+    .execute(&mut *db)
+    .await?;
+
+    Ok(())
 }
 
 /// Validates and inserts a schema, returning its id. The caller checks permissions.
@@ -228,6 +312,8 @@ pub async fn insert_schema(
     .fetch_one(&mut *db)
     .await?;
 
+    replace_cancellation_policy(&mut *db, id, body.cancellation_policy.as_deref()).await?;
+
     Ok(id)
 }
 
@@ -241,7 +327,9 @@ pub async fn post(
     require_asset_type_perm(Some(user.id), asset_type_id, BookablePerm::Admin, &data.db).await?;
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
-    let id = insert_schema(&mut conn, schema, asset_type_id).await?;
+    let mut trans = grab_trans(&mut conn).await?;
+    let id = insert_schema(&mut trans, schema, asset_type_id).await?;
+    trans.commit().await?;
 
     Ok((StatusCode::CREATED, Json(BoardPostIdModel { id })))
 }
@@ -284,6 +372,8 @@ pub async fn put(
     }
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+    let mut trans = grab_trans(&mut conn).await?;
+
     let record = sqlx::query_as!(
         BookableSchema,
         r#"UPDATE bookable_schemas SET (label, schedule, asset_type_id, slot_price, activation_grace_period, expiry_refund_percent, requires_activation) = ($1, $2::time[], $3, $4, $5, $6, $7) WHERE id = $8
@@ -295,13 +385,18 @@ pub async fn put(
         slot_price,
         EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period,
         expiry_refund_percent,
-        requires_activation
+        requires_activation,
+        null as "cancellation_policy: Vec<BookableSchemaCancellationPolicy>"
         "#,
         schema.label, schema.schedule as Vec<String>, asset_type_id, schema.slot_price, schema.activation_grace_period.map(PgInterval::try_from)
           .transpose().map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?, schema.expiry_refund_percent, schema.requires_activation, id
     )
-    .fetch_one(&mut *conn)
+    .fetch_one(&mut *trans)
     .await?;
+
+    replace_cancellation_policy(&mut trans, id, schema.cancellation_policy.as_deref()).await?;
+
+    trans.commit().await?;
 
     Ok((StatusCode::OK, Json(record)))
 }

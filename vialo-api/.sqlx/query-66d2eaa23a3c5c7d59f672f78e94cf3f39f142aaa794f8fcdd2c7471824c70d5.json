@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE bookable_schemas SET (label, schedule, asset_type_id, slot_price, activation_grace_period, expiry_refund_percent, requires_activation) = ($1, $2::time[], $3, $4, $5, $6, $7) WHERE id = $8\n        RETURNING\n        id,\n        label,\n        schedule::text[] as \"schedule!\",\n        asset_type_id,\n        slot_price,\n        EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period,\n        expiry_refund_percent,\n        requires_activation\n        ",
+  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,\n            bs.expiry_refund_percent,\n            bs.requires_activation,\n            COALESCE(cp.cancellation_policy, ARRAY[]::jsonb[]) AS \"cancellation_policy!: Vec<BookableSchemaCancellationPolicy>\"\n        FROM\n            bookable_schemas bs\n        LEFT JOIN LATERAL (\n            SELECT array_agg(jsonb_build_object('min_notice', EXTRACT(EPOCH FROM bscp.min_notice)::bigint, 'refund_percent', bscp.refund_percent)) as cancellation_policy\n            FROM bookable_schema_cancellation_policy bscp\n            WHERE bscp.schema_id = bs.id\n        ) cp ON true\n        WHERE account_bookable_perm_exists($1, bs.asset_type_id, 'view'::bookable_perm) AND\n        TRUE AND\n        TRUE\n        LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -80,18 +80,19 @@
             "name": "requires_activation"
           }
         }
+      },
+      {
+        "ordinal": 8,
+        "name": "cancellation_policy!: Vec<BookableSchemaCancellationPolicy>",
+        "type_info": "JsonbArray",
+        "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "TimeArray",
-        "Int4",
-        "Int4",
-        "Interval",
-        "Int2",
-        "Bool",
-        "Int4"
+        "Uuid",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -102,8 +103,9 @@
       false,
       null,
       true,
-      false
+      false,
+      null
     ]
   },
-  "hash": "9fbf424253879e1abcb4c8c50428eca96396732ba00ccb3853fbc5536000c656"
+  "hash": "66d2eaa23a3c5c7d59f672f78e94cf3f39f142aaa794f8fcdd2c7471824c70d5"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            bs.id,\n            bs.label,\n            bs.schedule::text[] as \"schedule!\",\n            bs.asset_type_id,\n            bs.slot_price,\n            EXTRACT(EPOCH FROM bs.activation_grace_period)::bigint as activation_grace_period,\n            bs.expiry_refund_percent,\n            bs.requires_activation\n        FROM\n            bookable_schemas bs\n        WHERE account_bookable_perm_exists($1, bs.asset_type_id, 'view'::bookable_perm) AND\n        TRUE AND\n        TRUE\n        LIMIT $2 OFFSET $3",
+  "query": "UPDATE bookable_schemas SET (label, schedule, asset_type_id, slot_price, activation_grace_period, expiry_refund_percent, requires_activation) = ($1, $2::time[], $3, $4, $5, $6, $7) WHERE id = $8\n        RETURNING\n        id,\n        label,\n        schedule::text[] as \"schedule!\",\n        asset_type_id,\n        slot_price,\n        EXTRACT(EPOCH FROM activation_grace_period)::bigint as activation_grace_period,\n        expiry_refund_percent,\n        requires_activation,\n        null as \"cancellation_policy: Vec<BookableSchemaCancellationPolicy>\"\n        ",
   "describe": {
     "columns": [
       {
@@ -80,13 +80,24 @@
             "name": "requires_activation"
           }
         }
+      },
+      {
+        "ordinal": 8,
+        "name": "cancellation_policy: Vec<BookableSchemaCancellationPolicy>",
+        "type_info": "Text",
+        "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Int8",
-        "Int8"
+        "Text",
+        "TimeArray",
+        "Int4",
+        "Int4",
+        "Interval",
+        "Int2",
+        "Bool",
+        "Int4"
       ]
     },
     "nullable": [
@@ -97,8 +108,9 @@
       false,
       null,
       true,
-      false
+      false,
+      null
     ]
   },
-  "hash": "89e8cd11e57a312d2a18dda9d55f9c4a7bc06160385b0f6a48c0201a8ef46c90"
+  "hash": "195de1fb5e987e9010ee3f6e5e9df582c23d50c03a0f7d47f658d53b57360ca6"
 }

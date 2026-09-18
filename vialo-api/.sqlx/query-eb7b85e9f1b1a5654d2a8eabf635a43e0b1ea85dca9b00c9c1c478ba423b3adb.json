@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM bookable_schema_cancellation_policy WHERE schema_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eb7b85e9f1b1a5654d2a8eabf635a43e0b1ea85dca9b00c9c1c478ba423b3adb"
+}

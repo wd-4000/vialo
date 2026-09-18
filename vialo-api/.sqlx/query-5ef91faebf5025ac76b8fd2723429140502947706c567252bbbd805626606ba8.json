@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bookable_schema_cancellation_policy (schema_id, min_notice, refund_percent)\n        SELECT $1 as schema_id, min_notice, refund_percent FROM unnest($2::interval[], $3::smallint[]) AS p(min_notice, refund_percent)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "IntervalArray",
+        "Int2Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ef91faebf5025ac76b8fd2723429140502947706c567252bbbd805626606ba8"
+}
