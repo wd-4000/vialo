@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT cl.id,\n        CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS \"from_account: AccountEmbed\",\n        CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS \"to_account: AccountEmbed\",\n         cl.credits, cl.label, cl.created_at, cl.last_updated, cl.status as \"status: TransactionStatus\", cl.refund_of, CASE WHEN ba.id IS NOT NULL THEN jsonb_build_object('type', cl.product, 'id', ba.id) ELSE NULL END AS \"product: ProductEmbed\", cl.entry_type as \"entry_type: LedgerEntryType\"\n        FROM credit_ledger cl\n        LEFT JOIN accounts_people ac_from ON from_account = ac_from.id\n        LEFT JOIN accounts_people ac_to ON to_account = ac_to.id\n        LEFT JOIN bookable_appointments ba ON ba.transaction_id = cl.id\n        WHERE cl.id = $1 AND (cl.from_account = $2 OR cl.to_account = $2)",
+  "query": "SELECT cl.id,\n        CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS \"from_account: AccountEmbed\",\n        CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS \"to_account: AccountEmbed\",\n         credits, cl.credits_refunded, cl.created_at, cl.last_updated, cl.status as \"status: TransactionStatus\", cl.refund_of, cl.product as \"product: ProductType\", cl.label, cl.entry_type as \"entry_type: LedgerEntryType\"\n        FROM credit_ledger cl\n        LEFT JOIN accounts_people ac_from ON from_account = ac_from.id\n        LEFT JOIN accounts_people ac_to ON to_account = ac_to.id\n       WHERE to_account = $1 OR from_account = $1\n        ORDER BY created_at DESC\n        LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -39,12 +39,12 @@
       },
       {
         "ordinal": 4,
-        "name": "label",
-        "type_info": "Text",
+        "name": "credits_refunded",
+        "type_info": "Int4",
         "origin": {
           "Table": {
             "table": "credit_ledger",
-            "name": "label"
+            "name": "credits_refunded"
           }
         }
       },
@@ -105,12 +105,39 @@
       },
       {
         "ordinal": 9,
-        "name": "product: ProductEmbed",
-        "type_info": "Jsonb",
-        "origin": "Expression"
+        "name": "product: ProductType",
+        "type_info": {
+          "Custom": {
+            "name": "product_type",
+            "kind": {
+              "Enum": [
+                "printer_color",
+                "printer_bw",
+                "bookable"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "credit_ledger",
+            "name": "product"
+          }
+        }
       },
       {
         "ordinal": 10,
+        "name": "label",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "credit_ledger",
+            "name": "label"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
         "name": "entry_type: LedgerEntryType",
         "type_info": {
           "Custom": {
@@ -135,7 +162,8 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -143,14 +171,15 @@
       null,
       null,
       true,
-      true,
+      false,
       false,
       true,
       false,
       true,
-      null,
+      true,
+      true,
       false
     ]
   },
-  "hash": "c00f1a0a45d742f77d7037d73ccded826feeea0482469fb2a7253ef3ead63eb4"
+  "hash": "c782fd4017be58210438ba8f99b55d2fd476d9aabe16cb7090ac3917e399c8e1"
 }

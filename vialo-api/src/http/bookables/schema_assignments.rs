@@ -124,10 +124,10 @@ pub async fn post(
                         RETURNING id, transaction_id
                     )
                     INSERT INTO credit_ledger (to_account, refund_of, credits)
-                    SELECT cl.from_account, cancelled.transaction_id, cl.credits
+                    SELECT cl.from_account, cancelled.transaction_id, cl.credits - cl.credits_refunded
                     FROM cancelled
                     JOIN credit_ledger cl ON cl.id = cancelled.transaction_id
-                    WHERE cl.from_account IS NOT NULL AND cl.credits > 0 AND cl.status <> 'refunded'"#,
+                    WHERE cl.from_account IS NOT NULL AND cl.credits > cl.credits_refunded"#,
                     body.assignment.begins,
                     id
                 )

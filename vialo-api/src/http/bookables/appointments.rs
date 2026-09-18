@@ -47,6 +47,7 @@ pub struct BookableAppointmentFilterOptions {
 pub struct TransactionEmbed {
     pub id: Uuid,
     pub credits: Option<i32>,
+    pub credits_refunded: i32,
     pub from_account_id: Option<Uuid>,
     pub to_account_id: Option<Uuid>,
     pub status: TransactionStatus,
@@ -63,7 +64,7 @@ pub struct BookableAppointmentModel {
     pub account: Option<AccountEmbed>,
 
     pub transaction: Option<TransactionEmbed>,
-    pub refund_transaction: Option<TransactionEmbed>,
+    pub refund_transactions: Vec<TransactionEmbed>,
 
     pub begins: Option<DateTime<Utc>>,
     pub ends: PgDateTime,
@@ -280,8 +281,8 @@ pub async fn delete_appointment(
           ba.cancelled_at,
           ba.activated,
           coalesce(cl.credits, 0) as credits,
+          coalesce(cl.credits - cl.credits_refunded, 0) AS refundable_credits,
           cl.from_account,
-          cl.status as "status: TransactionStatus",
           ba.maintenance,
           b.asset_type_id,
           COALESCE(p.refund_percent, 0) AS current_refund_percent
@@ -334,39 +335,46 @@ pub async fn delete_appointment(
         ));
     }
 
+    let process_refund = body.process_refund.unwrap_or(true);
+
+    // The policy is a percentage of the original price, but an admin undo may already have
+    // returned part of it. Never hand back more than is left.
     let refund_credits =
-        appointment.credits.unwrap_or(0) * appointment.current_refund_percent.unwrap_or(0) / 100;
+        (appointment.credits.unwrap_or(0) * appointment.current_refund_percent.unwrap_or(0) / 100)
+            .min(appointment.refundable_credits.unwrap_or(0));
 
     if let Some(expected) = body.expected_credits
-        && refund_credits != expected {
-            tracing::error!(
-                "expected_credits: expected {} got {}",
-                expected,
-                refund_credits
-            );
+        && process_refund
+        && refund_credits != expected
+    {
+        tracing::error!(
+            "expected_credits: expected {} got {}",
+            expected,
+            refund_credits
+        );
 
-            let details = serde_json::json!({
-                "expected": expected,
-                "actual": refund_credits,
-                "appointment_id": id,
-            });
-            health::add_health_event(
-                &data.db,
-                Subsystem::App,
-                "expected_credits",
-                Some(&details),
-                10,
-                false,
-                None,
-            )
-            .await;
+        let details = serde_json::json!({
+            "expected": expected,
+            "actual": refund_credits,
+            "appointment_id": id,
+        });
+        health::add_health_event(
+            &data.db,
+            Subsystem::App,
+            "expected_credits",
+            Some(&details),
+            10,
+            false,
+            None,
+        )
+        .await;
 
-            return Err(VialoError::AppErrorWithDetails(
-                StatusCode::CONFLICT,
-                "expected_credits".to_string(),
-                details,
-            ));
-        }
+        return Err(VialoError::AppErrorWithDetails(
+            StatusCode::CONFLICT,
+            "expected_credits".to_string(),
+            details,
+        ));
+    }
 
     let result = sqlx::query!(
         "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = $2 WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",
@@ -382,7 +390,7 @@ pub async fn delete_appointment(
         ));
     }
 
-    if body.process_refund.unwrap_or(true) && refund_credits > 0 {
+    if process_refund && refund_credits > 0 {
         query!(
             "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
             appointment.from_account,
@@ -507,17 +515,23 @@ pub async fn get(
             bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id
             LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id
             LEFT JOIN credit_ledger cl ON ba.transaction_id = cl.id
-            LEFT JOIN credit_ledger clr ON clr.refund_of = cl.id
+            LEFT JOIN LATERAL (
+              SELECT array_agg(
+                jsonb_build_object('id', r.id, 'from_account_id', r.from_account, 'to_account_id', r.to_account, 'credits', r.credits, 'credits_refunded', r.credits_refunded, 'created_at', r.created_at, 'status', r.status)
+                ORDER BY r.created_at
+              ) AS refunds
+              FROM credit_ledger r WHERE r.refund_of = cl.id
+            ) clr ON true
             WHERE ba.id = {id} AND (ba.account_id = {user_id} OR account_bookable_perm_exists({user_id}, b.asset_type_id, 'admin'::bookable_perm))"#,
             #account_info = match(opts.account_info){
                  true => r#"jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account: AccountEmbed","#,
                 false => r#"null AS "account: AccountEmbed","#
             },
             #transaction_info= match(opts.transaction_info){
-                true => r#"CASE WHEN cl.id IS NOT NULL THEN jsonb_build_object('id', cl.id, 'from_account_id', cl.from_account, 'to_account_id', cl.to_account, 'credits', cl.credits, 'created_at', cl.created_at, 'status', cl.status) ELSE null END AS "transaction?: TransactionEmbed",
-                        CASE WHEN clr.id IS NOT NULL THEN jsonb_build_object('id', clr.id, 'from_account_id', clr.from_account, 'to_account_id', clr.to_account, 'credits', clr.credits, 'created_at', clr.created_at, 'status', clr.status) ELSE null END AS "refund_transaction?: TransactionEmbed""#,
+                true => r#"CASE WHEN cl.id IS NOT NULL THEN jsonb_build_object('id', cl.id, 'from_account_id', cl.from_account, 'to_account_id', cl.to_account, 'credits', cl.credits, 'credits_refunded', cl.credits_refunded, 'created_at', cl.created_at, 'status', cl.status) ELSE null END AS "transaction?: TransactionEmbed",
+                        COALESCE(clr.refunds, ARRAY[]::jsonb[]) AS "refund_transactions!: Vec<TransactionEmbed>""#,
                 false => r#"null AS "transaction: TransactionEmbed",
-                        null AS "refund_transaction: TransactionEmbed""#,
+                        ARRAY[]::jsonb[] AS "refund_transactions!: Vec<TransactionEmbed>""#,
             }
 
     )

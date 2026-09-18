@@ -75,14 +75,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION account_role_exists (acid uuid, rl app_role) RETURNS BOOLEAN LANGUAGE sql STABLE STRICT AS $$
-    SELECT COUNT(*) > 0
-    FROM account_group_memberships agm
-    JOIN account_group_app_roles agra
-    ON agm.group_id = agra.group_id
-    WHERE agm.account_id = acid AND agra.role = rl
-$$;
-
 CREATE OR REPLACE FUNCTION update_i18n_strings (
   idx_id int,
   language_labels text[], -- Array of language labels
@@ -281,6 +273,14 @@ CREATE TABLE account_group_app_roles (
   PRIMARY KEY (group_id, role)
 );
 
+CREATE OR REPLACE FUNCTION account_role_exists (acid uuid, rl app_role) RETURNS BOOLEAN LANGUAGE sql STABLE STRICT AS $$
+    SELECT COUNT(*) > 0
+    FROM account_group_memberships agm
+    JOIN account_group_app_roles agra
+    ON agm.group_id = agra.group_id
+    WHERE agm.account_id = acid AND agra.role = rl
+$$;
+
 --
 -- Residents
 --
@@ -360,6 +360,15 @@ CREATE TABLE credit_ledger (
   label text,
   refund_of uuid REFERENCES credit_ledger (id),
   entry_type ledger_entry_type NOT NULL DEFAULT 'transfer',
+  -- Materialized from the rows that point here via refund_of
+  credits_refunded int NOT NULL DEFAULT 0,
+  CONSTRAINT credit_ledger_refund_not_exceeded CHECK (
+    credits_refunded >= 0
+    AND (
+      credits IS NULL
+      OR credits_refunded <= credits
+    )
+  ),
   CHECK (
     (
       entry_type = 'transfer'
@@ -381,6 +390,8 @@ CREATE INDEX credit_ledger_created_at_idx ON credit_ledger (created_at);
 CREATE INDEX credit_ledger_from_idx ON credit_ledger (from_account);
 
 CREATE INDEX credit_ledger_to_idx ON credit_ledger (to_account);
+
+CREATE INDEX credit_ledger_refund_of_idx ON credit_ledger (refund_of) WHERE refund_of IS NOT NULL;
 
 -- Update credits column in accounts table on transaction.
 CREATE OR REPLACE FUNCTION materialize_transaction () RETURNS TRIGGER AS $$
@@ -421,14 +432,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Accumulate the refunded amount on the target
 CREATE OR REPLACE FUNCTION set_refund_status () RETURNS TRIGGER AS $$
 BEGIN
     IF NEW.refund_of IS NOT NULL THEN
-        UPDATE credit_ledger SET status = 'refunded'
-        WHERE id = NEW.refund_of AND status <> 'refunded';
-        IF NOT FOUND THEN
-            RAISE EXCEPTION 'Transaction already refunded or not found';
-        END IF;
+        UPDATE credit_ledger SET
+            credits_refunded = credits_refunded + COALESCE(NEW.credits, 0),
+            status = CASE
+                WHEN credits_refunded + COALESCE(NEW.credits, 0) >= credits THEN 'refunded'
+                ELSE status
+            END
+        WHERE id = NEW.refund_of;
     END IF;
 
     RETURN NEW;

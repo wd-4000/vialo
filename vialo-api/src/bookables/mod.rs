@@ -189,6 +189,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
     ba.transaction_id,
     cl.from_account,
     cl.credits,
+    coalesce(cl.credits - cl.credits_refunded, 0) as refundable_credits,
     ba.cancelled_at,
     ba.cancellation_reason as "cancellation_reason: CancellationReason",
     ba.activated,
@@ -212,7 +213,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
     JOIN credit_ledger cl ON ba.transaction_id = cl.id
     JOIN accounts_people ap ON ap.id = ba.account_id
     JOIN bookable_assets bast ON bast.id = ba.asset_id
-    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.requires_activation AND cs.expiry_refund_percent IS NOT NULL AND greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period <= NOW() AND cl.status <> 'refunded'"#,
+    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.requires_activation AND cs.expiry_refund_percent IS NOT NULL AND greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period <= NOW()"#,
         &["en".into(), "de".into()],
     )
     .fetch_all(&app_state.db)
@@ -227,8 +228,10 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
             "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = 'expired' WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",
             appointment.id,
         ).execute(&mut *trans).await?;
+        // Clamp to what an earlier partial refund left behind
         let refund_credits =
-            appointment.credits.unwrap_or(0) * appointment.expiry_refund_percent as i32 / 100;
+            (appointment.credits.unwrap_or(0) * appointment.expiry_refund_percent as i32 / 100)
+                .min(appointment.refundable_credits.unwrap_or(0));
         if refund_credits > 0 {
             query!(
                 "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",

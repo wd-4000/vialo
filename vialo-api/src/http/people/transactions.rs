@@ -44,7 +44,7 @@ pub async fn list(
         r#"SELECT cl.id,
         CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
         CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
-         credits, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, cl.product as "product: ProductType", cl.label, cl.entry_type as "entry_type: LedgerEntryType"
+         credits, cl.credits_refunded, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, cl.product as "product: ProductType", cl.label, cl.entry_type as "entry_type: LedgerEntryType"
         FROM credit_ledger cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
         LEFT JOIN accounts_people ac_to ON to_account = ac_to.id
@@ -73,7 +73,7 @@ pub async fn get(
         r#"SELECT cl.id,
         CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
         CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
-         cl.credits, cl.label, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, CASE WHEN ba.id IS NOT NULL THEN jsonb_build_object('type', cl.product, 'id', ba.id) ELSE NULL END AS "product: ProductEmbed", cl.entry_type as "entry_type: LedgerEntryType"
+         cl.credits, cl.credits_refunded, cl.label, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, CASE WHEN ba.id IS NOT NULL THEN jsonb_build_object('type', cl.product, 'id', ba.id) ELSE NULL END AS "product: ProductEmbed", cl.entry_type as "entry_type: LedgerEntryType"
         FROM credit_ledger cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
         LEFT JOIN accounts_people ac_to ON to_account = ac_to.id
@@ -134,14 +134,20 @@ pub async fn undo(
     Extension(user): Extension<User>,
     MaybeJsonE(body): MaybeJsonE<UndoTransactionSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+    let mut trans = grab_trans(&mut conn).await?;
+
+    // FOR UPDATE so the remainder we read is the remainder we refund, even if a cancellation
+    // lands on the same transaction concurrently.
     let transaction = sqlx::query!(
-        r#"SELECT status as "status: TransactionStatus" FROM credit_ledger WHERE id = $1"#,
+        r#"SELECT coalesce(credits - credits_refunded, 0) AS "refundable!" FROM credit_ledger WHERE id = $1 FOR UPDATE"#,
         id
     )
-    .fetch_one(&data.db)
-    .await?;
+    .fetch_optional(&mut *trans)
+    .await?
+    .ok_or(VialoError::NotFound())?;
 
-    if transaction.status == TransactionStatus::Refunded {
+    if transaction.refundable <= 0 {
         return Err(VialoError::AppError(
             StatusCode::BAD_REQUEST,
             "already_refunded".into(),
@@ -155,11 +161,8 @@ pub async fn undo(
         WHERE transaction_id = $1"#,
         id
     )
-    .fetch_all(&data.db)
+    .fetch_all(&mut *trans)
     .await?;
-
-    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
-    let mut trans = grab_trans(&mut conn).await?;
 
     if !products.is_empty() {
         match body.and_then(|b| b.cancel_associated_product) {
@@ -183,7 +186,7 @@ pub async fn undo(
 
     sqlx::query!(
         "INSERT INTO credit_ledger (to_account, credits, refund_of)
-         SELECT from_account, credits, id FROM credit_ledger WHERE id = $1",
+         SELECT from_account, credits - credits_refunded, id FROM credit_ledger WHERE id = $1",
         id
     )
     .execute(&mut *trans)

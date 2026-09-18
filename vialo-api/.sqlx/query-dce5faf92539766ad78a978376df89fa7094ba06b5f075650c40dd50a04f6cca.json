@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT cl.id,\n        CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS \"from_account: AccountEmbed\",\n        CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS \"to_account: AccountEmbed\",\n         credits, cl.created_at, cl.last_updated, cl.status as \"status: TransactionStatus\", cl.refund_of, cl.product as \"product: ProductType\", cl.label, cl.entry_type as \"entry_type: LedgerEntryType\"\n        FROM credit_ledger cl\n        LEFT JOIN accounts_people ac_from ON from_account = ac_from.id\n        LEFT JOIN accounts_people ac_to ON to_account = ac_to.id\n       WHERE to_account = $1 OR from_account = $1\n        ORDER BY created_at DESC\n        LIMIT $2 OFFSET $3",
+  "query": "SELECT cl.id,\n            CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS \"from_account: AccountEmbed\",\n            CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS \"to_account: AccountEmbed\",\n             credits, cl.credits_refunded, cl.created_at, cl.last_updated, cl.status as \"status: TransactionStatus\", cl.product as \"product: ProductType\", cl.refund_of, cl.label, cl.entry_type as \"entry_type: LedgerEntryType\"\n            FROM credit_ledger cl\n            LEFT JOIN accounts_people ac_from ON from_account = ac_from.id\n            LEFT JOIN accounts_people ac_to ON to_account = ac_to.id\n            WHERE to_account = $1 OR from_account = $1\n            ORDER BY created_at DESC\n            LIMIT 5",
   "describe": {
     "columns": [
       {
@@ -39,6 +39,17 @@
       },
       {
         "ordinal": 4,
+        "name": "credits_refunded",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "credit_ledger",
+            "name": "credits_refunded"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -49,7 +60,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "last_updated",
         "type_info": "Timestamptz",
         "origin": {
@@ -60,7 +71,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "status: TransactionStatus",
         "type_info": {
           "Custom": {
@@ -78,17 +89,6 @@
           "Table": {
             "table": "credit_ledger",
             "name": "status"
-          }
-        }
-      },
-      {
-        "ordinal": 7,
-        "name": "refund_of",
-        "type_info": "Uuid",
-        "origin": {
-          "Table": {
-            "table": "credit_ledger",
-            "name": "refund_of"
           }
         }
       },
@@ -116,6 +116,17 @@
       },
       {
         "ordinal": 9,
+        "name": "refund_of",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "credit_ledger",
+            "name": "refund_of"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
         "name": "label",
         "type_info": "Text",
         "origin": {
@@ -126,7 +137,7 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "entry_type: LedgerEntryType",
         "type_info": {
           "Custom": {
@@ -150,9 +161,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Int8",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -160,6 +169,7 @@
       null,
       null,
       true,
+      false,
       false,
       true,
       false,
@@ -169,5 +179,5 @@
       false
     ]
   },
-  "hash": "534e5339a73d4dc9c2823a8a9ec99632107a682f2da4697dbbfc85ec3605e13c"
+  "hash": "dce5faf92539766ad78a978376df89fa7094ba06b5f075650c40dd50a04f6cca"
 }

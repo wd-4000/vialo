@@ -117,10 +117,12 @@ DECLARE
     p_bytea_cols text[];
     p_record_key text;
     -- Columns whose changes carry no value. We Do Not Care
-    -- account_people.credit_balance is just materialized from the transactions
+    -- account_people.credit_balance is just materialized from the transactions,
+    -- credit_ledger.credits_refunded from the refund rows
     p_noise_cols CONSTANT jsonb := '{
       "*": ["last_updated", "last_seen"],
-      "accounts_people": ["credit_balance"]
+      "accounts_people": ["credit_balance"],
+      "credit_ledger": ["credits_refunded"]
     }';
 BEGIN
     SELECT INTO p_account_id CAST(nullif(current_setting('app.account_id', true), '') AS uuid);

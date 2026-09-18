@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance,\n            CASE WHEN cl.id IS NOT NULL THEN jsonb_build_object('id', cl.id, 'from_account_id', cl.from_account, 'to_account_id', cl.to_account, 'credits', cl.credits, 'created_at', cl.created_at, 'status', cl.status) ELSE null END AS \"transaction?: TransactionEmbed\",\n                        CASE WHEN clr.id IS NOT NULL THEN jsonb_build_object('id', clr.id, 'from_account_id', clr.from_account, 'to_account_id', clr.to_account, 'credits', clr.credits, 'created_at', clr.created_at, 'status', clr.status) ELSE null END AS \"refund_transaction?: TransactionEmbed\"\n        FROM\n            bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id\n            LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id\n            LEFT JOIN credit_ledger cl ON ba.transaction_id = cl.id\n            LEFT JOIN credit_ledger clr ON clr.refund_of = cl.id\n            WHERE ba.id = $1 AND (ba.account_id = $2 OR account_bookable_perm_exists($2, b.asset_type_id, 'admin'::bookable_perm))",
+  "query": "SELECT\n            ba.id,\n            ba.asset_id,\n            ba.transaction_id,\n            null AS \"account: AccountEmbed\",\n            lower(ba.during) as begins,\n            coalesce(upper(ba.during), '+infinity'::timestamptz) as \"ends!: PgDateTime\",\n            ba.cancelled_at,\n            ba.cancellation_reason as \"cancellation_reason: CancellationReason\",\n            ba.activated,\n            ba.maintenance,\n            null AS \"transaction: TransactionEmbed\",\n                        ARRAY[]::jsonb[] AS \"refund_transactions!: Vec<TransactionEmbed>\"\n        FROM\n            bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id\n            LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id\n            LEFT JOIN credit_ledger cl ON ba.transaction_id = cl.id\n            LEFT JOIN LATERAL (\n              SELECT array_agg(\n                jsonb_build_object('id', r.id, 'from_account_id', r.from_account, 'to_account_id', r.to_account, 'credits', r.credits, 'credits_refunded', r.credits_refunded, 'created_at', r.created_at, 'status', r.status)\n                ORDER BY r.created_at\n              ) AS refunds\n              FROM credit_ledger r WHERE r.refund_of = cl.id\n            ) clr ON true\n            WHERE ba.id = $1 AND (ba.account_id = $2 OR account_bookable_perm_exists($2, b.asset_type_id, 'admin'::bookable_perm))",
   "describe": {
     "columns": [
       {
@@ -111,14 +111,14 @@
       },
       {
         "ordinal": 10,
-        "name": "transaction?: TransactionEmbed",
-        "type_info": "Jsonb",
+        "name": "transaction: TransactionEmbed",
+        "type_info": "Text",
         "origin": "Expression"
       },
       {
         "ordinal": 11,
-        "name": "refund_transaction?: TransactionEmbed",
-        "type_info": "Jsonb",
+        "name": "refund_transactions!: Vec<TransactionEmbed>",
+        "type_info": "JsonbArray",
         "origin": "Expression"
       }
     ],
@@ -143,5 +143,5 @@
       null
     ]
   },
-  "hash": "17c82f21ca9be5f9f68586c575acfae533134ed02d87edf269417e278631e605"
+  "hash": "36f063522acdcf4a7a7978604b36632ee32e23186120b65629b9dd4d8c63d31b"
 }
