@@ -1,9 +1,9 @@
 use super::{handlers::BookableFilterOptions, models::BoardPostIdModel};
-use crate::AppState;
 use crate::helpers::{I18nMap, LangVariant};
 use crate::http::util::{JsonE, User, VialoError, clamp_pagination};
 use crate::http::util::{grab_authd_conn_user, grab_trans};
 use crate::permissions::{AppRole, check_app_role};
+use crate::{AppState, impl_jsonb_embed};
 use axum::extract::Path;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
@@ -15,16 +15,50 @@ use sqlx_conditional_queries::conditional_query_as;
 use std::i64;
 use std::sync::Arc;
 use utoipa::ToSchema;
+use uuid::Uuid;
+
+#[derive(Serialize, ToSchema)]
+pub struct BookableAssetListTypeTranslated {
+    pub id: i32,
+    pub name: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct BookableType {
+    pub id: i32,
+    #[schema(value_type = Option<I18nMap>)]
+    pub name: Option<JsonValue>,
+    pub permissions: Vec<BookableTypePermRow>,
+}
 
 #[derive(Serialize, ToSchema)]
 pub struct BookableAssetTypeTranslated {
     pub id: i32,
     pub name: Option<String>,
+    pub permissions: Vec<BookableTypePermRow>,
 }
+
+#[derive(Clone, Debug, PartialEq, sqlx::Type, Deserialize, Serialize, ToSchema)]
+#[sqlx(type_name = "bookable_perm", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum BookableTypePerm {
+    View,
+    Book,
+    Admin,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct BookableTypePermRow {
+    /// NULL means everyone that is logged in
+    pub group_id: Option<Uuid>,
+    pub perm: BookableTypePerm,
+}
+
+impl_jsonb_embed!(BookableTypePermRow);
 
 #[utoipa::path(get, path = "/bookables/types", params(
     BookableFilterOptions
-), responses((status = 200, description = "OK", body=Vec<BookableAssetTypeTranslated>)))]
+), responses((status = 200, description = "OK", body=Vec<BookableAssetListTypeTranslated>)))]
 pub async fn list(
     Query(opts): Query<BookableFilterOptions>,
     State(data): State<Arc<AppState>>,
@@ -35,38 +69,61 @@ pub async fn list(
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
 
-    if let Some(search) = opts.search {
-        let record = conditional_query_as!(
-            BookableAssetTypeTranslated,
-            r#"SELECT id, name FROM (SELECT
+    let record = conditional_query_as!(
+        BookableAssetListTypeTranslated,
+        r#"SELECT id, name FROM (SELECT
                 id,
                 get_i18n_string(bd.name_i18n, {langs:Vec<String>}) AS name
             FROM
-                bookable_asset_types bd) WHERE name ILIKE '%' || {search} || '%' LIMIT {limit} OFFSET {offset}"#
-        )
-        .fetch_all(&data.db)
-        .await?;
+                bookable_asset_types bd) {#search} LIMIT {limit} OFFSET {offset}"#,
+            #search = match opts.search {
+                Some(search) => "WHERE name ILIKE '%' || {search} || '%'",
+                None => "",
+            }
+    )
+    .fetch_all(&data.db)
+    .await?;
 
-        Ok((StatusCode::OK, Json(record)))
-    } else {
-        let record = conditional_query_as!(
-            BookableAssetTypeTranslated,
-            r#"SELECT
-                id,
-                get_i18n_string(bd.name_i18n, {langs:Vec<String>}) AS name
-            FROM
-                bookable_asset_types bd LIMIT {limit} OFFSET {offset}"#
-        )
-        .fetch_all(&data.db)
-        .await?;
-
-        Ok((StatusCode::OK, Json(record)))
-    }
+    Ok((StatusCode::OK, Json(record)))
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct PostBookableTypeSchema {
     pub name: I18nMap,
+    pub permissions: Option<Vec<BookableTypePermRow>>,
+}
+
+/// Replaces an asset type's permissions. None leaves the existing rows alone.
+async fn replace_asset_type_permissions(
+    db: &mut PgConnection,
+    asset_type_id: i32,
+    permissions: Option<&[BookableTypePermRow]>,
+) -> Result<(), VialoError> {
+    let Some(permissions) = permissions else {
+        return Ok(());
+    };
+
+    query!(
+        "DELETE FROM bookable_asset_type_group_perms WHERE asset_type_id = $1",
+        asset_type_id
+    )
+    .execute(&mut *db)
+    .await?;
+
+    if permissions.is_empty() {
+        return Ok(());
+    }
+
+    let group_ids = permissions.iter().map(|p| p.group_id).collect::<Vec<_>>();
+    let permissions = permissions.iter().map(|p| p.perm.clone()).collect::<Vec<_>>();
+
+    query!("INSERT INTO bookable_asset_type_group_perms (asset_type_id, group_id, perm)
+        SELECT $1 as asset_type_id, group_id, perm FROM unnest($2::uuid[], $3::bookable_perm[]) AS p(group_id, perm)",
+        asset_type_id, &group_ids[..] as &[Option<Uuid>], &permissions[..] as &[BookableTypePerm])
+    .execute(&mut *db)
+    .await?;
+
+    Ok(())
 }
 
 /// Inserts an asset type and its name, returning its id. The caller checks permissions.
@@ -84,6 +141,8 @@ pub async fn insert_asset_type(
     )
     .fetch_one(&mut *db)
     .await?;
+
+    replace_asset_type_permissions(&mut *db, id, body.permissions.as_deref()).await?;
 
     Ok(id)
 }
@@ -106,13 +165,6 @@ pub async fn post(
     Ok((StatusCode::CREATED, Json(BoardPostIdModel { id })))
 }
 
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct BookableType {
-    pub id: i32,
-    #[schema(value_type = Option<I18nMap>)]
-    pub name: Option<JsonValue>,
-}
-
 #[utoipa::path(get, path = "/bookables/types/{id}", params(BookableFilterOptions), responses((status = 200, description = "OK", body = LangVariant<BookableType, BookableAssetTypeTranslated>)))]
 pub async fn get(
     Path(id): Path<i32>,
@@ -126,11 +178,18 @@ pub async fn get(
     if langs == ["all"] {
         let post = sqlx::query_as!(
             BookableType,
-            "SELECT
+            r#"SELECT
                 bp.id,
-                get_i18n_all_string_translations(bp.name_i18n) AS name
+                get_i18n_all_string_translations(bp.name_i18n) AS name,
+                COALESCE(p.permissions, ARRAY[]::jsonb[]) AS "permissions!: Vec<BookableTypePermRow>"
             FROM
-                bookable_asset_types bp WHERE id = $1",
+                bookable_asset_types bp
+            LEFT JOIN LATERAL (
+                SELECT array_agg(jsonb_build_object('group_id', batgp.group_id, 'perm', batgp.perm)) as permissions
+                FROM bookable_asset_type_group_perms batgp
+                WHERE batgp.asset_type_id = bp.id
+            ) p ON true
+                WHERE id = $1"#,
             id
         )
         .fetch_one(&data.db)
@@ -141,11 +200,17 @@ pub async fn get(
         let post = sqlx::query_as!(
             BookableAssetTypeTranslated,
             r#"SELECT
-            bp.id,
-               get_i18n_string(bp.name_i18n, $1) AS name
-
+               bp.id,
+               get_i18n_string(bp.name_i18n, $1) AS name,
+               COALESCE(p.permissions, ARRAY[]::jsonb[]) AS "permissions!: Vec<BookableTypePermRow>"
            FROM
-                bookable_asset_types bp WHERE id = $2;"#,
+               bookable_asset_types bp
+           LEFT JOIN LATERAL (
+               SELECT array_agg(jsonb_build_object('group_id', batgp.group_id, 'perm', batgp.perm)) as permissions
+               FROM bookable_asset_type_group_perms batgp
+               WHERE batgp.asset_type_id = bp.id
+           ) p ON true
+           WHERE id = $2;"#,
             &langs,
             id
         )
@@ -178,6 +243,8 @@ pub async fn put(
     )
     .execute(&mut *trans)
     .await?;
+
+    replace_asset_type_permissions(&mut *trans, id, body.permissions.as_deref()).await?;
 
     trans.commit().await?;
 

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM bookable_asset_type_group_perms WHERE asset_type_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6736c9b436d062b6cc7cf96419bb2eec53ff940ca874ea1941c8c7b8317e6a46"
+}

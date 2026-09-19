@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                bp.id,\n                get_i18n_all_string_translations(bp.name_i18n) AS name\n            FROM\n                bookable_asset_types bp WHERE id = $1",
+  "query": "SELECT id, name FROM (SELECT\n                id,\n                get_i18n_string(bd.name_i18n, $1) AS name\n            FROM\n                bookable_asset_types bd)  LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -17,13 +17,15 @@
       {
         "ordinal": 1,
         "name": "name",
-        "type_info": "Jsonb",
+        "type_info": "Text",
         "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
-        "Int4"
+        "TextArray",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -31,5 +33,5 @@
       null
     ]
   },
-  "hash": "c8b00102280e70e864006649337103ebf72636d3db85c2711fee3e435418473c"
+  "hash": "36130d6e2de5149a1b230c4986cc3295e97c46faf0521edb731673c0f371fe24"
 }

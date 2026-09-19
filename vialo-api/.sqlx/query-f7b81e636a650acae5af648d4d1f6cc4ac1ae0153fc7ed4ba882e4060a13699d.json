@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bookable_asset_type_group_perms (asset_type_id, group_id, perm)\n        SELECT $1 as asset_type_id, group_id, perm FROM unnest($2::uuid[], $3::bookable_perm[]) AS p(group_id, perm)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "UuidArray",
+        {
+          "Custom": {
+            "name": "bookable_perm[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "bookable_perm",
+                  "kind": {
+                    "Enum": [
+                      "view",
+                      "book",
+                      "admin"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f7b81e636a650acae5af648d4d1f6cc4ac1ae0153fc7ed4ba882e4060a13699d"
+}
