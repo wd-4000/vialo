@@ -3,7 +3,7 @@
 use crate::{AppState, http::util::VialoError};
 use axum::http::header::{self};
 use axum::{body::Body, extract::State, http::StatusCode, response::IntoResponse};
-use sqlx::query;
+use sqlx::query_scalar;
 use std::sync::Arc;
 
 #[utoipa::path(get, path = "/etc/mail-recipients", responses((status = 200, description = "OK", content_type = "text/plain", body = String)))]
@@ -11,7 +11,7 @@ pub async fn list_mail_recipients(
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
     // match query!(r#"SELECT ARRAY_AGG(email) AS emails FROM (select ag.email from account_groups ag WHERE ag.email IS NOT NULL UNION SELECT slug from boards bd WHERE slug IS NOT NULL);"#,)
-    let record = query!(
+    let record = query_scalar!(
         r#"select ARRAY_AGG(ag.email) as emails from account_groups ag WHERE ag.email IS NOT NULL"#,
     )
     .fetch_one(&data.db)
@@ -23,6 +23,6 @@ pub async fn list_mail_recipients(
             (header::CONTENT_TYPE, "text/plain"),
             (header::CACHE_CONTROL, "no-cache"),
         ],
-        Body::from(record.emails.map_or(String::from(""), |h| h.join("\n"))),
+        Body::from(record.map_or(String::from(""), |h| h.join("\n"))),
     ))
 }
