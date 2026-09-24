@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT ON (j_i) ba.id as \"id?\" FROM UNNEST($2::tstzrange[]) WITH ORDINALITY AS j(j_v, j_i) LEFT JOIN bookable_appointments ba ON ba.account_id = $1 AND cancellation_reason = 'expired' AND during = j_v ORDER BY j_i",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id?",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "bookable_appointments",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TstzRangeArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "05cb2022938b585ceda952e525db801a4bc88bc4d0f73f71af53d96676cea856"
+}

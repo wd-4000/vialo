@@ -10,12 +10,15 @@ use axum_extra::extract::Query;
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sqlx::postgres::types::PgRange;
 use sqlx::{query, query_as, query_scalar};
 use sqlx_conditional_queries::conditional_query_as;
 use std::collections::HashMap;
 use std::i64;
+use std::ops::Bound;
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
 
 #[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct TakenSlotQuery {
@@ -185,6 +188,7 @@ pub struct MaterializedSlots {
     pub ends: Option<DateTime<Utc>>,
     pub asset_id: Option<i32>,
     pub price: Option<i32>,
+    pub existing_expired: Option<Uuid>,
 }
 
 #[utoipa::path(post, path = "/bookables/slots/book", request_body = BookSlotSchema, responses((status = 200, description = "Booked", body=Vec<MaterializedSlots>),(status = 400, description = "Slot expectation failed"),(status = 400, description = "Slot index failure"),(status = 400, description = "Slot info failure")))]
@@ -200,18 +204,41 @@ pub async fn book_slots(
     }
 
     // Materialize the slots (Give them concrete start and end points)
-    let materialized_slots = query_as!(MaterializedSlots, r#"SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index, (((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date + bs.schedule[(j_v->>'slot_index')::int+1])::timestamptz as begins, (((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date + bs.schedule[(j_v->>'slot_index')::int+2])::timestamptz as ends, bs.slot_price as price, (j_v->>'asset_id')::int as asset_id
+    let mut materialized_slots = query_as!(MaterializedSlots, r#"SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index,
+            (((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date + bs.schedule[(j_v->>'slot_index')::int+1])::timestamptz as begins,
+            (((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date + bs.schedule[(j_v->>'slot_index')::int+2])::timestamptz as ends,
+            bs.slot_price as price, (j_v->>'asset_id')::int as asset_id,
+            NULL as "existing_expired: Uuid"
         FROM bookable_schema_assignments bsa
         JOIN jsonb_array_elements($1) WITH ORDINALITY AS j(j_v, j_i) ON bsa.begins <= ((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date AND bsa.asset_id = (j_v->>'asset_id')::int
         JOIN bookable_schemas bs ON bsa.schema_id = bs.id
         ORDER BY j_i, bsa.begins DESC;"#, json!(body.slots)).fetch_all(&data.db)
         .await?;
 
-    tracing::debug!("materialized_slots: {:?}", materialized_slots);
-
     // Verify the slots and the client's expectations (if present)
     let mut sum_total = 0;
-    for slot in &materialized_slots {
+
+    // Check for existing expired slots from this user
+    let existing_expired = query_scalar!(
+        r#"SELECT DISTINCT ON (j_i) ba.id as "id?" FROM UNNEST($2::tstzrange[]) WITH ORDINALITY AS j(j_v, j_i) LEFT JOIN bookable_appointments ba ON ba.account_id = $1 AND cancellation_reason = 'expired' AND during = j_v ORDER BY j_i"#,
+        user.id,
+        &materialized_slots
+            .iter()
+            .map(|s| PgRange {
+                start: s
+                    .begins
+                    .map(|d| Bound::Included(d))
+                    .unwrap_or(Bound::Unbounded),
+                end: s
+                    .ends
+                    .map(|d| Bound::Excluded(d))
+                    .unwrap_or(Bound::Unbounded),
+            })
+            .collect::<Vec<_>>()
+    ).fetch_all(&data.db)
+    .await?;
+
+    for (slot, expired_slot) in materialized_slots.iter_mut().zip(existing_expired) {
         let idx: usize = slot.index.ok_or(VialoError::AppError(
             StatusCode::INTERNAL_SERVER_ERROR,
             "slot_info".to_string(),
@@ -248,9 +275,14 @@ pub async fn book_slots(
                 "slot_index".to_string(),
             ));
         }
-        if let Some(price) = slot.price {
+
+        if let Some(price) = slot.price
+            && expired_slot.is_none()
+        {
             sum_total += price;
         }
+
+        slot.existing_expired = expired_slot;
     }
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
