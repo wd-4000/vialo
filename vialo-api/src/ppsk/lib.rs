@@ -108,6 +108,18 @@ impl UniFiApi {
         .await
     }
 
+    pub async fn post_network_config(&self, network: NetworkPost) -> Result<Network> {
+        self.authenticated_request(
+            &format!(
+                "/proxy/network/integration/v1/sites/{}/networks",
+                self.site_id
+            ),
+            Method::POST,
+            Some(&network),
+        )
+        .await
+    }
+
     pub async fn get_wlans(&self) -> Result<Vec<WlanSummary>> {
         self.fetch_all(&format!(
             "/proxy/network/integration/v1/sites/{}/wifi/broadcasts",
@@ -157,11 +169,20 @@ pub struct UniFiListResponse<T> {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct NetworkPost {
+    pub name: String,
+    pub enabled: Option<bool>,
+    pub vlan_id: i32,
+    pub management: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Network {
     pub id: String,
     pub name: String,
     pub enabled: Option<bool>,
-    pub vlan_id: i64,
+    pub vlan_id: i32,
     pub default: Option<bool>,
     pub management: Option<String>,
     pub metadata: Option<Value>,

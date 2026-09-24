@@ -73,7 +73,7 @@ pub async fn main(
                     &app_state.config.proxy,
                 )?;
 
-                let unifi_vlans: HashMap<i64, _> = session
+                let unifi_vlans: HashMap<i32, _> = session
                     .get_network_conf()
                     .await?
                     .into_iter()
@@ -109,7 +109,20 @@ pub async fn main(
             let networkconf_id = if let Some(unifi_vlan) = unifi_vlans.get(&p.vlan.into()) {
                 unifi_vlan.id.clone()
             } else {
-                return Err(anyhow::anyhow!("VLAN {} not found in UniFi", p.vlan));
+                warn!("VLAN {} not found in UniFi", p.vlan);
+                match session.post_network_config(NetworkPost {
+                    name: format!("{} (Vialo)", p.vlan),
+                    enabled: Some(true),
+                    vlan_id: p.vlan.into(),
+                    management: "UNMANAGED".into(),
+                }).await {
+                    Ok(network) => network.id,
+                    Err(e) => {
+                        add_health_event(&mut *conn, Subsystem::Ppsk, "unifi_error", Some(json!({"vlan": p.vlan})), 2, false, None).await;
+                        error!("Failed to create network config for VLAN {}: {}", p.vlan, e);
+                        continue;
+                    }
+                }
             };
             ppsk.push(WlanPresharedKey {
                 network: WlanPresharedKeyNetwork {
