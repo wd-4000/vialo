@@ -47,7 +47,7 @@
                 "app",
                 "bookable",
                 "printer",
-                "ppsk",
+                "nms",
                 "email",
                 "sysop",
                 "dhcp"

@@ -65,7 +65,7 @@ CREATE INDEX idx_net_cred_account ON net_cred (account_id); -- accounts cascade 
 
 CREATE OR REPLACE FUNCTION enqueue_ppsk_refresh () RETURNS void AS $$
     INSERT INTO subsystem_jobs (subsystem, data, created_at, last_updated, status)
-    VALUES ('ppsk', jsonb_build_object('type', 'refresh'), NOW(), NOW(), 'pending');
+    VALUES ('nms', jsonb_build_object('type', 'refresh'), NOW(), NOW(), 'pending');
 $$ LANGUAGE sql;
 
 -- A cred only reaches the NMS if its network is PPSK and actually linked to one

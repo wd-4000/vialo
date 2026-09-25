@@ -25,7 +25,7 @@ pub enum Subsystem {
     App,
     Bookable,
     Printer,
-    Ppsk,
+    Nms,
     Email,
     Sysop,
 }

@@ -5,7 +5,7 @@ CREATE TYPE subsystem_type AS ENUM(
   'app',
   'bookable',
   'printer',
-  'ppsk',
+  'nms',
   'email',
   'sysop',
   'dhcp'

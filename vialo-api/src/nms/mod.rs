@@ -46,7 +46,7 @@ async fn sync_connector(
             let passphrase = p.password.expose();
             if passphrase.len() < 8 || passphrase.len() > 63 {
                 error!("Invalid password length. Ignoring password for cred \"{}\".", p.id);
-                add_health_event(&mut *conn, Subsystem::Ppsk, "bad_password", Some(json!({"cred_id": p.id})), 2, false, None).await;
+                add_health_event(&mut *conn, Subsystem::Nms, "bad_password", Some(json!({"cred_id": p.id})), 2, false, None).await;
                 continue;
             }
             entries.push(PpskEntry { passphrase, vlan: p.vlan });
@@ -57,7 +57,7 @@ async fn sync_connector(
                 NmsError::VlanUnavailable { vlan } => {
                     add_health_event(
                         &mut *conn,
-                        Subsystem::Ppsk,
+                        Subsystem::Nms,
                         "vlan_unavailable",
                         Some(json!({"connector_id": connector_id, "vlan": vlan})),
                         2,
@@ -69,7 +69,7 @@ async fn sync_connector(
                 NmsError::EmptyListUnsupported => {
                     add_health_event(
                         &mut *conn,
-                        Subsystem::Ppsk,
+                        Subsystem::Nms,
                         "empty_list",
                         Some(json!({"network_id": link.network_id})),
                         50,
@@ -89,7 +89,7 @@ pub async fn add_task<'a, E>(db: E, job: JobData) -> Result<i32, sqlx::Error>
 where
     E: Executor<'a, Database = Postgres>,
 {
-    sqlx::query_scalar!("INSERT INTO subsystem_jobs (subsystem, data, created_at, last_updated, status) VALUES ('ppsk',$1,NOW(),NOW(), 'pending') RETURNING id", Json(job) as _).fetch_one(db).await
+    sqlx::query_scalar!("INSERT INTO subsystem_jobs (subsystem, data, created_at, last_updated, status) VALUES ('nms',$1,NOW(),NOW(), 'pending') RETURNING id", Json(job) as _).fetch_one(db).await
 }
 
 pub async fn main(
@@ -105,14 +105,14 @@ pub async fn main(
 
         let mut current_job_id = None;
 
-        let mut conn = grab_authd_conn_subsystem(&db_pool.clone(), "ppsk")
+        let mut conn = grab_authd_conn_subsystem(&db_pool.clone(), "nms")
             .await
             .map_err(|e| anyhow::anyhow!("couldn't connect to db: {e:?}"))?;
 
         if let Some(job) = sqlx::query!(
         r#"UPDATE subsystem_jobs SET status = 'processing', last_updated = NOW() WHERE id IN (SELECT id
                              FROM subsystem_jobs
-                             WHERE subsystem = 'ppsk' AND (status = 'pending' OR (status = 'error' AND last_updated < NOW() - INTERVAL '5 minutes')) ORDER BY id ASC
+                             WHERE subsystem = 'nms' AND (status = 'pending' OR (status = 'error' AND last_updated < NOW() - INTERVAL '5 minutes')) ORDER BY id ASC
                              LIMIT 1) RETURNING id, data as "data: Json<JobData>", created_at, OLD.last_updated, OLD.status AS "status: models::JobStatus""#).fetch_optional(&mut *conn).await?
     {
         info!("Job {:?}", job);

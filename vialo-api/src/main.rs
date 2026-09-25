@@ -466,15 +466,13 @@ async fn main() {
     // Task per subsystem
     let mut subsystems: Vec<(&'static str, tokio::task::JoinHandle<()>)> = Vec::new();
 
-    #[cfg(feature = "ppsk")]
-    subsystems.push(("ppsk", {
+    #[cfg(feature = "nms")]
+    subsystems.push(("nms", {
         let pool = pool.clone();
         let asp = asp.clone();
-        tokio::spawn(run_subsystem(
-            "ppsk",
-            shutdown_rx.clone(),
-            move |shutdown| vialo_api::ppsk::main(pool.clone(), asp.clone(), shutdown),
-        ))
+        tokio::spawn(run_subsystem("nms", shutdown_rx.clone(), move |shutdown| {
+            vialo_api::nms::main(pool.clone(), asp.clone(), shutdown)
+        }))
     }));
 
     // Printer is !Send so it gets special treatment

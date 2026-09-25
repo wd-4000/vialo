@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO subsystem_jobs (subsystem, data, created_at, last_updated, status) VALUES ('ppsk',$1,NOW(),NOW(), 'pending') RETURNING id",
+  "query": "INSERT INTO subsystem_jobs (subsystem, data, created_at, last_updated, status) VALUES ('nms',$1,NOW(),NOW(), 'pending') RETURNING id",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "93eb31da88bada6986c86d8275fdf1c674b44e0797415fa1cef9d3ffcacc55c0"
+  "hash": "50dab1a734ded2a142b26d2dfbc6f19e6dd4fef2803e420c98597b4e13f78a61"
 }

@@ -12,8 +12,8 @@ pub mod ws;
 #[cfg(feature = "migrate")]
 pub mod migrations;
 
-#[cfg(feature = "ppsk")]
-pub mod ppsk;
+#[cfg(feature = "nms")]
+pub mod nms;
 
 #[cfg(feature = "email")]
 pub mod email;
