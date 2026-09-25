@@ -2,17 +2,89 @@ use crate::{
     AppState,
     health::add_health_event,
     helpers::{encryption::Encrypted, grab_authd_conn_subsystem},
+    http::network::models::NmsType,
 };
+use anyhow::anyhow;
 use serde_json::json;
-use sqlx::{Executor, PgPool, Postgres, types::Json};
-use std::{collections::HashMap, sync::Arc};
+use sqlx::{Executor, PgConnection, PgPool, Postgres, types::Json};
+use std::sync::Arc;
 use tokio::{sync::watch, time};
 use tracing::{debug, error, info, warn};
-mod lib;
 mod models;
+mod traits;
+mod unifi;
 use crate::http::history::models::Subsystem;
-use lib::*;
 use models::*;
+use traits::*;
+use unifi::UniFiApi;
+
+/// Pushes the PPSK list of every password network linked to the connector.
+async fn sync_connector(
+    api: &mut impl NmsApi,
+    connector_id: i32,
+    db_pool: &PgPool,
+    conn: &mut PgConnection,
+) -> Result<(), anyhow::Error> {
+    let links = sqlx::query!(
+        "SELECT nnl.nms_id, nnl.network_id FROM net_network_nms_link nnl
+         JOIN net_networks n ON n.id = nnl.network_id
+         WHERE nnl.nms_connector_id = $1 AND n.auth = 'password'",
+        connector_id
+    )
+    .fetch_all(db_pool)
+    .await?;
+
+    for link in links {
+        let mut entries = vec![];
+        for p in sqlx::query!(
+            r#"select nc.password as "password!: Encrypted<String>", nr.vlan as "vlan!", nc.id from net_cred nc JOIN net_realm_assignments nra ON nc.account_id = nra.account_ID JOIN net_realms nr ON nr.id = nra.realm_id WHERE nc.network_id = $1 AND nc.password IS NOT NULL AND nr.vlan IS NOT NULL"#,
+            link.network_id
+        )
+        .fetch_all(db_pool)
+        .await?
+        {
+            let passphrase = p.password.expose();
+            if passphrase.len() < 8 || passphrase.len() > 63 {
+                error!("Invalid password length. Ignoring password for cred \"{}\".", p.id);
+                add_health_event(&mut *conn, Subsystem::Ppsk, "bad_password", Some(json!({"cred_id": p.id})), 2, false, None).await;
+                continue;
+            }
+            entries.push(PpskEntry { passphrase, vlan: p.vlan });
+        }
+
+        for issue in api.set_ppsks(&link.nms_id, &entries).await? {
+            match issue {
+                NmsError::VlanUnavailable { vlan } => {
+                    add_health_event(
+                        &mut *conn,
+                        Subsystem::Ppsk,
+                        "vlan_unavailable",
+                        Some(json!({"connector_id": connector_id, "vlan": vlan})),
+                        2,
+                        false,
+                        None,
+                    )
+                    .await
+                }
+                NmsError::EmptyListUnsupported => {
+                    add_health_event(
+                        &mut *conn,
+                        Subsystem::Ppsk,
+                        "empty_list",
+                        Some(json!({"network_id": link.network_id})),
+                        50,
+                        false,
+                        None,
+                    )
+                    .await
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn add_task<'a, E>(db: E, job: JobData) -> Result<i32, sqlx::Error>
 where
     E: Executor<'a, Database = Postgres>,
@@ -62,92 +134,40 @@ pub async fn main(
     }
         if let Some(job_id) = current_job_id {
             let mut run_task = async || -> Result<(), anyhow::Error> {
-                let credentials = sqlx::query!(r#"SELECT id, hostname, api_key as "api_key!: Encrypted<String>", site_id as "site_id!" FROM net_nms_connectors WHERE type = 'unifi'"#)
-        .fetch_one(&db_pool)
-        .await?;
-                // https://i.kym-cdn.com/photos/images/newsfeed/002/425/217/e06
-                let session = UniFiApi::new(
-                    credentials.hostname,
-                    credentials.api_key.expose(),
-                    credentials.site_id,
-                    &app_state.config.proxy,
-                )?;
+                let connectors = sqlx::query!(r#"SELECT id, type as "type: NmsType", hostname, api_key as "api_key: Encrypted<String>", site_id FROM net_nms_connectors"#)
+                    .fetch_all(&db_pool)
+                    .await?;
 
-                let unifi_vlans: HashMap<i32, _> = session
-                    .get_network_conf()
-                    .await?
-                    .into_iter()
-                    .map(|n| (n.vlan_id, n))
-                    .collect();
-
-                let vialo_networks: Vec<_> = sqlx::query!(
-                    "SELECT nnl.nms_id, nnl.network_id FROM net_network_nms_link nnl
-                     JOIN net_networks n ON n.id = nnl.network_id
-                     WHERE nnl.nms_connector_id = $1 AND n.auth = 'password'",
-                    credentials.id
-                )
-                .fetch_all(&db_pool)
-                .await?
-                .into_iter()
-                .map(|r| (r.nms_id, r.network_id))
-                .collect();
-
-                for (nms_id, net_id) in vialo_networks {
-                    let mut old_wlan_unifi = session.get_wlan(&nms_id).await?;
-                    let mut ppsk: Vec<WlanPresharedKey> = vec![];
-                    for p in sqlx::query!(
-            r#"select nc.password as "password!: Encrypted<String>", nr.vlan as "vlan!", nc.id from net_cred nc JOIN net_realm_assignments nra ON nc.account_id = nra.account_ID JOIN net_realms nr ON nr.id = nra.realm_id WHERE nc.network_id = $1 AND nc.password IS NOT NULL AND nr.vlan IS NOT NULL"#,
-            net_id
-        ).fetch_all(&db_pool)
-        .await? {
-            let password = p.password.expose();
-            if password.len() < 8 || password.len() > 63 {
-                error!("Invalid password length. Ignoring password for cred \"{}\".", p.id);
-                add_health_event(&mut *conn, Subsystem::Ppsk, "bad_password", Some(json!({"cred_id": p.id})), 2, false, None).await;
-                continue;
-            }
-            let networkconf_id = if let Some(unifi_vlan) = unifi_vlans.get(&p.vlan.into()) {
-                unifi_vlan.id.clone()
-            } else {
-                warn!("VLAN {} not found in UniFi", p.vlan);
-                match session.post_network_config(NetworkPost {
-                    name: format!("{} (Vialo)", p.vlan),
-                    enabled: Some(true),
-                    vlan_id: p.vlan.into(),
-                    management: "UNMANAGED".into(),
-                }).await {
-                    Ok(network) => network.id,
-                    Err(e) => {
-                        add_health_event(&mut *conn, Subsystem::Ppsk, "unifi_error", Some(json!({"vlan": p.vlan})), 2, false, None).await;
-                        error!("Failed to create network config for VLAN {}: {}", p.vlan, e);
-                        continue;
+                let mut failed = 0;
+                for c in connectors {
+                    let result = match c.r#type {
+                        NmsType::Unifi => {
+                            async {
+                                let mut api = UniFiApi::new(
+                                    c.hostname,
+                                    c.api_key.ok_or_else(|| anyhow!("no API key"))?.expose(),
+                                    c.site_id.ok_or_else(|| anyhow!("no site ID"))?,
+                                    &app_state.config.proxy,
+                                )?;
+                                sync_connector(&mut api, c.id, &db_pool, &mut conn).await
+                            }
+                            .await
+                        }
+                        NmsType::Mikrotik => {
+                            warn!(
+                                "someone needs to implement mikrotik for connector {} to work",
+                                c.id
+                            );
+                            continue;
+                        }
+                    };
+                    if let Err(e) = result {
+                        error!("Connector {} failed: {:?}", c.id, e);
+                        failed += 1;
                     }
                 }
-            };
-            ppsk.push(WlanPresharedKey {
-                network: WlanPresharedKeyNetwork {
-                    network_type: WlanPresharedKeyNetworkType::Specific,
-                    network_id: Some(networkconf_id),
-                },
-                passphrase: password,
-            });
-        }
-                    // UniFi doesn't like empty PPSK
-                    if ppsk.is_empty() {
-                        add_health_event(
-                            &mut *conn,
-                            Subsystem::Ppsk,
-                            "empty_list",
-                            Some(json!({"network_id": net_id})),
-                            50,
-                            false,
-                            None,
-                        )
-                        .await;
-                    } else {
-                        old_wlan_unifi.security_configuration.preshared_keys = Some(ppsk);
-                        session.set_wlan(&old_wlan_unifi).await?;
-                    }
+                if failed > 0 {
+                    return Err(anyhow!("{failed} connector(s) failed"));
                 }
                 Ok(())
             };

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, hostname, api_key as \"api_key!: Encrypted<String>\", site_id as \"site_id!\" FROM net_nms_connectors WHERE type = 'unifi'",
+  "query": "SELECT id, type as \"type: NmsType\", hostname, api_key as \"api_key: Encrypted<String>\", site_id FROM net_nms_connectors",
   "describe": {
     "columns": [
       {
@@ -16,6 +16,27 @@
       },
       {
         "ordinal": 1,
+        "name": "type: NmsType",
+        "type_info": {
+          "Custom": {
+            "name": "net_nms_type",
+            "kind": {
+              "Enum": [
+                "unifi",
+                "mikrotik"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "net_nms_connectors",
+            "name": "type"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
         "name": "hostname",
         "type_info": "Text",
         "origin": {
@@ -26,8 +47,8 @@
         }
       },
       {
-        "ordinal": 2,
-        "name": "api_key!: Encrypted<String>",
+        "ordinal": 3,
+        "name": "api_key: Encrypted<String>",
         "type_info": "Bytea",
         "origin": {
           "Table": {
@@ -37,8 +58,8 @@
         }
       },
       {
-        "ordinal": 3,
-        "name": "site_id!",
+        "ordinal": 4,
+        "name": "site_id",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -54,9 +75,10 @@
     "nullable": [
       false,
       false,
+      false,
       true,
       true
     ]
   },
-  "hash": "007f91873bc6a0daeda0c05b640164c39288f097cfd0f6a0c230b67a16648c8b"
+  "hash": "1649d8af5399ddba40c53b73550440d72ed101be282353a92cad933e38894127"
 }

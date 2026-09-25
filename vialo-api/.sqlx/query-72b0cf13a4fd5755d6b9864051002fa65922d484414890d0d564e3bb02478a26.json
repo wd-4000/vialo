@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT nnl.nms_id, nnl.network_id FROM net_network_nms_link nnl\n                     JOIN net_networks n ON n.id = nnl.network_id\n                     WHERE nnl.nms_connector_id = $1 AND n.auth = 'password'",
+  "query": "SELECT nnl.nms_id, nnl.network_id FROM net_network_nms_link nnl\n         JOIN net_networks n ON n.id = nnl.network_id\n         WHERE nnl.nms_connector_id = $1 AND n.auth = 'password'",
   "describe": {
     "columns": [
       {
@@ -36,5 +36,5 @@
       false
     ]
   },
-  "hash": "19fb3973b50dd6d71fdcd26d05b932328c215df8a3f88c95094bedc92ca9635d"
+  "hash": "72b0cf13a4fd5755d6b9864051002fa65922d484414890d0d564e3bb02478a26"
 }

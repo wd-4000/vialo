@@ -1,8 +1,13 @@
+use super::{
+    models::{NmsError, PpskEntry},
+    traits::NmsApi,
+};
 use anyhow::{Context, Result, anyhow};
 use reqwest::{Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use tracing::{error, warn};
 
 #[derive(Debug, Clone)]
 pub struct UniFiApi {
@@ -155,6 +160,68 @@ impl UniFiApi {
     }
 }
 
+impl NmsApi for UniFiApi {
+    async fn set_ppsks(&mut self, nms_id: &str, entries: &[PpskEntry]) -> Result<Vec<NmsError>> {
+        let mut issues = vec![];
+        // https://i.kym-cdn.com/photos/images/newsfeed/002/425/217/e06
+        let mut vlans: HashMap<i32, String> = self
+            .get_network_conf()
+            .await?
+            .into_iter()
+            .map(|n| (n.vlan_id, n.id))
+            .collect();
+
+        let mut ppsk: Vec<WlanPresharedKey> = vec![];
+        for entry in entries {
+            let networkconf_id = if let Some(id) = vlans.get(&entry.vlan) {
+                id.clone()
+            } else {
+                warn!("VLAN {} not found in UniFi", entry.vlan);
+                match self
+                    .post_network_config(NetworkPost {
+                        name: format!("{} (Vialo)", entry.vlan),
+                        enabled: Some(true),
+                        vlan_id: entry.vlan,
+                        management: "UNMANAGED".into(),
+                    })
+                    .await
+                {
+                    Ok(network) => {
+                        vlans.insert(entry.vlan, network.id.clone());
+                        network.id
+                    }
+                    Err(e) => {
+                        error!(
+                            "Failed to create network config for VLAN {}: {}",
+                            entry.vlan, e
+                        );
+                        issues.push(NmsError::VlanUnavailable { vlan: entry.vlan });
+                        continue;
+                    }
+                }
+            };
+            ppsk.push(WlanPresharedKey {
+                network: WlanPresharedKeyNetwork {
+                    network_type: WlanPresharedKeyNetworkType::Specific,
+                    network_id: Some(networkconf_id),
+                },
+                passphrase: entry.passphrase.clone(),
+            });
+        }
+
+        // UniFi doesn't like empty PPSK
+        if ppsk.is_empty() {
+            issues.push(NmsError::EmptyListUnsupported);
+            return Ok(issues);
+        }
+
+        let mut wlan = self.get_wlan(nms_id).await?;
+        wlan.security_configuration.preshared_keys = Some(ppsk);
+        self.set_wlan(&wlan).await?;
+        Ok(issues)
+    }
+}
+
 /* Type definitions */
 
 #[derive(Debug, Deserialize)]
@@ -209,13 +276,13 @@ pub struct WlanSecurityConfigSummary {
     pub config_type: String,
 }
 
-/// Full Wlan object for GET/PUT. Uses flatten to round-trip unknown fields.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Wlan {
     pub id: String,
     pub name: String,
     pub security_configuration: WlanSecurityConfig,
+    /// Make sure we don't lose any extra fields from the API response
     #[serde(flatten)]
     pub extra: HashMap<String, Value>,
 }

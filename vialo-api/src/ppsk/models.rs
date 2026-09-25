@@ -15,6 +15,18 @@ pub enum JobData {
     Refresh {},
 }
 
+#[derive(Debug, Clone)]
+pub struct PpskEntry {
+    pub passphrase: String,
+    pub vlan: i32,
+}
+
+#[derive(Debug, Clone)]
+pub enum NmsError {
+    VlanUnavailable { vlan: i32 },
+    EmptyListUnsupported,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct JobModel {
     pub id: i32,
