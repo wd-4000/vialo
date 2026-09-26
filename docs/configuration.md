@@ -131,7 +131,7 @@ used separately from the config file for direct HTTP calls.
 |---|---|---|
 | `proxy` | no | SOCKS5 proxy URL for outbound HTTP clients (printer, bookable connectors). If absent, no proxy is used. |
 
-Note: the PPSK/UniFi subsystem also respects this setting.
+Note: the NMS/UniFi subsystem also respects this setting.
 
 ### `[email]` (requires feature `email`)
 

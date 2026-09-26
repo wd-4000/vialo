@@ -156,13 +156,13 @@ The printer subsystem runs as a background task. It:
 - Reads page counters and deducts credits
 - Handles account creation, deletion, and limit changes
 
-## PPSK subsystem
+## NMS subsystem
 
-Requires the `ppsk` feature (enabled by default).
+Requires the `nms` feature (enabled by default).
 
-The PPSK subsystem pushes per‑account Wi‑Fi credentials to a UniFi controller.
-It reads credentials from the `net_cred` table and the UniFi controller
-hostname from `net_nms_connectors` (type `unifi`).
+The NMS subsystem pushes per‑account Wi‑Fi credentials to a UniFi or MikroTik controller.
+It reads credentials from the `net_cred` table and the controller
+hostname from `net_nms_connectors`.
 
 For an outbound proxy (e.g., SOCKS5 to reach the UniFi controller):
 

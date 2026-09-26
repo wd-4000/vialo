@@ -29,7 +29,7 @@ src/
 ├── bookables/        # Bookable connector subsystem (NetIO smart outlets)
 ├── printer/          # Printer subsystem (Konica Minolta API)
 ├── email/            # Email subsystem (SMTP/sendmail + handlebars templates)
-├── ppsk/             # PPSK subsystem (UniFi controller credential sync)
+├── nms/              # PPSK subsystem (UniFi/MikroTik controller credential sync)
 ├── helpers/          # Encryption, people helpers, file utilities
 ├── permissions.rs    # App role checks
 ├── events.rs         # Broadcast channel wiring
@@ -79,7 +79,7 @@ The in‑process subsystems follow the same pattern:
 | Subsystem | Code | Job data |
 |---|---|---|
 | Printer | `printer::main()` | CreateAccount, DeleteAccount, UpdateAccountLimit, Refresh, FullSync |
-| PPSK | `ppsk::main()` | Refresh (sync credentials to UniFi) |
+| NMS | `nms::main()` | Refresh (sync credentials to UniFi) |
 | Email | `email::main()` | Event‑driven via broadcast channels, no job table |
 | Bookables | `bookables::main()` | Connector power on/off on appointment start/end |
 | DHCP | `vialo-dhcp` binary | Discover, Request, Release, Decline. Standalone process using dora for the DHCP protocol. |
