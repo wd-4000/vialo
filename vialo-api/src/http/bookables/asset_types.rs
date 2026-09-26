@@ -244,7 +244,7 @@ pub async fn put(
     .execute(&mut *trans)
     .await?;
 
-    replace_asset_type_permissions(&mut *trans, id, body.permissions.as_deref()).await?;
+    replace_asset_type_permissions(&mut trans, id, body.permissions.as_deref()).await?;
 
     trans.commit().await?;
 

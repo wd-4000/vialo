@@ -390,7 +390,6 @@ pub async fn main(
 }
 
 /// Recompute every bookable payload and broadcast what changed.
-
 async fn publish_bookables(
     app_state: &AppState,
     cache: &mut HashMap<i32, (BookableAssetStatus, BookableAssetQueue)>,
