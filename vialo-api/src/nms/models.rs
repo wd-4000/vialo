@@ -15,7 +15,7 @@ pub enum JobData {
     Refresh {},
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PpskEntry {
     pub passphrase: String,
     pub vlan: i32,

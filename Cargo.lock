@@ -2532,6 +2532,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0aeb26bf5e836cc1c341c8106051b573f1766dfa05aa87f0b98be5e51b02303"
 dependencies = [
  "nix 0.29.0",
+ "serde",
  "winapi",
 ]
 
@@ -3611,6 +3612,7 @@ dependencies = [
  "rustls-pki-types",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tokio-native-tls",

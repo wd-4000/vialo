@@ -10,10 +10,12 @@ use sqlx::{Executor, PgConnection, PgPool, Postgres, types::Json};
 use std::sync::Arc;
 use tokio::{sync::watch, time};
 use tracing::{debug, error, info, warn};
+mod mikrotik;
 mod models;
 mod traits;
 mod unifi;
 use crate::http::history::models::Subsystem;
+use mikrotik::MikrotikApi;
 use models::*;
 use traits::*;
 use unifi::UniFiApi;
@@ -134,7 +136,7 @@ pub async fn main(
     }
         if let Some(job_id) = current_job_id {
             let mut run_task = async || -> Result<(), anyhow::Error> {
-                let connectors = sqlx::query!(r#"SELECT id, type as "type: NmsType", hostname, api_key as "api_key: Encrypted<String>", site_id FROM net_nms_connectors"#)
+                let connectors = sqlx::query!(r#"SELECT id, type as "type: NmsType", hostname, api_key as "api_key: Encrypted<String>", site_id, username as "username: Encrypted<String>", password as "password: Encrypted<String>" FROM net_nms_connectors"#)
                     .fetch_all(&db_pool)
                     .await?;
 
@@ -154,11 +156,16 @@ pub async fn main(
                             .await
                         }
                         NmsType::Mikrotik => {
-                            warn!(
-                                "someone needs to implement mikrotik for connector {} to work",
-                                c.id
-                            );
-                            continue;
+                            async {
+                                let mut api = MikrotikApi::new(
+                                    c.hostname,
+                                    c.username.ok_or_else(|| anyhow!("no username"))?.expose(),
+                                    c.password.ok_or_else(|| anyhow!("no password"))?.expose(),
+                                    &app_state.config.proxy,
+                                )?;
+                                sync_connector(&mut api, c.id, &db_pool, &mut conn).await
+                            }
+                            .await
                         }
                     };
                     if let Err(e) = result {
