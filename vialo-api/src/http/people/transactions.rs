@@ -77,7 +77,7 @@ pub async fn get(
         FROM credit_ledger cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
         LEFT JOIN accounts_people ac_to ON to_account = ac_to.id
-        LEFT JOIN bookable_appointments ba ON ba.transaction_id = cl.id
+        LEFT JOIN bookable_appointments ba ON cl.product = 'bookable' AND ba.transaction_id = cl.id
         WHERE cl.id = {id} {#WH_MANAGER}"#,
         #WH_MANAGER = match(is_credit_manager) {
             false => "AND (cl.from_account = {user_id} OR cl.to_account = {user_id})",
