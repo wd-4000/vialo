@@ -62,12 +62,12 @@ pub async fn list_devices(
 
     // Permission check in case we receive an account ID different from the current account
     let resolved_account_id = opts.account_id.resolve(user.id);
-    if resolved_account_id != IdOrAllQuery::Id(user.id) {
+    if resolved_account_id != IdOrAllQuery::One(user.id) {
         check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
     }
 
     match resolved_account_id {
-        IdOrAllQuery::Id(account_id) => {
+        IdOrAllQuery::One(account_id) => {
             let devices = conditional_query_as!(
                 ListDeviceWithRefs,
                 r#"SELECT nd.id, label, hostname, realm_id, nd.last_updated,  nd.last_seen, jsonb_agg(jsonb_build_object('id', ndc.cred_id, 'network_id', nc.network_id, 'mac', ndc.mac) ORDER BY ndc.cred_id) AS "creds!: DeviceCredEmbeds"

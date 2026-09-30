@@ -1,8 +1,8 @@
 use serde::Serialize;
-use serde::{Deserialize, Deserializer, de::Error};
+use serde::{Deserialize, Deserializer, de::Error, de::IntoDeserializer};
 use utoipa::ToSchema;
 use utoipa::openapi::{
-    KnownFormat, ObjectBuilder, OneOfBuilder, RefOr, Schema, SchemaFormat,
+    ArrayBuilder, KnownFormat, ObjectBuilder, OneOfBuilder, RefOr, Schema, SchemaFormat,
     schema::{SchemaType, Type},
 };
 use uuid::Uuid;
@@ -61,11 +61,83 @@ macro_rules! impl_jsonb_embed {
     };
 }
 
+/// Query param, a single value or "all"
 #[derive(Debug, PartialEq)]
-pub enum IdOrAllQuery {
-    Id(Uuid),
+pub enum OrAllQuery<T> {
+    One(T),
     All,
 }
+
+impl<T: Default> Default for OrAllQuery<T> {
+    fn default() -> Self {
+        Self::One(T::default())
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for OrAllQuery<T> {
+    fn deserialize<D>(de: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(de)?;
+
+        if value == "all" {
+            return Ok(Self::All);
+        }
+        T::deserialize(IntoDeserializer::<D::Error>::into_deserializer(value)).map(Self::One)
+    }
+}
+
+/// Repeated query param, either a list of values or the "all"
+#[derive(Debug, PartialEq)]
+pub enum ListOrAllQuery<T> {
+    List(Vec<T>),
+    All,
+}
+
+impl<T> Default for ListOrAllQuery<T> {
+    fn default() -> Self {
+        Self::List(Vec::new())
+    }
+}
+
+impl<T: utoipa::PartialSchema> utoipa::PartialSchema for ListOrAllQuery<T> {
+    fn schema() -> RefOr<Schema> {
+        RefOr::T(Schema::OneOf(
+            OneOfBuilder::new()
+                .item(ArrayBuilder::new().items(T::schema()).build())
+                .item(
+                    ObjectBuilder::new()
+                        .schema_type(SchemaType::new(Type::String))
+                        .enum_values(Some(["all"]))
+                        .build(),
+                )
+                .build(),
+        ))
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for ListOrAllQuery<T> {
+    fn deserialize<D>(de: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let values = Vec::<String>::deserialize(de)?;
+
+        if values.iter().any(|v| v == "all") {
+            return Ok(Self::All);
+        }
+        values
+            .into_iter()
+            .map(|v| T::deserialize(IntoDeserializer::<D::Error>::into_deserializer(v)))
+            .collect::<Result<_, _>>()
+            .map(Self::List)
+    }
+}
+
+// ToSchema impls go on aliases: utoipauto can't register generic impls, and utoipa names each
+// alias as its own component.
+pub type IdOrAllQuery = OrAllQuery<Uuid>;
 
 impl utoipa::PartialSchema for IdOrAllQuery {
     fn schema() -> RefOr<Schema> {
@@ -94,33 +166,14 @@ impl utoipa::ToSchema for IdOrAllQuery {
     }
 }
 
-impl<'de> Deserialize<'de> for IdOrAllQuery {
-    fn deserialize<D>(de: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let variant = String::deserialize(de)?;
+pub type IdOrMeOrAllQuery = OrAllQuery<IdOrMeQuery>;
 
-        Ok(match variant.as_str() {
-            "all" => IdOrAllQuery::All,
-            id => IdOrAllQuery::Id(id.parse::<Uuid>().map_err(Error::custom)?),
-        })
-    }
-}
-
-#[derive(Debug, PartialEq, Default)]
-pub enum IdOrMeOrAllQuery {
-    Id(Uuid),
-    #[default]
-    Me,
-    All,
-}
 impl IdOrMeOrAllQuery {
     /// Converts "me" into the actual Uuid, or returns the specific ID/All.
     pub fn resolve(&self, current_user_id: Uuid) -> IdOrAllQuery {
         match self {
-            Self::Id(id) => IdOrAllQuery::Id(*id),
-            Self::Me => IdOrAllQuery::Id(current_user_id),
+            Self::One(IdOrMeQuery::Id(id)) => IdOrAllQuery::One(*id),
+            Self::One(IdOrMeQuery::Me) => IdOrAllQuery::One(current_user_id),
             Self::All => IdOrAllQuery::All,
         }
     }
@@ -150,21 +203,6 @@ impl utoipa::PartialSchema for IdOrMeOrAllQuery {
 impl utoipa::ToSchema for IdOrMeOrAllQuery {
     fn name() -> std::borrow::Cow<'static, str> {
         "IdOrMeOrAllQuery".into()
-    }
-}
-
-impl<'de> Deserialize<'de> for IdOrMeOrAllQuery {
-    fn deserialize<D>(de: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let variant = String::deserialize(de)?;
-
-        Ok(match variant.as_str() {
-            "all" => Self::All,
-            "me" => Self::Me,
-            id => Self::Id(id.parse::<Uuid>().map_err(Error::custom)?),
-        })
     }
 }
 

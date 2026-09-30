@@ -35,7 +35,7 @@ pub async fn list(
 ) -> Result<impl IntoResponse, VialoError> {
     // Permission check in case we receive an account ID different from the current account
     let resolved_account_id = opts.account_id.resolve(user.id);
-    if resolved_account_id != IdOrAllQuery::Id(user.id) {
+    if resolved_account_id != IdOrAllQuery::One(user.id) {
         check_app_role(user.clone(), AppRole::CreditManager, &data.db).await?;
     }
 
@@ -51,7 +51,7 @@ pub async fn list(
        {#account_where}
         ORDER BY created_at DESC
         LIMIT {limit} OFFSET {offset}"#, #account_where = match (resolved_account_id) {
-            IdOrAllQuery::Id(acid) => "WHERE to_account = {acid} OR from_account = {acid}",
+            IdOrAllQuery::One(acid) => "WHERE to_account = {acid} OR from_account = {acid}",
             IdOrAllQuery::All => ""
         })
         .fetch_all(&data.db)

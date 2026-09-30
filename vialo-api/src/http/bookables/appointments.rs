@@ -5,7 +5,7 @@ use crate::bookables::CancellationReason;
 use crate::helpers::{PgDateTime, encryption, grab_authd_conn_subsystem};
 use crate::http::history::models::Subsystem;
 use crate::http::people::models::TransactionStatus;
-use crate::http::util::models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery};
+use crate::http::util::models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery, ListOrAllQuery};
 use crate::http::util::{
     MaybeJsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
 };
@@ -40,7 +40,15 @@ pub struct BookableAppointmentFilterOptions {
     pub search: Option<String>,
     pub asset_types: Option<Vec<i32>>,
     #[serde(default)]
-    pub include_cancelled: bool,
+    pub include_cancelled: CancellationReasonsOrAll,
+}
+
+pub type CancellationReasonsOrAll = ListOrAllQuery<CancellationReason>;
+
+impl ToSchema for CancellationReasonsOrAll {
+    fn name() -> std::borrow::Cow<'static, str> {
+        "CancellationReasonsOrAll".into()
+    }
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -440,7 +448,8 @@ pub async fn list(
             ba.maintenance
         FROM
             bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true
-            {#permission} {#account} {#asset_types} {#from} {#to} {#cancelled} ORDER BY ba.during, ba.id LIMIT {limit} OFFSET {offset}"#,
+            {#permission} {#account} {#asset_types} {#from} {#to} {#cancelled}
+            ORDER BY ba.during, ba.id LIMIT {limit} OFFSET {offset}"#,
             #account_info = match(&resolved_account_id){
                   IdOrAllQuery::All => r#"jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account: AccountEmbed","#,
                   _ => r#"null AS "account: AccountEmbed","#
@@ -452,7 +461,7 @@ pub async fn list(
             },
             #account = match (&resolved_account_id) {
                 IdOrAllQuery::All => "",
-                IdOrAllQuery::Id(account) => "AND ba.account_id = {account}",
+                IdOrAllQuery::One(account) => "AND ba.account_id = {account}",
             },
             #asset_types = match (opts.asset_types) {
                 Some(at) => "AND b.asset_type_id = ANY({at:Vec<i32>})",
@@ -466,11 +475,10 @@ pub async fn list(
                 Some(to) => "AND UPPER(ba.during) <= {to} ",
                 None => ""
             },
-            #cancelled = match (opts.include_cancelled) {
-                true => "",
-                false => "AND ba.cancelled_at IS NULL",
+            #cancelled = match (&opts.include_cancelled) {
+                ListOrAllQuery::All => "",
+                ListOrAllQuery::List(reasons) => "AND (ba.cancellation_reason IS NULL OR ba.cancellation_reason = ANY({reasons:&[CancellationReason]}))",
             }
-
     )
     .fetch_all(&data.db)
     .await?;
