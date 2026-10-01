@@ -158,7 +158,7 @@ REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT
 EXECUTE FUNCTION printer_context_delete_sync ();
 
 -- Credit changes need a limit update (limits are counter + balance/price).
--- Printer billing rows don't, balance and counter move together.
+-- Printer billing rows don't, balance and counter move together (unless it's a refund)
 CREATE OR REPLACE FUNCTION enqueue_account_limit_update () RETURNS TRIGGER AS $$
 BEGIN
     -- Both sides of a transfer may change balance
@@ -171,7 +171,7 @@ BEGIN
       CROSS JOIN LATERAL (VALUES (n.from_account), (n.to_account)) AS a(account_id)
     WHERE (
             (n.entry_type = 'transfer'
-             AND (n.product IS NULL OR n.product NOT IN ('printer_bw', 'printer_color')))
+             AND (n.product IS NULL OR n.product NOT IN ('printer_bw', 'printer_color') OR n.refund_of IS NOT NULL))
             OR n.entry_type IN ('unlimited_enabled', 'unlimited_disabled')
           )
       AND a.account_id IS NOT NULL

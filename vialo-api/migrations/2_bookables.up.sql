@@ -120,6 +120,7 @@ CREATE TABLE bookable_appointments (
 
 CREATE INDEX bookable_appointments_during_idx ON bookable_appointments (during, id);
 CREATE INDEX bookable_appointments_account_id_during_idx ON bookable_appointments (account_id, during, id);
+CREATE INDEX bookable_appointments_transaction_id_idx ON bookable_appointments (transaction_id);
 
 CREATE TYPE bookable_status_type AS ENUM(
   'available',

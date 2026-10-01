@@ -281,10 +281,14 @@ pub enum ProductType {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
-pub struct ProductEmbed {
-    pub id: Uuid,
-    #[serde(rename = "type")]
-    pub product_type: ProductType,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ProductEmbed {
+    Bookable {
+        id: Option<Uuid>,
+        asset_ids: Vec<i32>,
+    },
+    PrinterColor,
+    PrinterBw,
 }
 
 impl_jsonb_embed!(ProductEmbed);

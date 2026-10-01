@@ -234,7 +234,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
                 .min(appointment.refundable_credits.unwrap_or(0));
         if refund_credits > 0 {
             query!(
-                "INSERT INTO credit_ledger (to_account, refund_of, credits) VALUES ($1, $2, $3)",
+                "INSERT INTO credit_ledger (to_account, refund_of, credits, product) VALUES ($1, $2, $3, (SELECT product FROM credit_ledger WHERE id = $2))",
                 appointment.from_account,
                 appointment.transaction_id,
                 refund_credits

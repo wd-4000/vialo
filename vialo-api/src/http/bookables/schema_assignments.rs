@@ -123,8 +123,8 @@ pub async fn post(
                           AND asset_id = $2
                         RETURNING id, transaction_id
                     )
-                    INSERT INTO credit_ledger (to_account, refund_of, credits)
-                    SELECT cl.from_account, cancelled.transaction_id, cl.credits - cl.credits_refunded
+                    INSERT INTO credit_ledger (to_account, refund_of, credits, product)
+                    SELECT cl.from_account, cancelled.transaction_id, cl.credits - cl.credits_refunded, cl.product
                     FROM cancelled
                     JOIN credit_ledger cl ON cl.id = cancelled.transaction_id
                     WHERE cl.from_account IS NOT NULL AND cl.credits > cl.credits_refunded"#,

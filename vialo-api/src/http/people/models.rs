@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     helpers::{I18nMap, PgDate},
-    http::util::models::{AccountEmbed, AccountPersonEmbed, ProductEmbed, ProductType, RoomEmbed},
+    http::util::models::{AccountEmbed, AccountPersonEmbed, ProductEmbed, RoomEmbed},
     permissions::{AppRole, GroupRole},
 };
 
@@ -169,29 +169,13 @@ pub struct PersonalTransactionModel {
     pub id: Uuid,
     pub to_account: Option<AccountEmbed>,
     pub from_account: Option<AccountEmbed>,
-    pub product: Option<ProductType>,
-    pub credits: Option<i32>,
-    pub credits_refunded: i32,
-    pub status: TransactionStatus,
-    pub refund_of: Option<Uuid>,
-    pub entry_type: LedgerEntryType,
-    pub label: Option<String>,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-#[derive(Serialize, Debug, ToSchema)]
-pub struct PersonalTransactionModelWithProductDetails {
-    pub id: Uuid,
-    pub to_account: Option<AccountEmbed>,
-    pub from_account: Option<AccountEmbed>,
     pub product: Option<ProductEmbed>,
-    pub label: Option<String>,
     pub credits: Option<i32>,
     pub credits_refunded: i32,
     pub status: TransactionStatus,
     pub refund_of: Option<Uuid>,
     pub entry_type: LedgerEntryType,
+    pub label: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
 }

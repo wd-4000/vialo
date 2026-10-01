@@ -1,8 +1,5 @@
 use super::{
-    models::{
-        LedgerEntryType, PersonalTransactionModel, PersonalTransactionModelWithProductDetails,
-        TransactionStatus,
-    },
+    models::{LedgerEntryType, PersonalTransactionModel, TransactionStatus},
     schemas::TransactionFilterOptions,
 };
 
@@ -10,7 +7,7 @@ use crate::{
     AppState,
     http::util::{
         JsonE, MaybeJsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
-        models::{AccountEmbed, IdOrAllQuery, ProductEmbed, ProductType},
+        models::{AccountEmbed, IdOrAllQuery, ProductEmbed},
     },
     permissions::{AppRole, check_app_role},
 };
@@ -44,13 +41,22 @@ pub async fn list(
         r#"SELECT cl.id,
         CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
         CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
-         credits, cl.credits_refunded, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, cl.product as "product: ProductType", cl.label, cl.entry_type as "entry_type: LedgerEntryType"
-        FROM credit_ledger cl
+         credits, cl.credits_refunded, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, CASE WHEN cl.product IS NOT NULL THEN jsonb_build_object('type', cl.product, 'id', bas.appointment_id, 'asset_ids', COALESCE(bas.asset_ids, ARRAY[]::int[])) ELSE NULL END AS "product: ProductEmbed", cl.label, cl.entry_type as "entry_type: LedgerEntryType"
+        FROM (
+            SELECT * FROM credit_ledger
+            {#account_where}
+            ORDER BY created_at DESC
+            LIMIT {limit} OFFSET {offset} -- Paginate here so the joins only run for the page
+        ) cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
         LEFT JOIN accounts_people ac_to ON to_account = ac_to.id
-       {#account_where}
-        ORDER BY created_at DESC
-        LIMIT {limit} OFFSET {offset}"#, #account_where = match (resolved_account_id) {
+        LEFT JOIN LATERAL (
+            SELECT array_agg(DISTINCT ba.asset_id ORDER BY ba.asset_id) AS asset_ids,
+                   (array_agg(ba.id ORDER BY lower(ba.during), ba.id))[1] AS appointment_id
+            FROM bookable_appointments ba
+            WHERE cl.product = 'bookable' AND (ba.transaction_id = cl.id OR ba.transaction_id = cl.refund_of)
+        ) bas ON true
+        ORDER BY cl.created_at DESC"#, #account_where = match (resolved_account_id) {
             IdOrAllQuery::One(acid) => "WHERE to_account = {acid} OR from_account = {acid}",
             IdOrAllQuery::All => ""
         })
@@ -59,7 +65,7 @@ pub async fn list(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/people/transactions/{id}", responses((status = 200, description = "OK", body=PersonalTransactionModelWithProductDetails)))]
+#[utoipa::path(get, path = "/people/transactions/{id}", responses((status = 200, description = "OK", body=PersonalTransactionModel)))]
 pub async fn get(
     Path(id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
@@ -69,15 +75,20 @@ pub async fn get(
         .await
         .is_ok();
     let user_id = user.id;
-    let record = conditional_query_as!(PersonalTransactionModelWithProductDetails,
+    let record = conditional_query_as!(PersonalTransactionModel,
         r#"SELECT cl.id,
         CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
         CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
-         cl.credits, cl.credits_refunded, cl.label, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, CASE WHEN ba.id IS NOT NULL THEN jsonb_build_object('type', cl.product, 'id', ba.id) ELSE NULL END AS "product: ProductEmbed", cl.entry_type as "entry_type: LedgerEntryType"
+         cl.credits, cl.credits_refunded, cl.label, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", cl.refund_of, CASE WHEN cl.product IS NOT NULL THEN jsonb_build_object('type', cl.product, 'id', bas.appointment_id, 'asset_ids', COALESCE(bas.asset_ids, ARRAY[]::int[])) ELSE NULL END AS "product: ProductEmbed", cl.entry_type as "entry_type: LedgerEntryType"
         FROM credit_ledger cl
         LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
         LEFT JOIN accounts_people ac_to ON to_account = ac_to.id
-        LEFT JOIN bookable_appointments ba ON cl.product = 'bookable' AND ba.transaction_id = cl.id
+        LEFT JOIN LATERAL (
+            SELECT array_agg(DISTINCT ba.asset_id ORDER BY ba.asset_id) AS asset_ids,
+                   (array_agg(ba.id ORDER BY lower(ba.during), ba.id))[1] AS appointment_id
+            FROM bookable_appointments ba
+            WHERE cl.product = 'bookable' AND (ba.transaction_id = cl.id OR ba.transaction_id = cl.refund_of)
+        ) bas ON true
         WHERE cl.id = {id} {#WH_MANAGER}"#,
         #WH_MANAGER = match(is_credit_manager) {
             false => "AND (cl.from_account = {user_id} OR cl.to_account = {user_id})",
@@ -140,12 +151,19 @@ pub async fn undo(
     // FOR UPDATE so the remainder we read is the remainder we refund, even if a cancellation
     // lands on the same transaction concurrently.
     let transaction = sqlx::query!(
-        r#"SELECT coalesce(credits - credits_refunded, 0) AS "refundable!" FROM credit_ledger WHERE id = $1 FOR UPDATE"#,
+        r#"SELECT coalesce(credits - credits_refunded, 0) AS "refundable!", refund_of FROM credit_ledger WHERE id = $1 FOR UPDATE"#,
         id
     )
     .fetch_optional(&mut *trans)
     .await?
     .ok_or(VialoError::NotFound())?;
+
+    if transaction.refund_of.is_some() {
+        return Err(VialoError::AppError(
+            StatusCode::BAD_REQUEST,
+            "is_refund".into(),
+        ));
+    }
 
     if transaction.refundable <= 0 {
         return Err(VialoError::AppError(
@@ -185,8 +203,8 @@ pub async fn undo(
     }
 
     sqlx::query!(
-        "INSERT INTO credit_ledger (to_account, credits, refund_of)
-         SELECT from_account, credits - credits_refunded, id FROM credit_ledger WHERE id = $1",
+        "INSERT INTO credit_ledger (to_account, credits, refund_of, product)
+         SELECT from_account, credits - credits_refunded, id, product FROM credit_ledger WHERE id = $1",
         id
     )
     .execute(&mut *trans)
