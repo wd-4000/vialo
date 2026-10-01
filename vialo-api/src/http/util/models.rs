@@ -286,6 +286,7 @@ pub enum ProductEmbed {
     Bookable {
         id: Option<Uuid>,
         asset_ids: Vec<i32>,
+        asset_type_ids: Vec<i32>,
     },
     PrinterColor,
     PrinterBw,

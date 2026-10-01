@@ -375,14 +375,16 @@ pub async fn get_person_overview(
             r#"SELECT cl.id,
             CASE WHEN from_account IS NOT NULL THEN jsonb_build_object('id', from_account, 'full_name', ac_from.full_name, 'type', 'person') ELSE NULL END AS "from_account: AccountEmbed",
             CASE WHEN to_account IS NOT NULL THEN jsonb_build_object('id', to_account, 'full_name', ac_to.full_name, 'type', 'person') ELSE NULL END AS "to_account: AccountEmbed",
-             credits, cl.credits_refunded, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", CASE WHEN cl.product IS NOT NULL THEN jsonb_build_object('type', cl.product, 'id', bas.appointment_id, 'asset_ids', COALESCE(bas.asset_ids, ARRAY[]::int[])) ELSE NULL END AS "product: ProductEmbed", cl.refund_of, cl.label, cl.entry_type as "entry_type: LedgerEntryType"
+             credits, cl.credits_refunded, cl.created_at, cl.last_updated, cl.status as "status: TransactionStatus", CASE WHEN cl.product IS NOT NULL THEN jsonb_build_object('type', cl.product, 'id', bas.appointment_id, 'asset_ids', COALESCE(bas.asset_ids, ARRAY[]::int[]), 'asset_type_ids', COALESCE(bas.asset_type_ids, ARRAY[]::int[])) ELSE NULL END AS "product: ProductEmbed", cl.refund_of, cl.label, cl.entry_type as "entry_type: LedgerEntryType"
             FROM credit_ledger cl
             LEFT JOIN accounts_people ac_from ON from_account = ac_from.id
             LEFT JOIN accounts_people ac_to ON to_account = ac_to.id
             LEFT JOIN LATERAL (
                 SELECT array_agg(DISTINCT ba.asset_id ORDER BY ba.asset_id) AS asset_ids,
+                       array_agg(DISTINCT bass.asset_type_id ORDER BY bass.asset_type_id) AS asset_type_ids,
                        (array_agg(ba.id ORDER BY lower(ba.during), ba.id))[1] AS appointment_id
                 FROM bookable_appointments ba
+                JOIN bookable_assets bass ON ba.asset_id = bass.id
                 WHERE cl.product = 'bookable' AND (ba.transaction_id = cl.id OR ba.transaction_id = cl.refund_of)
             ) bas ON true
             WHERE to_account = $1 OR from_account = $1
