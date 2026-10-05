@@ -340,8 +340,8 @@ async fn main() {
     };
 
     let (posts_tx, _) = broadcast::channel::<i32>(256);
-    let (expired_appointments_tx, _) =
-        broadcast::channel::<vialo_api::bookables::ExpiredAppointmentMessage>(256);
+    let (bookable_events_tx, _) =
+        broadcast::channel::<vialo_api::bookables::BookableEventMessage>(256);
     let kiosk_config = config
         .bookables
         .as_ref()
@@ -357,7 +357,7 @@ async fn main() {
                 kiosk_config,
             ),
             posts_tx,
-            expired_appointments_tx,
+            bookable_events_tx,
         },
         config,
         kratos_config,

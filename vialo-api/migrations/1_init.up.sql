@@ -187,6 +187,7 @@ CREATE TABLE accounts_people (
   email citext UNIQUE,
   membership_start date,
   membership_end date not null, -- Association membership end. Expired = No access.
+  comms_lang text,
   full_name text,
   manually_suspended boolean not null default false, -- True = No access to any syiervices.
   credit_balance int DEFAULT 0, -- NULL = unlimited credits

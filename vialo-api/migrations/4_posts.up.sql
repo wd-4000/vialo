@@ -80,7 +80,7 @@ CREATE TABLE board_pinned_posts (
 CREATE INDEX board_pinned_posts_board_id_idx ON board_pinned_posts (board_id, post_id) INCLUDE (pinned_until);
 
 CREATE TABLE board_subscriptions (
-  id uuid PRIMARY KEY default gen_random_uuid(),
+  id uuid PRIMARY KEY default gen_random_uuid(), -- This is the unsubscribe token 😍
   account_id uuid REFERENCES accounts_people (id) ON DELETE CASCADE,
   board_id int NOT NULL REFERENCES boards (id) ON DELETE CASCADE,
   UNIQUE (account_id, board_id)

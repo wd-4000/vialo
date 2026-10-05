@@ -1,0 +1,11 @@
+{{#*inline "content"}}
+    {{> html/bookable_appointment}}
+    {{#if message.bookable.appointment.event.credits_refunded}}
+    <tr>
+        <td>
+            <p style="margin: 15px 0 0 0">{{> credits_info}}</p>
+        </td>
+    </tr>
+    {{/if}}
+{{/inline}}
+{{> html/message}}

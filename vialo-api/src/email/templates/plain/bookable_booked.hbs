@@ -1,0 +1,8 @@
+{{#*inline "content"}}
+{{> plain/bookable_appointment}}
+{{#if message.bookable.appointment.event.credits}}
+
+{{> credits_info}}
+{{/if}}
+{{/inline}}
+{{> plain/message}}

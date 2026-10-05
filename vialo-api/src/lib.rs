@@ -38,7 +38,7 @@ pub struct EventChannels {
     pub bookables: BookableChannel,
     pub bookable_queues: BookableQueueChannel,
     pub posts_tx: broadcast::Sender<i32>,
-    pub expired_appointments_tx: broadcast::Sender<crate::bookables::ExpiredAppointmentMessage>,
+    pub bookable_events_tx: broadcast::Sender<crate::bookables::BookableEventMessage>,
 }
 
 pub struct AppState {

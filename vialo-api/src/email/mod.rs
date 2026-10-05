@@ -13,6 +13,7 @@ mod custom_headers;
 mod date;
 use crate::{
     AppState,
+    bookables::{BookableEventKind, BookableEventMessage},
     config::{Config, OrgConfig},
 };
 use custom_headers::*;
@@ -67,9 +68,9 @@ enum MessageType {
         subject: String,
         body: String,
     },
-    BookableExpired {
-        asset_name: String,
-        credits_refunded: i32,
+    Bookable {
+        appointment: BookableEventMessage,
+        time: String,
     },
 }
 
@@ -77,7 +78,8 @@ enum MessageType {
 struct EmailAccountInfo<'a> {
     full_name: &'a str,
     email: &'a str,
-    url_unsubscribe: String,
+    /// One-click unsubscribe target, only for real subscriptions
+    url_unsubscribe: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -102,12 +104,44 @@ fn build_registry() -> Result<Handlebars<'static>, anyhow::Error> {
         ("html/post", include_str!("templates/html/post.hbs")),
         ("html/direct", include_str!("templates/html/direct.hbs")),
         (
+            "html/bookable_appointment",
+            include_str!("templates/html/bookable_appointment.hbs"),
+        ),
+        (
+            "html/bookable_booked",
+            include_str!("templates/html/bookable_booked.hbs"),
+        ),
+        (
+            "html/bookable_upcoming",
+            include_str!("templates/html/bookable_upcoming.hbs"),
+        ),
+        (
+            "html/bookable_canceled",
+            include_str!("templates/html/bookable_canceled.hbs"),
+        ),
+        (
             "html/bookable_expired",
             include_str!("templates/html/bookable_expired.hbs"),
         ),
         ("plain/message", include_str!("templates/plain/message.hbs")),
         ("plain/post", include_str!("templates/plain/post.hbs")),
         ("plain/direct", include_str!("templates/plain/direct.hbs")),
+        (
+            "plain/bookable_appointment",
+            include_str!("templates/plain/bookable_appointment.hbs"),
+        ),
+        (
+            "plain/bookable_booked",
+            include_str!("templates/plain/bookable_booked.hbs"),
+        ),
+        (
+            "plain/bookable_upcoming",
+            include_str!("templates/plain/bookable_upcoming.hbs"),
+        ),
+        (
+            "plain/bookable_canceled",
+            include_str!("templates/plain/bookable_canceled.hbs"),
+        ),
         (
             "plain/bookable_expired",
             include_str!("templates/plain/bookable_expired.hbs"),
@@ -140,39 +174,48 @@ async fn form_email<'a>(
 ) -> Result<Message, anyhow::Error> {
     let email_domain = config.email_domain();
 
-    let (html_template, plain_template, html_msg_locale, plain_msg_locale) = match context.message {
-        MessageType::Post { .. } => (
-            "html/post",
-            "plain/post",
-            locale["post"]["new"].clone(),
-            locale_plain["post"]["new"].clone(),
-        ),
-        MessageType::Direct { .. } => (
-            "html/direct",
-            "plain/direct",
-            locale["direct"].clone(),
-            locale_plain["direct"].clone(),
-        ),
-        MessageType::BookableExpired { .. } => (
-            "html/bookable_expired",
-            "plain/bookable_expired",
-            locale["bookable"]["expired"].clone(),
-            locale_plain["bookable"]["expired"].clone(),
-        ),
+    // Strings directly under `section` are shared by its kinds, `kind` overrides them
+    let (html_template, plain_template, section, kind) = match context.message {
+        MessageType::Post { .. } => ("html/post", "plain/post", "post", Some("new")),
+        MessageType::Direct { .. } => ("html/direct", "plain/direct", "direct", None),
+        MessageType::Bookable { appointment, .. } => {
+            let (html, plain, key) = match BookableEventKind::from(&appointment.event) {
+                BookableEventKind::Booked => {
+                    ("html/bookable_booked", "plain/bookable_booked", "booked")
+                }
+                BookableEventKind::Upcoming => {
+                    ("html/bookable_upcoming", "plain/bookable_upcoming", "upcoming")
+                }
+                BookableEventKind::Canceled => {
+                    ("html/bookable_canceled", "plain/bookable_canceled", "canceled")
+                }
+                BookableEventKind::Expired => {
+                    ("html/bookable_expired", "plain/bookable_expired", "expired")
+                }
+            };
+            (html, plain, "bookable", Some(key))
+        }
+    };
+
+    let register_message_partials = |handlebars: &mut Handlebars, locale: &Yaml| {
+        register_locale_partials(handlebars, &locale["global"])?;
+        register_locale_partials(handlebars, &locale[section])?;
+        if let Some(kind) = kind {
+            register_locale_partials(handlebars, &locale[section][kind])?;
+        }
+        Ok::<_, anyhow::Error>(())
     };
 
     // Cloned per message because the locale partials below are registered into
     // the registry, and the plain ones overwrite the html ones between renders.
     let mut handlebars = registry.clone();
 
-    register_locale_partials(&mut handlebars, &locale["global"])?;
-    register_locale_partials(&mut handlebars, &html_msg_locale)?;
+    register_message_partials(&mut handlebars, &locale)?;
 
     let email_title = handlebars.render("title", &context)?;
     let email_content_html = handlebars.render(html_template, &context)?;
 
-    register_locale_partials(&mut handlebars, &locale_plain["global"])?;
-    register_locale_partials(&mut handlebars, &plain_msg_locale)?;
+    register_message_partials(&mut handlebars, &locale_plain)?;
 
     let email_content_plain = handlebars.render(plain_template, &context)?;
 
@@ -195,18 +238,20 @@ async fn form_email<'a>(
         .parse::<Mailbox>()?,
     );
 
-    Ok(builder
+    builder = builder
         .to(context.account.email.parse::<Mailbox>()?)
-        .subject(email_title)
-        .header(custom_headers::ListUnsubscribe(format!(
-            "<{}>",
-            context.account.url_unsubscribe
-        )))
-        .header(ListUnsubscribePost("List-Unsubscribe=One-Click".into()))
-        .multipart(MultiPart::alternative_plain_html(
-            email_content_plain,
-            email_content_html,
-        ))?)
+        .subject(email_title);
+
+    if let Some(url_unsubscribe) = &context.account.url_unsubscribe {
+        builder = builder
+            .header(ListUnsubscribe(format!("<{url_unsubscribe}>")))
+            .header(ListUnsubscribePost("List-Unsubscribe=One-Click".into()));
+    }
+
+    Ok(builder.multipart(MultiPart::alternative_plain_html(
+        email_content_plain,
+        email_content_html,
+    ))?)
 }
 
 async fn notify_post_subscribers(
@@ -223,8 +268,9 @@ async fn notify_post_subscribers(
             bp.board_id,
             get_i18n_string(b.label, $1) AS "board_label!",
             get_i18n_string(bp.title, $1) AS title,
-            bp.event_from,
-            bp.event_to,
+            bp.event_from::timestamp AS "event_from?",
+            bp.event_to::timestamp AS "event_to?",
+            now()::timestamp AS "now_local!",
             get_i18n_string(bp.content_html, $1) AS content_html,
             get_i18n_string(bp.content_plain, $1) AS content_plain,
             ag.label as "group_label?",
@@ -247,7 +293,7 @@ async fn notify_post_subscribers(
             url: url_prefixes.board.clone() + &post.board_id.to_string(),
         },
         title: post.title.unwrap_or_else(|| "No title".into()),
-        time: get_event_timespan(locale!("en"), post.event_from, post.event_to),
+        time: get_event_timespan(locale!("en"), post.now_local, post.event_from, post.event_to),
         url: url_prefixes.post.clone() + &post.id.to_string(),
         content_html: post.content_html,
         content_plain: post.content_plain,
@@ -273,8 +319,9 @@ async fn notify_post_subscribers(
                 account: EmailAccountInfo {
                     full_name,
                     email: &person.email,
-                    url_unsubscribe: url_prefixes.unsubscribe.clone()
-                        + &person.unsubscribe.to_string(),
+                    url_unsubscribe: Some(
+                        url_prefixes.unsubscribe.clone() + &person.unsubscribe.to_string(),
+                    ),
                 },
                 group: post.group_label.as_ref().map(|label| EmailGroupInfo {
                     label,
@@ -312,20 +359,45 @@ async fn notify_post_subscribers(
     Ok(())
 }
 
-async fn notify_expired_appointment(
+async fn notify_bookable_event(
     app_state: &AppState,
     mailer: &MailTransport,
     registry: &Handlebars<'static>,
-    message: &crate::bookables::ExpiredAppointmentMessage,
+    message: &BookableEventMessage,
     locale: &Yaml,
     locale_plain: &Yaml,
 ) -> Result<(), anyhow::Error> {
-    let url_prefixes = &app_state.config.email.url;
-    let full_name = message.full_name.as_deref().unwrap_or("");
+    let Some(recipient) = sqlx::query!(
+        r#"SELECT ap.full_name, ap.email as "email!",
+        $3::timestamptz::timestamp as "begins_local!",
+        $4::timestamptz::timestamp as "ends_local!",
+        now()::timestamp as "now_local!"
+        FROM accounts_people ap
+        JOIN bookable_notification_prefs p ON p.account_id = ap.id
+        WHERE ap.id = $1 AND ap.email IS NOT NULL AND $2 = ANY(p.events)"#,
+        message.account_id,
+        BookableEventKind::from(&message.event) as BookableEventKind,
+        message.begins,
+        message.ends
+    )
+    .fetch_optional(&app_state.db)
+    .await?
+    else {
+        return Ok(());
+    };
 
-    let message_type = MessageType::BookableExpired {
-        asset_name: message.asset_name.clone(),
-        credits_refunded: message.credits_refunded,
+    let url_prefixes = &app_state.config.email.url;
+    let full_name = recipient.full_name.as_deref().unwrap_or("");
+
+    let message_type = MessageType::Bookable {
+        appointment: message.clone(),
+        time: get_event_timespan(
+            locale!("en"),
+            recipient.now_local,
+            Some(recipient.begins_local),
+            Some(recipient.ends_local),
+        )
+        .unwrap_or_default(),
     };
 
     let email = form_email(
@@ -335,8 +407,8 @@ async fn notify_expired_appointment(
             message: &message_type,
             account: EmailAccountInfo {
                 full_name,
-                email: &message.email,
-                url_unsubscribe: url_prefixes.preferences.clone(),
+                email: &recipient.email,
+                url_unsubscribe: None,
             },
             group: None,
             org: app_state.config.org.clone(),
@@ -349,19 +421,19 @@ async fn notify_expired_appointment(
 
     match mailer.send(email).await {
         Ok(_) => debug!(
-            "Expired appointment {} notification to {} sent!",
-            message.id, message.email
+            "Appointment {} notification to {} sent!",
+            message.appointment_id, recipient.email
         ),
         Err(e) => {
             error!(
-                "Expired appointment {} notification for {} failed: {:?}",
-                message.id, message.email, e
+                "Appointment {} notification for {} failed: {:?}",
+                message.appointment_id, recipient.email, e
             );
             crate::health::add_health_event(
                 &app_state.db,
                 crate::http::history::models::Subsystem::Email,
                 "smtp_failure",
-                Some(serde_json::json!({"appointment_id": message.id, "recipient": message.email, "error": e.to_string()})),
+                Some(serde_json::json!({"appointment_id": message.appointment_id, "recipient": recipient.email, "error": e.to_string()})),
                 20,
                 false,
                 None,
@@ -400,7 +472,7 @@ pub async fn main(
         .ok_or_else(|| anyhow::anyhow!("empty locale_plain file"))?;
 
     let mut posts_rx = app_state.event_channels.posts_tx.subscribe();
-    let mut expired_rx = app_state.event_channels.expired_appointments_tx.subscribe();
+    let mut bookable_rx = app_state.event_channels.bookable_events_tx.subscribe();
 
     loop {
         tokio::select! {
@@ -429,25 +501,25 @@ pub async fn main(
                     Err(RecvError::Closed) => return Ok(()),
                 }
             }
-            result = expired_rx.recv() => {
+            result = bookable_rx.recv() => {
                 match result {
                     Ok(message) => {
-                        if let Err(e) = notify_expired_appointment(
+                        if let Err(e) = notify_bookable_event(
                             &app_state, &mailer, &registry, &message, &locale, &locale_plain,
                         ).await {
                             error!(
-                                "Expired appointment {} notification failed: {e:?}",
-                                message.id
+                                "Appointment {} notification failed: {e:?}",
+                                message.appointment_id
                             );
                         }
                     }
                     Err(RecvError::Lagged(n)) => {
-                        warn!("Email subsystem lagged, missed {} expiry notifications", n);
+                        warn!("Email subsystem lagged, missed {} bookable notifications", n);
                         crate::health::add_health_event(
                             &app_state.db,
                             crate::http::history::models::Subsystem::Email,
                             "channel_lagged",
-                            Some(serde_json::json!({"missed": n, "channel": "expired_appointments"})),
+                            Some(serde_json::json!({"missed": n, "channel": "bookable_events"})),
                             30,
                             false,
                             None,

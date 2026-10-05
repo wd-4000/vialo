@@ -3,23 +3,19 @@ global:
   footer_disclaimer: Emails from us always include your full name.
   email_replyable: You can reply! {{group.label}} will receive your message.
 post:
+  read_more: Read more
+  footer: "You can always unsubscribe from this board by visiting {{account.url_unsubscribe}} \n ...or manage your email preferences by visiting {{url_email_preferences}}."
   new:
     title: "{{message.post.title}} - {{message.post.board.label}}"
     body: There's a new post on {{message.post.board.label}}.
-    read_more: Read more
-    footer: "You can always unsubscribe from this board by visiting {{account.url_unsubscribe}} \n ...or manage your email preferences by visiting {{url_email_preferences}}."
 
   pinned:
     title: "📌 {{message.post.title}} - {{message.post.board.label}}"
     body: A post has been pinned on <a href="{{message.post.board.url}}">{{message.post.board.label}}</a>.
-    read_more: Read more
-    footer: "You can always unsubscribe from this board by visiting {{account.url_unsubscribe}} \n ...or manage your email preferences by visiting {{url_email_preferences}}."
 
   edited:
     title: "✏️ {{message.post.title}} - {{message.post.board.label}}"
     body: A post has been edited on <a href="{{message.post.board.url}}">{{message.post.board.label}}</a>. The person who edited it requested that you be notified.
-    read_more: Read more
-    footer: "You can always unsubscribe from this board by visiting {{account.url_unsubscribe}} \n ...or manage your email preferences by visiting {{url_email_preferences}}."
 
 direct:
   title: "{{message.direct.subject}} - {{group.label}}"
@@ -27,8 +23,19 @@ direct:
   footer: "This is a direct message from {{group.label}}."
 
 bookable:
+  footer: "Manage your email preferences at {{url_email_preferences}}"
+  booked:
+    title: "Booking confirmed: {{message.bookable.appointment.asset_name}}, {{message.bookable.time}}"
+    body: "Your booking for {{message.bookable.appointment.asset_name}} is confirmed."
+    credits_info: "{{message.bookable.appointment.event.credits}} credits have been charged to your account."
+  upcoming:
+    title: "Starting soon: {{message.bookable.appointment.asset_name}}, {{message.bookable.time}}"
+    body: "Your appointment for {{message.bookable.appointment.asset_name}} starts soon."
+  canceled:
+    title: "Canceled: {{message.bookable.appointment.asset_name}}, {{message.bookable.time}}"
+    body: "Your appointment for {{message.bookable.appointment.asset_name}} has been canceled{{#if (eq message.bookable.appointment.event.reason \"admin\")}} by an administrator{{/if}}."
+    credits_info: "{{message.bookable.appointment.event.credits_refunded}} credits have been refunded to your account."
   expired:
-    title: "Your appointment has expired"
-    body: "Your appointment for {{message.bookable_expired.asset_name}} was not activated in time and has been released."
-    credits_info: "{{message.bookable_expired.credits_refunded}} credits have been refunded to your account."
-    footer: "Manage your email preferences at {{url_email_preferences}}"
+    title: "Expired: {{message.bookable.appointment.asset_name}}, {{message.bookable.time}}"
+    body: "Your appointment for {{message.bookable.appointment.asset_name}} was not activated in time and has been released."
+    credits_info: "{{message.bookable.appointment.event.credits_refunded}} credits have been refunded to your account."

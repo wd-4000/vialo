@@ -9,6 +9,7 @@ use crate::http::bookables::models::{
 use crate::http::util::grab_trans;
 use crate::{AppState, helpers::grab_authd_conn_subsystem};
 use netio::models::OutputPost;
+use serde::Deserialize;
 use sqlx::{postgres::PgListener, query, query_as, query_scalar};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -193,10 +194,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
     ba.cancelled_at,
     ba.cancellation_reason as "cancellation_reason: CancellationReason",
     ba.activated,
-    cs.expiry_refund_percent as "expiry_refund_percent!",
-    ap.full_name,
-    ap.email,
-    get_i18n_string(bast.name_i18n, $1) as "asset_name?"
+    cs.expiry_refund_percent as "expiry_refund_percent!"
     FROM bookable_appointments ba
     CROSS JOIN LATERAL (
         SELECT DISTINCT ON (bsa.asset_id)
@@ -212,9 +210,7 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
     ) cs
     JOIN credit_ledger cl ON ba.transaction_id = cl.id
     JOIN accounts_people ap ON ap.id = ba.account_id
-    JOIN bookable_assets bast ON bast.id = ba.asset_id
     WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.requires_activation AND cs.expiry_refund_percent IS NOT NULL AND greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period <= NOW()"#,
-        &["en".into(), "de".into()],
     )
     .fetch_all(&app_state.db)
     .await?;
@@ -243,39 +239,136 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
             .await?;
         }
         trans.commit().await?;
+    }
 
-        let Some(email) = appointment.email else {
-            continue;
-        };
+    Ok(())
+}
 
+/// Send upcoming reminders. Appointments booked inside their grace period are skipped.
+pub async fn remind_upcoming(app_state: &AppState) -> Result<(), anyhow::Error> {
+    let mut conn = grab_authd_conn_subsystem(&app_state.db, "bookable")
+        .await
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+
+    let due = query!(
+        r#"UPDATE bookable_appointments ba SET reminded_at = now()
+        FROM bookable_notification_prefs p, bookable_assets bast
+        WHERE p.account_id = ba.account_id
+          AND bast.id = ba.asset_id
+          AND 'upcoming' = ANY(p.events)
+          AND ba.reminded_at IS NULL
+          AND ba.cancelled_at IS NULL
+          AND NOT ba.maintenance
+          AND lower(ba.during) > now()
+          AND lower(ba.during) - make_interval(mins => p.upcoming_minutes) <= now()
+        RETURNING ba.id,
+          ba.account_id,
+          lower(ba.during) as "begins!",
+          upper(ba.during) as "ends!",
+          COALESCE(ba.created_at > lower(ba.during) - make_interval(mins => p.upcoming_minutes), false) as "booked_late!",
+          get_i18n_string(bast.name_i18n, $1) as "asset_name?""#,
+        &["en".into(), "de".into()],
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+
+    for appointment in due.into_iter().filter(|a| !a.booked_late) {
         if app_state
             .event_channels
-            .expired_appointments_tx
-            .send(ExpiredAppointmentMessage {
-                id: appointment.id,
+            .bookable_events_tx
+            .send(BookableEventMessage {
+                appointment_id: appointment.id,
                 account_id: appointment.account_id,
-                full_name: appointment.full_name,
-                email,
                 asset_name: appointment.asset_name.unwrap_or_else(|| "Unknown".into()),
-                credits_refunded: refund_credits,
+                begins: appointment.begins,
+                ends: appointment.ends,
+                event: BookableEvent::Upcoming,
             })
             .is_err()
         {
             tracing::error!(
                 appointment_id = %appointment.id,
-                "expired_appointments channel has no receivers — expiry email will not be sent"
+                "bookable_events channel has no receivers, reminder will not be sent"
             );
-            crate::health::add_health_event(
-                &app_state.db,
-                crate::http::history::models::Subsystem::Email,
-                "channel_no_receivers",
-                Some(serde_json::json!({"appointment_id": appointment.id})),
-                50,
-                false,
-                None,
-            )
-            .await;
         }
+    }
+
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct BookableEventNotification {
+    appointment_id: uuid::Uuid,
+    kind: BookableEventKind,
+}
+
+/// Turn a `bookable_event` NOTIFY into a `BookableEventMessage`. Runs after commit, so refunds are visible.
+async fn publish_bookable_event(app_state: &AppState, payload: &str) -> Result<(), anyhow::Error> {
+    let notification: BookableEventNotification = serde_json::from_str(payload)?;
+
+    let Some(appointment) = query!(
+        r#"SELECT ba.account_id,
+        lower(ba.during) as "begins!",
+        upper(ba.during) as "ends!",
+        ba.cancellation_reason as "cancellation_reason: CancellationReason",
+        cl.credits as "credits?",
+        cl.credits_refunded as "credits_refunded?",
+        get_i18n_string(bast.name_i18n, $2) as "asset_name?"
+        FROM bookable_appointments ba
+        JOIN bookable_assets bast ON bast.id = ba.asset_id
+        LEFT JOIN credit_ledger cl ON cl.id = ba.transaction_id
+        WHERE ba.id = $1"#,
+        notification.appointment_id,
+        &["en".into(), "de".into()],
+    )
+    .fetch_optional(&app_state.db)
+    .await?
+    else {
+        return Ok(());
+    };
+
+    let credits_refunded = appointment.credits_refunded.unwrap_or(0);
+    let event = match notification.kind {
+        BookableEventKind::Booked => BookableEvent::Booked {
+            credits: appointment.credits.unwrap_or(0),
+        },
+        BookableEventKind::Canceled => BookableEvent::Canceled {
+            reason: appointment.cancellation_reason,
+            credits_refunded,
+        },
+        BookableEventKind::Expired => BookableEvent::Expired { credits_refunded },
+        BookableEventKind::Upcoming => {
+            return Err(anyhow::anyhow!("upcoming is not a database event"));
+        }
+    };
+
+    if app_state
+        .event_channels
+        .bookable_events_tx
+        .send(BookableEventMessage {
+            appointment_id: notification.appointment_id,
+            account_id: appointment.account_id,
+            asset_name: appointment.asset_name.unwrap_or_else(|| "Unknown".into()),
+            begins: appointment.begins,
+            ends: appointment.ends,
+            event,
+        })
+        .is_err()
+    {
+        tracing::error!(
+            appointment_id = %notification.appointment_id,
+            "bookable_events channel has no receivers, notification will not be sent"
+        );
+        crate::health::add_health_event(
+            &app_state.db,
+            crate::http::history::models::Subsystem::Email,
+            "channel_no_receivers",
+            Some(serde_json::json!({"appointment_id": notification.appointment_id})),
+            50,
+            false,
+            None,
+        )
+        .await;
     }
 
     Ok(())
@@ -294,6 +387,15 @@ async fn next_wakeup(app_state: &AppState) -> tokio::time::Instant {
             AND ba.during @> now()
             AND NOT upper_inf(ba.during)
             AND upper(ba.during) <> 'infinity'::timestamptz),
+        -- next upcoming reminder
+        (SELECT MIN(lower(ba.during) - make_interval(mins => p.upcoming_minutes))
+           FROM bookable_appointments ba
+           JOIN bookable_notification_prefs p ON p.account_id = ba.account_id
+          WHERE 'upcoming' = ANY(p.events)
+            AND ba.reminded_at IS NULL
+            AND ba.cancelled_at IS NULL
+            AND NOT ba.maintenance
+            AND lower(ba.during) > now()),
         -- quick unlocks are ranges too, and end the same way
         (SELECT MIN(upper(ba.quick_unlock))
            FROM bookable_assets ba
@@ -354,7 +456,9 @@ pub async fn main(
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), anyhow::Error> {
     let mut listener = PgListener::connect_with(&app_state.db).await?;
-    listener.listen("bookable_update").await?;
+    listener
+        .listen_all(["bookable_update", "bookable_event", "bookable_reschedule"])
+        .await?;
 
     // Empty on first pass, so everything broadcasts once
     let mut cache: HashMap<i32, (BookableAssetStatus, BookableAssetQueue)> = HashMap::new();
@@ -362,6 +466,7 @@ pub async fn main(
     loop {
         auto_activate_appointments(&app_state).await?;
         expire_appointments(&app_state).await?;
+        remind_upcoming(&app_state).await?;
         sync_connectors(&app_state).await?;
         publish_bookables(&app_state, &mut cache).await?;
 
@@ -376,8 +481,14 @@ pub async fn main(
                 // Scheduled wakeup
             }
             notif = listener.recv() => {
-                notif?;
-                debug!("bookable write notification received");
+                let notif = notif?;
+                if notif.channel() == "bookable_event" {
+                    if let Err(e) = publish_bookable_event(&app_state, notif.payload()).await {
+                        tracing::error!("bookable event {} failed: {e:?}", notif.payload());
+                    }
+                } else {
+                    debug!("{} notification received", notif.channel());
+                }
             }
             changed = shutdown.changed() => {
                 if changed.is_ok() && *shutdown.borrow() {

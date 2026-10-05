@@ -1,19 +1,18 @@
-use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
+use chrono::{Datelike, Duration, NaiveDateTime, Timelike};
 use icu::calendar::Date as IcuDate;
-use icu::datetime::fieldsets::{ET, T, YMDT};
 use icu::datetime::DateTimeFormatter;
+use icu::datetime::fieldsets::{ET, T, YMDT};
 use icu::locale::Locale;
 use icu::time::DateTime as IcuDateTime;
 use icu::time::Time as IcuTime;
 
-/// Converts DateTime inputs into a locale-aware event timespan string.
+/// Formats a venue-local timespan. All times are venue-local
 pub fn get_event_timespan(
     locale: Locale,
-    event_from: Option<DateTime<Utc>>,
-    event_to: Option<DateTime<Utc>>,
+    now: NaiveDateTime,
+    event_from: Option<NaiveDateTime>,
+    event_to: Option<NaiveDateTime>,
 ) -> Option<String> {
-    let now = Utc::now();
-
     let fmt_short_dt = DateTimeFormatter::try_new(
         locale.clone().into(),
         YMDT::short().with_time_precision(icu::datetime::options::TimePrecision::Minute),
@@ -35,7 +34,7 @@ pub fn get_event_timespan(
     .expect("Failed to create time formatter");
 
     // Helper to convert Chrono -> ICU DateTime
-    let to_icu = |dt: DateTime<Utc>| IcuDateTime {
+    let to_icu = |dt: NaiveDateTime| IcuDateTime {
         date: IcuDate::try_new_iso(dt.year(), dt.month() as u8, dt.day() as u8).unwrap(),
         time: IcuTime::try_new(
             dt.hour() as u8,
@@ -62,7 +61,7 @@ pub fn get_event_timespan(
             let icu_to = to_icu(to);
 
             // Same day
-            if from.date_naive() == to.date_naive() {
+            if from.date() == to.date() {
                 ret.push_str(" - ");
                 ret.push_str(&fmt_time_only.format(&icu_to).to_string());
             } else {

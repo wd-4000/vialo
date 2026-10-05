@@ -95,6 +95,23 @@ CREATE TABLE bookable_asset_type_group_perms (
 
 CREATE TYPE bookable_appointment_cancellation_reason AS ENUM('expired', 'user', 'admin');
 
+CREATE TYPE bookable_event_kind AS ENUM('booked', 'upcoming', 'canceled', 'expired');
+
+-- Which appointment events a person is notified about
+CREATE TABLE bookable_notification_settings (
+  account_id uuid PRIMARY KEY REFERENCES accounts_people (id) ON DELETE CASCADE,
+  events bookable_event_kind[] NOT NULL,
+  upcoming_minutes int NOT NULL CHECK (upcoming_minutes BETWEEN 1 AND 1440)
+);
+
+-- Defaults for people who never saved settings
+CREATE VIEW bookable_notification_prefs AS
+SELECT ap.id AS account_id,
+       COALESCE(s.events, '{expired}') AS events,
+       COALESCE(s.upcoming_minutes, 15) AS upcoming_minutes
+FROM accounts_people ap
+LEFT JOIN bookable_notification_settings s ON s.account_id = ap.id;
+
 CREATE TABLE bookable_appointments (
   id uuid PRIMARY KEY default gen_random_uuid(),
   asset_id int NOT NULL REFERENCES bookable_assets (id),
@@ -106,6 +123,7 @@ CREATE TABLE bookable_appointments (
   cancelled_at timestamptz,
   cancellation_reason bookable_appointment_cancellation_reason,
   maintenance boolean not null default false,
+  reminded_at timestamptz, -- upcoming notification handled (sent or skipped)
   CONSTRAINT no_overlapping_appointments_per_asset EXCLUDE USING GIST (
     asset_id
     WITH
@@ -279,6 +297,44 @@ EXECUTE FUNCTION bookable_notify_trigger ('asset_id');
 CREATE TRIGGER tg_bookable_update_assets
 AFTER INSERT OR UPDATE OR DELETE ON bookable_assets FOR EACH ROW
 EXECUTE FUNCTION bookable_notify_trigger ('id');
+
+-- Make sure that any preferences change recomputes the bookable wakeup
+CREATE OR REPLACE FUNCTION bookable_reschedule_trigger () RETURNS TRIGGER AS $$
+BEGIN
+    PERFORM pg_notify('bookable_reschedule', '');
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_bookable_reschedule_notification_settings
+AFTER INSERT OR UPDATE ON bookable_notification_settings FOR EACH STATEMENT
+EXECUTE FUNCTION bookable_reschedule_trigger ();
+
+-- Appointment lifecycle events for notifications. Best-effort: missed if nobody is listening.
+CREATE OR REPLACE FUNCTION bookable_event_trigger () RETURNS TRIGGER AS $$
+DECLARE
+    kind bookable_event_kind;
+BEGIN
+    IF NEW.maintenance THEN
+        RETURN NULL;
+    END IF;
+
+    IF TG_OP = 'INSERT' THEN
+        kind := 'booked';
+    ELSIF OLD.cancelled_at IS NULL AND NEW.cancelled_at IS NOT NULL THEN
+        kind := CASE NEW.cancellation_reason WHEN 'expired' THEN 'expired' ELSE 'canceled' END;
+    ELSE
+        RETURN NULL;
+    END IF;
+
+    PERFORM pg_notify('bookable_event', json_build_object('appointment_id', NEW.id, 'kind', kind)::text);
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_bookable_event_appointments
+AFTER INSERT OR UPDATE OF cancelled_at ON bookable_appointments FOR EACH ROW
+EXECUTE FUNCTION bookable_event_trigger ();
 
 CREATE OR REPLACE FUNCTION slots_from_schedule (schedule time[], reference_date DATE) RETURNS table (id int, range tstzrange) LANGUAGE plpgsql AS $$
     DECLARE

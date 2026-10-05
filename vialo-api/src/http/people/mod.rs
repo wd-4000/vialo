@@ -19,6 +19,7 @@ pub mod identities;
 pub mod models;
 pub mod rooms;
 pub mod schemas;
+pub mod settings;
 pub mod transactions;
 
 #[cfg(feature = "printer")]
@@ -29,6 +30,10 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     let me_routes = Router::new()
         .route("/me", get(handlers::get_me))
         .route("/me/roles", get(handlers::get_person_roles_me))
+        .route(
+            "/me/settings",
+            get(settings::get_settings).put(settings::put_settings),
+        )
         .route(
             "/me/capabilities",
             get(handlers::get_person_capabilities_me),
