@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT board_id FROM board_subscriptions WHERE account_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "board_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "board_subscriptions",
+            "name": "board_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1ce3f8773da1b26041494e8f3bb548acb9d9937507a8ab9694d9780905589587"
+}

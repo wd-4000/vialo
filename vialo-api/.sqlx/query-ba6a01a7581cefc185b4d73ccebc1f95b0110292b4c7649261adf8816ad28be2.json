@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO board_subscriptions (account_id, board_id)\n        SELECT $1, b.id FROM boards b\n        WHERE b.id = ANY($2) AND account_board_perm_exists($1, b.id, 'view')\n        ON CONFLICT (account_id, board_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ba6a01a7581cefc185b4d73ccebc1f95b0110292b4c7649261adf8816ad28be2"
+}

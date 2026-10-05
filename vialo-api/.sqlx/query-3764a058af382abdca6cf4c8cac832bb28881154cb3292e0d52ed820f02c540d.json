@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ap.comms_lang,\n        p.events as \"events!: Vec<BookableEventKind>\",\n        p.upcoming_minutes as \"upcoming_minutes!\"\n        FROM accounts_people ap\n        JOIN bookable_notification_prefs p ON p.account_id = ap.id\n        WHERE ap.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "comms_lang",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "comms_lang"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "events!: Vec<BookableEventKind>",
+        "type_info": {
+          "Custom": {
+            "name": "bookable_event_kind[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "bookable_event_kind",
+                  "kind": {
+                    "Enum": [
+                      "booked",
+                      "upcoming",
+                      "canceled",
+                      "expired"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "bookable_notification_prefs",
+            "name": "events"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "upcoming_minutes!",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bookable_notification_prefs",
+            "name": "upcoming_minutes"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "3764a058af382abdca6cf4c8cac832bb28881154cb3292e0d52ed820f02c540d"
+}

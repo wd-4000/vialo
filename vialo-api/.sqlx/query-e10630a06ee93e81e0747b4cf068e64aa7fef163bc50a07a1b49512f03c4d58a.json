@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            bp.id,\n            bp.board_id,\n            get_i18n_string(b.label, $1) AS \"board_label!\",\n            get_i18n_string(bp.title, $1) AS title,\n            bp.event_from,\n            bp.event_to,\n            get_i18n_string(bp.content_html, $1) AS content_html,\n            get_i18n_string(bp.content_plain, $1) AS content_plain,\n            ag.label as \"group_label?\",\n            ag.email as \"group_email\"\n        FROM board_posts bp\n        JOIN boards b ON b.id = bp.board_id\n        LEFT JOIN account_groups ag ON b.group_id = ag.id\n        WHERE bp.id = $2",
+  "query": "SELECT\n            bp.id,\n            bp.board_id,\n            get_i18n_string(b.label, $1) AS \"board_label!\",\n            get_i18n_string(bp.title, $1) AS title,\n            bp.event_from::timestamp AS \"event_from?\",\n            bp.event_to::timestamp AS \"event_to?\",\n            now()::timestamp AS \"now_local!\",\n            get_i18n_string(bp.content_html, $1) AS content_html,\n            get_i18n_string(bp.content_plain, $1) AS content_plain,\n            ag.label as \"group_label?\",\n            ag.email as \"group_email\"\n        FROM board_posts bp\n        JOIN boards b ON b.id = bp.board_id\n        LEFT JOIN account_groups ag ON b.group_id = ag.id\n        WHERE bp.id = $2",
   "describe": {
     "columns": [
       {
@@ -39,40 +39,36 @@
       },
       {
         "ordinal": 4,
-        "name": "event_from",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "board_posts",
-            "name": "event_from"
-          }
-        }
+        "name": "event_from?",
+        "type_info": "Timestamp",
+        "origin": "Expression"
       },
       {
         "ordinal": 5,
-        "name": "event_to",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "board_posts",
-            "name": "event_to"
-          }
-        }
+        "name": "event_to?",
+        "type_info": "Timestamp",
+        "origin": "Expression"
       },
       {
         "ordinal": 6,
+        "name": "now_local!",
+        "type_info": "Timestamp",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
         "name": "content_html",
         "type_info": "Text",
         "origin": "Expression"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "content_plain",
         "type_info": "Text",
         "origin": "Expression"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "group_label?",
         "type_info": "Text",
         "origin": {
@@ -83,7 +79,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "group_email",
         "type_info": {
           "Custom": {
@@ -110,13 +106,14 @@
       false,
       null,
       null,
-      true,
-      true,
+      null,
+      null,
+      null,
       null,
       null,
       true,
       true
     ]
   },
-  "hash": "44438eba4af8d447f9fcbb6557c89473d8339d66bbb64100d237f93ab5d7c72a"
+  "hash": "e10630a06ee93e81e0747b4cf068e64aa7fef163bc50a07a1b49512f03c4d58a"
 }

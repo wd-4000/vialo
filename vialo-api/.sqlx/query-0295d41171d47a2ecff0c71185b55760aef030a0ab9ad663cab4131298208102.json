@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                bd.id,\n                bd.slug,\n                bd.icon,\n                get_i18n_all_string_translations(bd.label) AS label,\n                CASE\n                    WHEN bd.group_id IS NOT NULL THEN jsonb_build_object(\n                        'id', bd.group_id,\n                        'label', ag.label\n                    )\n                    ELSE NULL\n                END AS \"group: GroupEmbed\",\n                bd.default_post_visibility AS \"default_post_visibility: PostVisibility\"\n            FROM\n                boards bd LEFT JOIN account_groups ag ON bd.group_id = ag.id\n            WHERE account_board_perm_exists($1, bd.id, 'view')\n            LIMIT $2 OFFSET $3",
+  "query": "SELECT\n                bd.id,\n                bd.slug,\n                bd.icon,\n                get_i18n_string(bd.label, $1) AS label,\n                CASE\n                    WHEN bd.group_id IS NOT NULL THEN jsonb_build_object(\n                        'id', bd.group_id,\n                        'label', ag.label\n                    )\n                    ELSE NULL\n                END AS \"group: GroupEmbed\",\n                bd.default_post_visibility AS \"default_post_visibility: PostVisibility\"\n            FROM\n                boards bd LEFT JOIN account_groups ag ON bd.group_id = ag.id\n            WHERE account_board_perm_exists($2, bd.id, $3)\n            LIMIT $4 OFFSET $5",
   "describe": {
     "columns": [
       {
@@ -49,7 +49,7 @@
       {
         "ordinal": 3,
         "name": "label",
-        "type_info": "Jsonb",
+        "type_info": "Text",
         "origin": "Expression"
       },
       {
@@ -83,7 +83,21 @@
     ],
     "parameters": {
       "Left": [
+        "TextArray",
         "Uuid",
+        {
+          "Custom": {
+            "name": "board_perm",
+            "kind": {
+              "Enum": [
+                "view",
+                "post",
+                "moderate",
+                "admin"
+              ]
+            }
+          }
+        },
         "Int8",
         "Int8"
       ]
@@ -97,5 +111,5 @@
       false
     ]
   },
-  "hash": "e107de08ea476f1565b6df248ac7e6ffeb8ece3e09cea99f92e105951e7376e9"
+  "hash": "0295d41171d47a2ecff0c71185b55760aef030a0ab9ad663cab4131298208102"
 }
