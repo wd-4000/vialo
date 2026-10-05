@@ -37,7 +37,7 @@ pub enum BoardPerm {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreateBoardSchema {
-    pub group_id: Uuid,
+    pub group_id: Option<Uuid>,
     pub label: I18nMap,
     #[serde(deserialize_with = "crate::helpers::limit_str_len_128")]
     pub slug: String,
@@ -181,19 +181,19 @@ pub async fn get_board(
     if langs == ["all"] {
         let uid = user.id;
         let post = conditional_query_as!(
-                    BoardModelTranslatedAllLanguages,
-                    r#"SELECT
+            BoardModelTranslatedAllLanguages,
+            r#"SELECT
             get_i18n_all_string_translations(bb.label) AS label,
             bb.group_id,
             bb.icon,
             bb.slug,
             bb.default_post_visibility AS "default_post_visibility: PostVisibility"
             FROM boards bb {#SELECTID} AND account_board_perm_exists({uid}, bb.id, 'view')"#,
-        #SELECTID = match id_or_slug.parse::<i32>() {
-            Ok(id_int) => "WHERE id = {id_int}",
-            _ => "WHERE slug = {id_or_slug}"
-        }
-                )
+            #SELECTID = match id_or_slug.parse::<i32>() {
+                Ok(id_int) => "WHERE id = {id_int}",
+                _ => "WHERE slug = {id_or_slug}"
+            }
+        )
         .fetch_optional(&data.db)
         .await?
         .ok_or(VialoError::NotFound())?;
@@ -307,7 +307,9 @@ pub async fn add_board(
        Boards can be created by users that are managers of the group they want to link the board to.
     */
 
-    check_manager_of_group(user.clone(), body.group_id, &data.db).await?;
+    if let Some(group_id) = body.group_id {
+        check_manager_of_group(user.clone(), group_id, &data.db).await?;
+    }
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
