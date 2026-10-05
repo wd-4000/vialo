@@ -62,6 +62,8 @@ pub struct CreateUserSchema {
     #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
     pub label: Option<String>,
     pub membership_end: PgDate,
+    #[serde(default, deserialize_with = "crate::helpers::limit_str_len_opt_255")]
+    pub phone: Option<String>,
     pub auto_setup_network: Option<bool>,
     pub enable_amenities_login: Option<bool>,
 }

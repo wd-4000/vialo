@@ -287,6 +287,7 @@ async fn get_person_impl(
      membership_start,
        membership_end as "membership_end: PgDate",
         full_name,
+        phone,
         manually_suspended,
        credit_balance FROM accounts_people WHERE id = {target_id}"#
     )
@@ -336,6 +337,7 @@ pub async fn get_person_overview(
        ap.membership_start,
          ap.membership_end as "membership_end: PgDate",
           ap.full_name,
+          ap.phone,
           ap.manually_suspended,
          ap.credit_balance, ap.amenities_username, spc.printer_username, spc.printer_id as "printer_id?"
          FROM accounts_people ap LEFT JOIN subsystem_printer_context spc ON ap.id = spc.id WHERE ap.id = $1"#, id).fetch_one(&data.db);
@@ -348,6 +350,7 @@ pub async fn get_person_overview(
            ap.membership_start,
              ap.membership_end as "membership_end: PgDate",
               ap.full_name,
+              ap.phone,
               ap.manually_suspended,
              ap.credit_balance, ap.amenities_username FROM accounts_people ap WHERE ap.id = $1"#, id).fetch_one(&data.db);
       }
@@ -422,8 +425,8 @@ pub async fn add_person(
     let mut trans = grab_trans(&mut conn).await?; // begin transaction
 
     let created_user = sqlx::query!(
-        r#"INSERT INTO accounts_people (label, email, membership_end, full_name, auth_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, full_name"#,
-        body.label, body.email, body.membership_end as PgDate, body.full_name, body.auth_id
+        r#"INSERT INTO accounts_people (label, email, membership_end, full_name, auth_id, phone) VALUES ($1, $2, $3, $4, $5, NULLIF(btrim($6), '')) RETURNING id, full_name"#,
+        body.label, body.email, body.membership_end as PgDate, body.full_name, body.auth_id, body.phone
     )
     .fetch_one(trans.deref_mut())
     .await
@@ -515,16 +518,17 @@ pub async fn put_person(
     let mut trans = grab_trans(&mut conn).await?;
 
     let updated_user = sqlx::query_as!(AccountModel,
-        r#"UPDATE accounts_people SET label = $1, email = $2, membership_end = $3, full_name = $4 WHERE id = $5 RETURNING id,
+        r#"UPDATE accounts_people SET label = $1, email = $2, membership_end = $3, full_name = $4, phone = NULLIF(btrim($6), '') WHERE id = $5 RETURNING id,
                label,
              auth_id,
               email,
              membership_start,
                membership_end as "membership_end: PgDate",
                 full_name,
+                phone,
                 manually_suspended,
                credit_balance"#,
-        body.label, body.email, body.membership_end as PgDate, body.full_name, id
+        body.label, body.email, body.membership_end as PgDate, body.full_name, id, body.phone
     )
     .fetch_one(trans.deref_mut())
     .await?;

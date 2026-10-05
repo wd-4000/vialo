@@ -189,6 +189,7 @@ CREATE TABLE accounts_people (
   membership_end date not null, -- Association membership end. Expired = No access.
   comms_lang text,
   full_name text,
+  phone text,
   manually_suspended boolean not null default false, -- True = No access to any syiervices.
   credit_balance int DEFAULT 0, -- NULL = unlimited credits
   amenities_username text UNIQUE, -- Amenities login username. NULL = not provisioned.
