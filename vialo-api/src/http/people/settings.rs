@@ -1,22 +1,15 @@
 use crate::{
     AppState,
     bookables::BookableEventKind,
-    http::{
-        history::models::Subsystem,
-        util::{
-            JsonE, ListOptions, User, VialoError, clamp_pagination, grab_authd_conn_user,
+    http::util::{
+            JsonE, User, VialoError, grab_authd_conn_user,
             grab_trans,
         },
-    },
-    permissions::{AppRole, require_app_role},
 };
-use axum::{Extension, Json, extract::State, http::StatusCode, middleware, response::IntoResponse};
-use axum::{Router, routing::get};
-use axum_extra::extract::Query;
-use chrono::{DateTime, Utc};
+use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::{query, query_scalar};
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 use utoipa::ToSchema;
 
 #[derive(Deserialize, Serialize, Debug, ToSchema)]
