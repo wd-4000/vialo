@@ -2,12 +2,14 @@ use super::super::util::grab_authd_conn_user;
 use super::models::PostVisibility;
 use super::permissions::require_board_perm;
 use super::schemas::PostFilterOptions;
+use crate::AppState;
 use crate::helpers::{I18nMap, LangVariant};
 use crate::http::posts::models::BoardPostIdModel;
 use crate::http::util::models::GroupEmbed;
-use crate::http::util::{JsonE, User, VialoError, clamp_pagination, grab_trans, is_unique_violation};
+use crate::http::util::{
+    JsonE, User, VialoError, clamp_pagination, grab_trans, is_unique_violation,
+};
 use crate::permissions::check_manager_of_group;
-use crate::AppState;
 use axum::Extension;
 use axum::{
     Json,
@@ -20,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{query_as, types::JsonValue};
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
@@ -89,9 +91,17 @@ pub struct BoardModelTranslatedAllLanguagesEmbeddedGroup {
     pub default_post_visibility: PostVisibility,
 }
 
-#[utoipa::path(get, path = "/posts/boards", params(PostFilterOptions), responses((status = 200, description = "OK", body=LangVariant<Vec<BoardModelTranslatedAllLanguagesEmbeddedGroup>, Vec<BoardModelTranslatedEmbeddedGroup>>)))]
+#[derive(Deserialize, Debug, Default, IntoParams)]
+pub struct BoardFilterOptions {
+    pub lang: Option<Vec<String>>,
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+    pub perm: Option<BoardPerm>,
+}
+
+#[utoipa::path(get, path = "/posts/boards", params(BoardFilterOptions), responses((status = 200, description = "OK", body=LangVariant<Vec<BoardModelTranslatedAllLanguagesEmbeddedGroup>, Vec<BoardModelTranslatedEmbeddedGroup>>)))]
 pub async fn list_boards(
-    Query(opts): Query<PostFilterOptions>,
+    Query(opts): Query<BoardFilterOptions>,
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
@@ -99,6 +109,8 @@ pub async fn list_boards(
     let langs = opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
+
+    let perm = opts.perm.unwrap_or(BoardPerm::View);
 
     if langs == ["all"] {
         let uid = user.id;
@@ -119,7 +131,7 @@ pub async fn list_boards(
                 bd.default_post_visibility AS "default_post_visibility: PostVisibility"
             FROM
                 boards bd LEFT JOIN account_groups ag ON bd.group_id = ag.id
-            WHERE account_board_perm_exists({uid}, bd.id, 'view')
+            WHERE account_board_perm_exists({uid}, bd.id, {perm:BoardPerm})
             LIMIT {limit} OFFSET {offset}"#,
         )
         .fetch_all(&data.db)
@@ -145,7 +157,7 @@ pub async fn list_boards(
                 bd.default_post_visibility AS "default_post_visibility: PostVisibility"
             FROM
                 boards bd LEFT JOIN account_groups ag ON bd.group_id = ag.id
-            WHERE account_board_perm_exists({uid}, bd.id, 'view')
+            WHERE account_board_perm_exists({uid}, bd.id, {perm:BoardPerm})
             LIMIT {limit} OFFSET {offset}"#,
         )
         .fetch_all(&data.db)
@@ -218,7 +230,6 @@ pub struct BoardPermissions {
     pub perm: BoardPerm,
 }
 
-
 #[utoipa::path(get, path = "/posts/boards/{id}/permissions", params(PostFilterOptions), responses((status = 200, description = "OK", body=Vec<BoardPermissions>)))]
 pub async fn get_permissions(
     Query(opts): Query<PostFilterOptions>,
@@ -226,7 +237,7 @@ pub async fn get_permissions(
     State(data): State<Arc<AppState>>,
     Path(id): Path<i32>,
 ) -> Result<impl IntoResponse, VialoError> {
-    require_board_perm(user.id,id, BoardPerm::Admin, &data.db).await?;
+    require_board_perm(user.id, id, BoardPerm::Admin, &data.db).await?;
 
     let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
@@ -250,7 +261,7 @@ pub async fn put_permission(
     Path((board_id, group_id)): Path<(i32, Uuid)>,
     JsonE(body): JsonE<PermSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
-    require_board_perm(user.id,board_id, BoardPerm::Admin, &data.db).await?;
+    require_board_perm(user.id, board_id, BoardPerm::Admin, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     sqlx::query!(
@@ -271,7 +282,7 @@ pub async fn delete_permission(
     Extension(user): Extension<User>,
     Path((board_id, group_id)): Path<(i32, Uuid)>,
 ) -> Result<impl IntoResponse, VialoError> {
-    require_board_perm(user.id,board_id, BoardPerm::Admin, &data.db).await?;
+    require_board_perm(user.id, board_id, BoardPerm::Admin, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     sqlx::query!(
@@ -398,7 +409,7 @@ pub async fn pin_post(
     Path(id): Path<i32>,
     JsonE(body): JsonE<PinPostSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
-    require_board_perm(user.id,id, BoardPerm::Moderate, &data.db).await?;
+    require_board_perm(user.id, id, BoardPerm::Moderate, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     sqlx::query!(
@@ -419,7 +430,7 @@ pub async fn unpin_post(
     Extension(user): Extension<User>,
     Path((board_id, post_id)): Path<(i32, i32)>,
 ) -> Result<impl IntoResponse, VialoError> {
-    require_board_perm(user.id,board_id, BoardPerm::Moderate, &data.db).await?;
+    require_board_perm(user.id, board_id, BoardPerm::Moderate, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     sqlx::query!(
