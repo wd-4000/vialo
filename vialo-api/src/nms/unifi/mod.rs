@@ -72,12 +72,16 @@ impl UniFiApi {
         }
 
         let response = request.send().await.context("Failed to send request")?;
+        let status = response.status();
         let text = response
             .text()
             .await
             .context("Failed to read response body")?;
+        if !status.is_success() {
+            return Err(anyhow!("{url} returned {status}: {text}"));
+        }
         let body: T = serde_json::from_str(&text)
-            .map_err(|e| anyhow!("Failed to parse response ({e}): {text}"))?;
+            .map_err(|e| anyhow!("Failed to parse response from {url} ({e}): {text}"))?;
 
         Ok(body)
     }
