@@ -161,7 +161,7 @@ pub async fn post(
     };
 
     sqlx::query!(
-        "INSERT INTO bookable_schema_assignments (begins, schema_id, asset_id) VALUES ($1, $2, $3) ON CONFLICT (begins, asset_id) DO UPDATE SET schema_id = $3;",
+        "INSERT INTO bookable_schema_assignments (begins, schema_id, asset_id) VALUES ($1, $2, $3) ON CONFLICT (begins, asset_id) DO UPDATE SET schema_id = $2;",
         body.assignment.begins,
         schema_id,
         id
