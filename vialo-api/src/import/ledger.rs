@@ -75,11 +75,15 @@ impl Importer {
                 .fetch_one(self.conn())
                 .await?
             }
-            // The pre-unlimited balance is kept in credits, so disabling can restore it
+            // The pre-unlimited balance is kept in credits, so disabling can restore it.
+            // A replay can run negative, which the ledger rejects there.
             LedgerKind::UnlimitedOn => {
+                if let Some(balance) = self.balance(e.account).await?.filter(|b| *b < 0) {
+                    self.warn(r, format!("account {}: balance {balance} when set to unlimited, kept as 0 to restore", e.account));
+                }
                 sqlx::query_scalar!(
                     "INSERT INTO credit_ledger (entry_type, from_account, credits, label, created_at)
-                     VALUES ('unlimited_enabled', $1, (SELECT credit_balance FROM accounts_people WHERE id = $1), $2, $3)
+                     VALUES ('unlimited_enabled', $1, (SELECT GREATEST(credit_balance, 0) FROM accounts_people WHERE id = $1), $2, $3)
                      RETURNING id",
                     e.account,
                     e.label,

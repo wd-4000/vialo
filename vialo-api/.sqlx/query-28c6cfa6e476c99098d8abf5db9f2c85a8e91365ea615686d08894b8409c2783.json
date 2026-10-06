@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO credit_ledger (entry_type, from_account, credits, label, created_at)\n                     VALUES ('unlimited_enabled', $1, (SELECT credit_balance FROM accounts_people WHERE id = $1), $2, $3)\n                     RETURNING id",
+  "query": "INSERT INTO credit_ledger (entry_type, from_account, credits, label, created_at)\n                     VALUES ('unlimited_enabled', $1, (SELECT GREATEST(credit_balance, 0) FROM accounts_people WHERE id = $1), $2, $3)\n                     RETURNING id",
   "describe": {
     "columns": [
       {
@@ -26,5 +26,5 @@
       false
     ]
   },
-  "hash": "f7b626d2cdf56c8b1f53ef3560a59f11a3f1dcbd2d641a034f8b829b2df1b92e"
+  "hash": "28c6cfa6e476c99098d8abf5db9f2c85a8e91365ea615686d08894b8409c2783"
 }
