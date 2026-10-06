@@ -70,14 +70,14 @@ impl<'r> sqlx::Decode<'r, sqlx::Postgres> for PgDate {
             sqlx::postgres::PgValueFormat::Text => match value.as_str()? {
                 "infinity" => Ok(PgDate::Infinity),
                 "-infinity" => Ok(PgDate::NegativeInfinity),
-                _ => NaiveDate::decode(value).map(PgDate::DateTime),
+                _ => <NaiveDate as sqlx::Decode<sqlx::Postgres>>::decode(value).map(PgDate::DateTime),
             },
             sqlx::postgres::PgValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
                 match bytes {
                     b"\x7F\xFF\xFF\xFF" => Ok(PgDate::Infinity),
                     b"\x80\x00\x00\x00" => Ok(PgDate::NegativeInfinity),
-                    _ => NaiveDate::decode(value).map(PgDate::DateTime),
+                    _ => <NaiveDate as sqlx::Decode<sqlx::Postgres>>::decode(value).map(PgDate::DateTime),
                 }
             }
         }
