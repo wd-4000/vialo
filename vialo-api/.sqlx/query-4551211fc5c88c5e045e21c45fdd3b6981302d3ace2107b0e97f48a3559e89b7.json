@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT credits - credits_refunded AS \"refundable!\", product AS \"product: ProductType\", from_account\n                        FROM credit_ledger WHERE id = $1 AND entry_type = 'transfer'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "refundable!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "product: ProductType",
+        "type_info": {
+          "Custom": {
+            "name": "product_type",
+            "kind": {
+              "Enum": [
+                "printer_color",
+                "printer_bw",
+                "bookable"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "credit_ledger",
+            "name": "product"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "from_account",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "credit_ledger",
+            "name": "from_account"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      true
+    ]
+  },
+  "hash": "4551211fc5c88c5e045e21c45fdd3b6981302d3ace2107b0e97f48a3559e89b7"
+}

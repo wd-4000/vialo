@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT network_id FROM net_cred WHERE id = $1 AND account_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "network_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "net_cred",
+            "name": "network_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c99dc470ae243dc4934c9f6d899be54f0b40f2ddcdd88bc6d5f97589f708863f"
+}

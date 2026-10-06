@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO res_rooms (label, floor, capacity) VALUES ($1, $2, $3)\n             ON CONFLICT (label) DO UPDATE SET (floor, capacity) = (EXCLUDED.floor, EXCLUDED.capacity)\n             RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "res_rooms",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d50fcdf79bca54c2689e1cba3c983d0ca5bc01f9f0d0fa446278d7531e3a5f77"
+}

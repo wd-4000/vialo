@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE accounts_people SET auth_id = $1 WHERE id = $2 AND auth_id IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f875d86d2d906f7da416cd5397f699ac3237724627a461307cee10865376b127"
+}

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO credit_ledger (entry_type, from_account, credits, label, created_at)\n                     VALUES ('unlimited_enabled', $1, (SELECT credit_balance FROM accounts_people WHERE id = $1), $2, $3)\n                     RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "credit_ledger",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f7b626d2cdf56c8b1f53ef3560a59f11a3f1dcbd2d641a034f8b829b2df1b92e"
+}

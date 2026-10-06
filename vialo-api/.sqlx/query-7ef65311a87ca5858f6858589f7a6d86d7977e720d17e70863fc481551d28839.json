@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO accounts_people (label, email, membership_end, full_name, auth_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, full_name",
+  "query": "INSERT INTO accounts_people (label, email, membership_end, full_name, auth_id, phone) VALUES ($1, $2, $3, $4, $5, NULLIF(btrim($6), '')) RETURNING id, full_name",
   "describe": {
     "columns": [
       {
@@ -37,7 +37,8 @@
         },
         "Date",
         "Text",
-        "Uuid"
+        "Uuid",
+        "Text"
       ]
     },
     "nullable": [
@@ -45,5 +46,5 @@
       true
     ]
   },
-  "hash": "af17d9266a3c2e331f35da2b0d4ce0c4da86b568cd9748a95bc9c2251a2d0ab2"
+  "hash": "7ef65311a87ca5858f6858589f7a6d86d7977e720d17e70863fc481551d28839"
 }

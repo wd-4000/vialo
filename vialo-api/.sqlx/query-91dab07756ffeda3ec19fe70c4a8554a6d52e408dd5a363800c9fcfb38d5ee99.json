@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bookable_schema_assignments (begins, schema_id, asset_id) VALUES ($1, $2, $3) ON CONFLICT (begins, asset_id) DO UPDATE SET schema_id = $2;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Date",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "91dab07756ffeda3ec19fe70c4a8554a6d52e408dd5a363800c9fcfb38d5ee99"
+}

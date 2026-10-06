@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                    SELECT 1 FROM (\n                        SELECT bs.schedule FROM bookable_schema_assignments bsa\n                        JOIN bookable_schemas bs ON bs.id = bsa.schema_id\n                        WHERE bsa.asset_id = $1 AND bsa.begins <= $2::timestamptz::date\n                        ORDER BY bsa.begins DESC LIMIT 1\n                    ) s, slots_from_schedule(s.schedule, $2::timestamptz::date) sl\n                    WHERE sl.range = tstzrange($2, $3, '[)')\n                ) AS \"aligned!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "aligned!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9355b15b1ec69515eec21add741f1595aedce5bc7d9bbefd44f4725c6f1a3155"
+}

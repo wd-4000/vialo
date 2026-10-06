@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE net_ip_assignments SET (device_id, cred_id, expires) = ($2, $3, COALESCE($4::timestamptz, 'infinity'))\n             WHERE host(ipv4_addr) = host($1) AND device_id IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Inet",
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "318a0f4d06d1b39f8530f6d3b945e7891e31c77e50960938a45a162805db8118"
+}

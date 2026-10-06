@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO net_realm_assignments (account_id, realm_id) VALUES ($1, $2)\n             ON CONFLICT (account_id) DO UPDATE SET realm_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "304ee60cf5438f22df9b416c60ccccd1e326b370cc111f27921fc71f9c9c2fe9"
+}

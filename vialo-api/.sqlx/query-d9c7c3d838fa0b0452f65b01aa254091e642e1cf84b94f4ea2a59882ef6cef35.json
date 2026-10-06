@@ -122,7 +122,8 @@
                 "nms",
                 "email",
                 "sysop",
-                "dhcp"
+                "dhcp",
+                "import"
               ]
             }
           }

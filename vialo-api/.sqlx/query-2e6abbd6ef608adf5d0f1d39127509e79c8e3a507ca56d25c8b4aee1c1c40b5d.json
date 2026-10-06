@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO net_device_creds (device_id, cred_id, network_id, account_id, mac) VALUES ($1, $2, $3, $4, $5)\n                 ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Uuid",
+        "Macaddr"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2e6abbd6ef608adf5d0f1d39127509e79c8e3a507ca56d25c8b4aee1c1c40b5d"
+}

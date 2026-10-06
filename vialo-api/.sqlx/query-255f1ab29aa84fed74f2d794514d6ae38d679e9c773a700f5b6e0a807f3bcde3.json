@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT cred_id, network_id FROM net_device_creds WHERE device_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "cred_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "net_device_creds",
+            "name": "cred_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "network_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "net_device_creds",
+            "name": "network_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "255f1ab29aa84fed74f2d794514d6ae38d679e9c773a700f5b6e0a807f3bcde3"
+}

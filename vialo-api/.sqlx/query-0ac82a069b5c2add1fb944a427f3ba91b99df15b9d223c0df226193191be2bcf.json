@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT ap.id,\n         ap.label,\n       ap.auth_id,\n        ap.email,\n       ap.membership_start,\n         ap.membership_end as \"membership_end: PgDate\",\n          ap.full_name,\n          ap.manually_suspended,\n         ap.credit_balance, ap.amenities_username, spc.printer_username, spc.printer_id as \"printer_id?\"\n         FROM accounts_people ap LEFT JOIN subsystem_printer_context spc ON ap.id = spc.id WHERE ap.id = $1",
+  "query": "SELECT    id,\n       label,\n     auth_id,\n      email,\n     membership_start,\n       membership_end as \"membership_end: PgDate\",\n        full_name,\n        phone,\n        manually_suspended,\n       credit_balance FROM accounts_people WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -87,6 +87,17 @@
       },
       {
         "ordinal": 7,
+        "name": "phone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "phone"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
         "name": "manually_suspended",
         "type_info": "Bool",
         "origin": {
@@ -97,46 +108,13 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "credit_balance",
         "type_info": "Int4",
         "origin": {
           "Table": {
             "table": "accounts_people",
             "name": "credit_balance"
-          }
-        }
-      },
-      {
-        "ordinal": 9,
-        "name": "amenities_username",
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "accounts_people",
-            "name": "amenities_username"
-          }
-        }
-      },
-      {
-        "ordinal": 10,
-        "name": "printer_username",
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "subsystem_printer_context",
-            "name": "printer_username"
-          }
-        }
-      },
-      {
-        "ordinal": 11,
-        "name": "printer_id?",
-        "type_info": "Int4",
-        "origin": {
-          "Table": {
-            "table": "subsystem_printer_context",
-            "name": "printer_id"
           }
         }
       }
@@ -154,12 +132,10 @@
       true,
       false,
       true,
+      true,
       false,
-      true,
-      true,
-      true,
       true
     ]
   },
-  "hash": "fabe723cf34f98679bb073138c255fa5cc84da2aec3ca7b85bbe9640bbdcde67"
+  "hash": "0ac82a069b5c2add1fb944a427f3ba91b99df15b9d223c0df226193191be2bcf"
 }

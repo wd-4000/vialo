@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE accounts_people SET (membership_start, manually_suspended) = ($2, $3) WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f6c69e931b048f05953c201424927bf4201c5ef40087cc08050c85a3dfab2255"
+}

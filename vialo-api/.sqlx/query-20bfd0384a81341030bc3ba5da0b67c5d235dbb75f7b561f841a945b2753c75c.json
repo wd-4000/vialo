@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO account_group_memberships (group_id, account_id, role) VALUES ($1, $2, $3)\n             ON CONFLICT (account_id, group_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "group_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "manager"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "20bfd0384a81341030bc3ba5da0b67c5d235dbb75f7b561f841a945b2753c75c"
+}
