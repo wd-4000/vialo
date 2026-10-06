@@ -30,7 +30,7 @@ pub async fn list_realms(
     let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     let records =  conditional_query_as!(
         RealmModel,
-        "SELECT nr.* FROM net_realms nr {#account} {#search} ORDER BY id ASC LIMIT {limit} OFFSET {offset}",
+        "SELECT nr.id, nr.ipv4_subnet, nr.ipv4_nat, nr.ipv4_router, nr.ipv4_dns, nr.ipv4_dhcp_server, nr.ipv6_prefix, nr.vlan FROM net_realms nr {#account} {#search} ORDER BY id ASC LIMIT {limit} OFFSET {offset}",
         #account = match opts.account_id{
             Some(account_id) => "JOIN net_realm_assignments nra ON nra.realm_id = nr.id WHERE nra.account_id = {account_id}",
                 _ => "WHERE TRUE"
@@ -73,7 +73,7 @@ pub async fn get_realm(
         }
     }
 
-    let records = query_as!(RealmModel, "SELECT * FROM net_realms WHERE id = $1", id)
+    let records = query_as!(RealmModel, "SELECT id, ipv4_subnet, ipv4_nat, ipv4_router, ipv4_dns, ipv4_dhcp_server, ipv6_prefix, vlan FROM net_realms WHERE id = $1", id)
         .fetch_one(&data.db)
         .await?;
 
@@ -97,8 +97,8 @@ pub async fn put_realm(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     let result = sqlx::query!(
-        "UPDATE net_realms SET ipv4_subnet = coalesce($1, ipv4_subnet), ipv4_nat = coalesce($2, ipv4_nat), ipv6_prefix = coalesce($3, ipv6_prefix), vlan = coalesce($4, vlan), ipv4_router = coalesce($5, ipv4_router), ipv4_dns = coalesce($6, ipv4_dns) WHERE id = $7",
-        body.ipv4_subnet, body.ipv4_nat, body.ipv6_prefix, body.vlan, body.ipv4_router, body.ipv4_dns, id
+        "UPDATE net_realms SET ipv4_subnet = coalesce($1, ipv4_subnet), ipv4_nat = coalesce($2, ipv4_nat), ipv6_prefix = coalesce($3, ipv6_prefix), vlan = coalesce($4, vlan), ipv4_router = coalesce($5, ipv4_router), ipv4_dns = coalesce($6, ipv4_dns), ipv4_dhcp_server = coalesce($8, ipv4_dhcp_server) WHERE id = $7",
+        body.ipv4_subnet, body.ipv4_nat, body.ipv6_prefix, body.vlan, body.ipv4_router, body.ipv4_dns, id, body.ipv4_dhcp_server
     )
     .execute(&mut *conn)
     .await?;
@@ -137,13 +137,14 @@ pub async fn insert_realm(
 
     Ok(query_as!(
         RealmModel,
-        "INSERT INTO net_realms (ipv4_subnet, ipv4_nat, ipv6_prefix, vlan, ipv4_router, ipv4_dns) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+        "INSERT INTO net_realms (ipv4_subnet, ipv4_nat, ipv6_prefix, vlan, ipv4_router, ipv4_dns, ipv4_dhcp_server) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, ipv4_subnet, ipv4_nat, ipv4_router, ipv4_dns, ipv4_dhcp_server, ipv6_prefix, vlan",
         body.ipv4_subnet,
         body.ipv4_nat,
         body.ipv6_prefix,
         body.vlan,
         body.ipv4_router,
-        body.ipv4_dns
+        body.ipv4_dns,
+        body.ipv4_dhcp_server
     )
     .fetch_one(&mut *db)
     .await?)

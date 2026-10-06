@@ -34,7 +34,8 @@ fn default_pg_max_connections() -> u32 {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DhcpConfig {
-    /// Server identifier IP — must be an IP on the listen interface.
+    /// Server identifier IP. Must be an IP on the listen interface. Realms with
+    /// their own DHCP server address use that instead.
     pub siaddr: Ipv4Addr,
 
     /// DHCP server listen address.

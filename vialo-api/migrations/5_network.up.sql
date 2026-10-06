@@ -148,6 +148,7 @@ CREATE TABLE net_realms (
   ipv4_nat inet,
   ipv4_router inet,
   ipv4_dns inet,
+  ipv4_dhcp_server inet, -- vialo-dhcp's own address on this subnet. Falls back to the configured siaddr
   ipv6_prefix cidr,
   vlan int,
   -- /20 = 4094 addresses; a mistyped prefix below that takes minutes to materialise
@@ -168,7 +169,7 @@ BEGIN
             RAISE EXCEPTION 'overlap';
         END IF;
 
-        pool := expand_cidr(NEW.ipv4_subnet, ARRAY[NEW.ipv4_router, NEW.ipv4_dns]);
+        pool := expand_cidr(NEW.ipv4_subnet, ARRAY[NEW.ipv4_router, NEW.ipv4_dns, NEW.ipv4_dhcp_server]);
 
         -- Retire entries that left the pool: subnet moved, or router/dns now excludes them
         DELETE FROM net_ip_assignments WHERE realm_id = NEW.id AND NOT (ipv4_addr = ANY (pool));

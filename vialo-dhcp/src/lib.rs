@@ -36,6 +36,8 @@ struct NetConfig {
     router: Ipv4Addr,
     dns: Option<Ipv4Addr>,
     subnet_mask: Ipv4Addr,
+    /// Our address on the realm's subnet, used as the server identifier
+    server: Option<Ipv4Addr>,
 }
 
 /// A registered device attachment (one credential on one device) and its realm.
@@ -189,15 +191,6 @@ impl Plugin<Message> for VialoDhcp {
                 self.discover(ctx, vlan_hint).await
             }
             Some(MessageType::Request) => {
-                // A REQUEST carrying another server's identifier means the client
-                // selected a different server. We must stay silent
-                if let Some(DhcpOption::ServerIdentifier(sid)) =
-                    req_opts.get(OptionCode::ServerIdentifier)
-                    && *sid != self.siaddr
-                {
-                    debug!(server_id = %sid, "request addressed to another server, dropping");
-                    return Ok(Action::NoResponse);
-                }
                 let mut resp = self.build_response(req);
                 if req.giaddr().is_unspecified() {
                     resp.set_flags(req.flags().set_broadcast());
@@ -240,6 +233,7 @@ impl VialoDhcp {
             warn!(realm_id = %device.realm_id, "realm has no router/subnet, cannot serve dhcp");
             return Ok(Action::NoResponse);
         };
+        self.set_server_id(ctx, net);
 
         let ip = match self
             .claim_ip(
@@ -290,6 +284,19 @@ impl VialoDhcp {
             warn!(realm_id = %device.realm_id, "realm has no router/subnet, cannot serve dhcp");
             return Ok(Action::NoResponse);
         };
+
+        // A REQUEST carrying another server's identifier means the client
+        // selected a different server. We must stay silent
+        let server = self.server_id(net);
+        if let Some(DhcpOption::ServerIdentifier(sid)) =
+            ctx.msg().opts().get(OptionCode::ServerIdentifier)
+            && *sid != server
+        {
+            debug!(server_id = %sid, "request addressed to another server, dropping");
+            return Ok(Action::NoResponse);
+        }
+        // Before the claim, since a NAK keeps the identifier too
+        self.set_server_id(ctx, net);
 
         let ip = match self
             .claim_ip(
@@ -370,6 +377,7 @@ impl VialoDhcp {
                    nr.id AS realm_id,
                    nr.ipv4_router AS "ipv4_router: IpNetwork",
                    nr.ipv4_dns AS "ipv4_dns: IpNetwork",
+                   nr.ipv4_dhcp_server AS "ipv4_dhcp_server: IpNetwork",
                    nr.ipv4_subnet AS "ipv4_subnet: IpNetwork"
             FROM net_device_creds ndc
             JOIN net_devices nd ON nd.id = ndc.device_id
@@ -391,6 +399,7 @@ impl VialoDhcp {
 
         let router = row.ipv4_router.and_then(host_v4);
         let dns = row.ipv4_dns.and_then(host_v4);
+        let server = row.ipv4_dhcp_server.and_then(host_v4);
         let subnet_mask = match row.ipv4_subnet.map(|s| s.mask()) {
             Some(std::net::IpAddr::V4(m)) => Some(m),
             _ => None,
@@ -406,6 +415,7 @@ impl VialoDhcp {
                     router,
                     dns,
                     subnet_mask,
+                    server,
                 }),
         }))
     }
@@ -598,6 +608,20 @@ impl VialoDhcp {
         .await
         {
             warn!(?err, %device_id, "failed to update last_seen");
+        }
+    }
+
+    /// The realm's own server address, or the configured one.
+    fn server_id(&self, net: NetConfig) -> Ipv4Addr {
+        net.server.unwrap_or(self.siaddr)
+    }
+
+    /// Answer as our address on the client's subnet.
+    fn set_server_id(&self, ctx: &mut MsgContext<Message>, net: NetConfig) {
+        let server = self.server_id(net);
+        if let Some(resp) = ctx.resp_msg_mut() {
+            resp.set_siaddr(server);
+            resp.opts_mut().insert(DhcpOption::ServerIdentifier(server));
         }
     }
 

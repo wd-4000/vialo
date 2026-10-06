@@ -368,3 +368,42 @@ async fn lookup_realm_without_router_has_no_netconfig(pool: PgPool) {
     let device = d.lookup_device(mac(1), None).await.unwrap().unwrap();
     assert!(device.net.is_none());
 }
+
+// The realm's own server address is our identifier there, and never leased out.
+#[sqlx::test(migrations = "../vialo-api/migrations")]
+async fn realm_dhcp_server_is_identifier_and_off_pool(pool: PgPool) {
+    let d = dhcp(pool.clone());
+    let realm = seed_realm(&pool, "10.203.0.0/29", "10.203.0.1", "10.203.0.1", 203).await;
+    let mut c = attributed(&pool).await;
+    sqlx::query!(
+        "UPDATE net_realms SET ipv4_dhcp_server = $1 WHERE id = $2",
+        net("10.203.0.2"),
+        realm,
+    )
+    .execute(&mut *c)
+    .await
+    .unwrap();
+    seed_device(&pool, mac(1), realm).await;
+
+    let pooled = sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM net_ip_assignments WHERE host(ipv4_addr) = '10.203.0.2') AS "pooled!""#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!pooled);
+
+    let net = d.lookup_device(mac(1), None).await.unwrap().unwrap().net.unwrap();
+    assert_eq!(d.server_id(net), Ipv4Addr::new(10, 203, 0, 2));
+}
+
+// Without one, the configured siaddr answers.
+#[sqlx::test(migrations = "../vialo-api/migrations")]
+async fn realm_without_dhcp_server_uses_siaddr(pool: PgPool) {
+    let d = dhcp(pool.clone());
+    let realm = seed_realm(&pool, "10.204.0.0/29", "10.204.0.1", "10.204.0.1", 204).await;
+    seed_device(&pool, mac(1), realm).await;
+
+    let net = d.lookup_device(mac(1), None).await.unwrap().unwrap().net.unwrap();
+    assert_eq!(d.server_id(net), Ipv4Addr::new(10, 200, 0, 1));
+}

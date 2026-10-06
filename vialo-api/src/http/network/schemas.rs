@@ -63,6 +63,9 @@ pub struct PostOrPutRealmSchema {
     pub ipv4_router: Option<ipnetwork::IpNetwork>,
     #[schema(value_type = Option<String>, format = Ipv4)]
     pub ipv4_dns: Option<ipnetwork::IpNetwork>,
+    /// vialo-dhcp's address on this subnet, falls back to the configured siaddr
+    #[schema(value_type = Option<String>, format = Ipv4)]
+    pub ipv4_dhcp_server: Option<ipnetwork::IpNetwork>,
     pub vlan: Option<i32>,
 }
 
