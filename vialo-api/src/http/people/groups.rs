@@ -383,21 +383,28 @@ pub async fn insert_group(
     })
 }
 
+async fn current_app_roles(
+    db: &mut PgConnection,
+    group_id: Uuid,
+) -> Result<HashSet<AppRole>, VialoError> {
+    Ok(sqlx::query!(
+        r#"SELECT role as "role: AppRole" FROM account_group_app_roles WHERE group_id = $1"#,
+        group_id
+    )
+    .fetch_all(&mut *db)
+    .await?
+    .into_iter()
+    .map(|m| m.role)
+    .collect())
+}
+
 /// Sets a group's app roles to exactly `new_app_roles`. The caller checks permissions.
 pub async fn replace_app_roles(
     db: &mut PgConnection,
     group_id: Uuid,
     new_app_roles: HashSet<AppRole>,
 ) -> Result<(), VialoError> {
-    let current_app_roles: HashSet<AppRole> = sqlx::query!(
-        r#"SELECT role as "role: AppRole" FROM account_group_app_roles WHERE group_id = $1"#,
-        group_id
-    )
-    .fetch_all(&mut *db)
-    .await?
-    .iter()
-    .map(|m| m.role.clone())
-    .collect();
+    let current_app_roles = current_app_roles(&mut *db, group_id).await?;
 
     // Look for roles that have been removed
     for current_role in &current_app_roles - &new_app_roles {
@@ -494,8 +501,11 @@ pub async fn put_group(
         }
     })?;
 
-    // We want to change app roles
-    if let Some(new_app_roles) = body.app_roles {
+    // We want to change app roles. Group managers may edit their group, but not what it grants.
+    if let Some(new_app_roles) = body.app_roles
+        && current_app_roles(&mut trans, group_id).await? != new_app_roles
+    {
+        check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
         replace_app_roles(&mut trans, group_id, new_app_roles).await?;
     }
 
