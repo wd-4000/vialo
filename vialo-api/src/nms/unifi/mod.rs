@@ -125,6 +125,15 @@ impl UniFiApi {
         .await
     }
 
+    /// Currently connected clients
+    pub async fn get_clients(&self) -> Result<Vec<ClientSummary>> {
+        self.fetch_all(&format!(
+            "/proxy/network/integration/v1/sites/{}/clients",
+            self.site_id
+        ))
+        .await
+    }
+
     pub async fn get_wlans(&self) -> Result<Vec<WlanSummary>> {
         self.fetch_all(&format!(
             "/proxy/network/integration/v1/sites/{}/wifi/broadcasts",
@@ -253,6 +262,25 @@ pub struct Network {
     pub default: Option<bool>,
     pub management: Option<String>,
     pub metadata: Option<Value>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ClientType {
+    Wired,
+    Wireless,
+    Vpn,
+    Teleport,
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientSummary {
+    #[serde(rename = "type")]
+    pub client_type: ClientType,
+    pub mac_address: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

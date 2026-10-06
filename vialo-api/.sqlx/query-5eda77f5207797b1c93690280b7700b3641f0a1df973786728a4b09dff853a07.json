@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT hostname, api_key AS \"api_key: Encrypted<String>\", site_id FROM net_nms_connectors WHERE type = 'unifi'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "hostname",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_nms_connectors",
+            "name": "hostname"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "api_key: Encrypted<String>",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "net_nms_connectors",
+            "name": "api_key"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "site_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "net_nms_connectors",
+            "name": "site_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "5eda77f5207797b1c93690280b7700b3641f0a1df973786728a4b09dff853a07"
+}

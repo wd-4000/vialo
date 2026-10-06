@@ -13,7 +13,7 @@ use tracing::{debug, error, info, warn};
 mod mikrotik;
 mod models;
 mod traits;
-mod unifi;
+pub mod unifi;
 use crate::http::history::models::Subsystem;
 use mikrotik::MikrotikApi;
 use models::*;

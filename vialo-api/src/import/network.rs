@@ -1,12 +1,16 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use sqlx::types::{ipnetwork::IpNetwork, mac_address::MacAddress};
 use uuid::Uuid;
 
 use super::{Importer, Ref, api_error};
 use crate::{
-    helpers::{encryption, network::generate_credentials},
+    helpers::{
+        encryption::{self, Encrypted},
+        network::generate_credentials,
+    },
     http::network::{models::NetAuth, realms::insert_realm, schemas::PostOrPutRealmSchema},
+    nms::unifi::{ClientSummary, UniFiApi},
 };
 
 /// How a device gets onto a network
@@ -34,6 +38,26 @@ pub struct ImportedDevice {
 }
 
 impl Importer {
+    /// Clients currently connected through any of vialo's UniFi connectors
+    pub async fn unifi_clients(&mut self, proxy: &Option<String>) -> Result<Vec<ClientSummary>> {
+        let connectors = sqlx::query!(
+            r#"SELECT hostname, api_key AS "api_key: Encrypted<String>", site_id FROM net_nms_connectors WHERE type = 'unifi'"#
+        )
+        .fetch_all(self.conn())
+        .await?;
+
+        let mut clients = Vec::new();
+        for c in connectors {
+            let (Some(key), Some(site)) = (c.api_key, c.site_id) else {
+                self.warn(None, format!("UniFi connector {} lacks an API key or site", c.hostname));
+                continue;
+            };
+            let api = UniFiApi::new(c.hostname.clone(), key.expose(), site, proxy)?;
+            clients.extend(api.get_clients().await.with_context(|| format!("UniFi {}", c.hostname))?);
+        }
+        Ok(clients)
+    }
+
     pub async fn network_by_label(&mut self, label: &str) -> Result<Option<i32>> {
         Ok(
             sqlx::query_scalar!("SELECT id FROM net_networks WHERE label = $1", label)
