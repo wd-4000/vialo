@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT nr.* FROM net_realms nr JOIN net_realm_assignments nra ON nra.realm_id = nr.id WHERE nra.account_id = $1 AND (ipv4_subnet::text ILIKE '%' || $2 || '%' OR ipv4_nat::text ILIKE '%' || $2 || '%' OR ipv6_prefix::text ILIKE '%' || $2 || '%') ORDER BY id ASC LIMIT $3 OFFSET $4",
+  "query": "SELECT nr.id, nr.ipv4_subnet, nr.ipv4_nat, nr.ipv4_router, nr.ipv4_dns, nr.ipv4_dhcp_server, nr.ipv6_prefix, nr.vlan FROM net_realms nr JOIN net_realm_assignments nra ON nra.realm_id = nr.id WHERE nra.account_id = $1  ORDER BY id ASC LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -60,6 +60,17 @@
       },
       {
         "ordinal": 5,
+        "name": "ipv4_dhcp_server",
+        "type_info": "Inet",
+        "origin": {
+          "Table": {
+            "table": "net_realms",
+            "name": "ipv4_dhcp_server"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
         "name": "ipv6_prefix",
         "type_info": "Cidr",
         "origin": {
@@ -70,7 +81,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "vlan",
         "type_info": "Int4",
         "origin": {
@@ -84,7 +95,6 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
         "Int8",
         "Int8"
       ]
@@ -96,8 +106,9 @@
       true,
       true,
       true,
+      true,
       true
     ]
   },
-  "hash": "5a4f30d7e30394ca0e6ed4927fabac47b92043c0883aece60293d4a63203a1bf"
+  "hash": "22a9510593c600a62325183fda9f5d77cb30a5c2f3d930a091f71b4e7f9aee3f"
 }

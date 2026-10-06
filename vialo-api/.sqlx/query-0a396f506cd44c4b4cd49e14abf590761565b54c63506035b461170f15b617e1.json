@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO net_realms (ipv4_subnet, ipv4_nat, ipv6_prefix, vlan, ipv4_router, ipv4_dns) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+  "query": "SELECT nr.id, nr.ipv4_subnet, nr.ipv4_nat, nr.ipv4_router, nr.ipv4_dns, nr.ipv4_dhcp_server, nr.ipv6_prefix, nr.vlan FROM net_realms nr WHERE TRUE  ORDER BY id ASC LIMIT $1 OFFSET $2",
   "describe": {
     "columns": [
       {
@@ -60,6 +60,17 @@
       },
       {
         "ordinal": 5,
+        "name": "ipv4_dhcp_server",
+        "type_info": "Inet",
+        "origin": {
+          "Table": {
+            "table": "net_realms",
+            "name": "ipv4_dhcp_server"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
         "name": "ipv6_prefix",
         "type_info": "Cidr",
         "origin": {
@@ -70,7 +81,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "vlan",
         "type_info": "Int4",
         "origin": {
@@ -83,12 +94,8 @@
     ],
     "parameters": {
       "Left": [
-        "Cidr",
-        "Inet",
-        "Cidr",
-        "Int4",
-        "Inet",
-        "Inet"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -98,8 +105,9 @@
       true,
       true,
       true,
+      true,
       true
     ]
   },
-  "hash": "3a204812b8bf0846f86cbdf0eb62e129330202672bdd54b17cdaa6c592e24118"
+  "hash": "0a396f506cd44c4b4cd49e14abf590761565b54c63506035b461170f15b617e1"
 }
