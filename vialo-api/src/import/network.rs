@@ -38,7 +38,7 @@ pub struct ImportedDevice {
 }
 
 impl Importer {
-    /// Clients currently connected through any of vialo's UniFi connectors
+    /// Clients known to any of vialo's UniFi connectors: the history, then the currently connected ones
     pub async fn unifi_clients(&mut self, proxy: &Option<String>) -> Result<Vec<ClientSummary>> {
         let connectors = sqlx::query!(
             r#"SELECT hostname, api_key AS "api_key: Encrypted<String>", site_id FROM net_nms_connectors WHERE type = 'unifi'"#
@@ -53,6 +53,11 @@ impl Importer {
                 continue;
             };
             let api = UniFiApi::new(c.hostname.clone(), key.expose(), site, proxy)?;
+            // Unofficial, so only worth a warning
+            match api.get_client_history().await {
+                Ok(history) => clients.extend(history),
+                Err(e) => self.warn(None, format!("UniFi {} client history: {e:#}", c.hostname)),
+            }
             clients.extend(api.get_clients().await.with_context(|| format!("UniFi {}", c.hostname))?);
         }
         Ok(clients)

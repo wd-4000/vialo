@@ -138,6 +138,26 @@ impl UniFiApi {
         .await
     }
 
+    /// Every client the site remembers, from the unofficial v2 API
+    pub async fn get_client_history(&self) -> Result<Vec<ClientSummary>> {
+        let sites: Vec<SiteSummary> = self
+            .fetch_all("/proxy/network/integration/v1/sites")
+            .await?;
+        let site = sites
+            .into_iter()
+            .find(|s| s.id == self.site_id)
+            .ok_or_else(|| anyhow!("site {} not found", self.site_id))?;
+        self.authenticated_request(
+            &format!(
+                "/proxy/network/v2/api/site/{}/clients/history?onlyNonBlocked=false&includeUnifiDevices=false&withinHours=0",
+                site.internal_reference
+            ),
+            Method::GET,
+            None::<&()>,
+        )
+        .await
+    }
+
     pub async fn get_wlans(&self) -> Result<Vec<WlanSummary>> {
         self.fetch_all(&format!(
             "/proxy/network/integration/v1/sites/{}/wifi/broadcasts",
@@ -284,7 +304,17 @@ pub enum ClientType {
 pub struct ClientSummary {
     #[serde(rename = "type")]
     pub client_type: ClientType,
+    /// `mac` in the v2 API
+    #[serde(alias = "mac")]
     pub mac_address: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SiteSummary {
+    pub id: String,
+    /// Site name in the unofficial API
+    pub internal_reference: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
