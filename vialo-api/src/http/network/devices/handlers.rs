@@ -181,24 +181,11 @@ async fn credential_for_account(
         return Ok(credential);
     }
 
-    let (username, password) = if let Some(net_auth) = network.auth {
-        let username = if net_auth == NetAuth::UsernamePassword {
-            Some(random::unambiguous_string(
-                network.gen_username.unwrap_or(8) as usize,
-            ))
-        } else {
-            None
-        };
-
-        (
-            username,
-            Some(random::unambiguous_string(
-                network.gen_password.unwrap_or(16) as usize,
-            )),
-        )
-    } else {
-        (None, None)
-    };
+    let (username, password) = crate::helpers::network::generate_credentials(
+        network.auth.as_ref(),
+        network.gen_username,
+        network.gen_password,
+    );
 
     let password_encrypted = password.map(|p| encryption::encrypt(&p)).transpose()?;
 

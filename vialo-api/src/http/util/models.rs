@@ -39,7 +39,8 @@ macro_rules! impl_jsonb_embed {
             fn decode(
                 value: sqlx::postgres::PgValueRef<'r>,
             ) -> Result<Self, sqlx::error::BoxDynError> {
-                let json: sqlx::types::Json<Self> = sqlx::decode::Decode::decode(value)?;
+                let json: sqlx::types::Json<Self> =
+                    sqlx::decode::Decode::<sqlx::Postgres>::decode(value)?;
                 Ok(json.0)
             }
         }
@@ -49,7 +50,7 @@ macro_rules! impl_jsonb_embed {
                 &self,
                 buf: &mut sqlx::postgres::PgArgumentBuffer,
             ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
-                sqlx::encode::Encode::encode(sqlx::types::Json(self), buf)
+                sqlx::encode::Encode::<sqlx::Postgres>::encode(sqlx::types::Json(self), buf)
             }
         }
 

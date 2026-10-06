@@ -303,7 +303,8 @@ declare
     'subsystem_jobs',
     'health_events',
     'accounts', -- derived from accounts_people/account_groups
-    'i18n_index' -- autoincrement
+    'i18n_index', -- autoincrement
+    'import_refs'
   ];
 begin
   for _sql in select concat (

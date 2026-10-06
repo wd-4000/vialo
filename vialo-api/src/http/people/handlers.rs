@@ -1,6 +1,7 @@
 use super::{
     models::{
-        AccountModel, AccountModelForOverview, CreatePersonResponse, CurrentRoomOccupantsViewModel,
+        AccountModel, AccountModelForOverview, CreatePersonNetworkRealm, CreatePersonResponse,
+        CurrentRoomOccupantsViewModel,
         GroupStubListModelWithRole, LeaseModelWithEmbeddedSublease, LedgerEntryType,
         PeopleLookupModel, PersonOverviewModel, PersonOverviewNetworkModel,
         PersonalTransactionModel, TransactionStatus,
@@ -30,7 +31,7 @@ use axum::{
 use axum_extra::extract::Query;
 use serde::Serialize;
 use serde_json::json;
-use sqlx::{query, query_scalar};
+use sqlx::{Postgres, Transaction, query, query_scalar};
 use sqlx_conditional_queries::conditional_query_as;
 use std::{ops::DerefMut, sync::Arc};
 use tokio::try_join;
@@ -424,6 +425,38 @@ pub async fn add_person(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?; // begin transaction
 
+    let created = insert_person(&mut trans, body).await?;
+
+    let mut response = json!({"id": created.id, "full_name": created.full_name});
+    if let Some(realm) = created.realm {
+        response
+            .as_object_mut()
+            .unwrap()
+            .insert("network".into(), json!({"realm": realm}));
+    }
+    if let Some(credentials) = created.amenities {
+        response.as_object_mut().unwrap().insert(
+            "amenities".into(),
+            json!({"username": credentials.username, "password": credentials.pin}),
+        );
+    }
+
+    trans.commit().await?;
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+pub struct CreatedPerson {
+    pub id: Uuid,
+    pub full_name: Option<String>,
+    pub realm: Option<CreatePersonNetworkRealm>,
+    pub amenities: Option<helpers::people::AmenitiesLogin>,
+}
+
+/// Inserts a person with their lease, realm and amenities login as requested. The caller checks permissions.
+pub async fn insert_person(
+    trans: &mut Transaction<'_, Postgres>,
+    body: CreateUserSchema,
+) -> Result<CreatedPerson, VialoError> {
     let created_user = sqlx::query!(
         r#"INSERT INTO accounts_people (label, email, membership_end, full_name, auth_id, phone) VALUES ($1, $2, $3, $4, $5, NULLIF(btrim($6), '')) RETURNING id, full_name"#,
         body.label, body.email, body.membership_end as PgDate, body.full_name, body.auth_id, body.phone
@@ -434,11 +467,9 @@ pub async fn add_person(
         VialoError::AppError(StatusCode::CONFLICT, "email_conflict".into())
     } else { e.into() })?;
 
-    if body.contract.is_some() {
-        let contract = body.contract.unwrap();
-
+    if let Some(contract) = body.contract {
         let room_id = sqlx::query!("SELECT id FROM res_rooms WHERE label = $1", contract.room)
-            .fetch_one(&mut *trans)
+            .fetch_one(trans.deref_mut())
             .await
             .map_err(|_| VialoError::AppError(StatusCode::BAD_REQUEST, "unknown_room".into()))?
             .id;
@@ -455,9 +486,7 @@ pub async fn add_person(
                 .await?;
     }
 
-    let mut response = json!({"id":  created_user.id, "full_name": created_user.full_name});
-
-    if body.auto_setup_network.unwrap_or(false) {
+    let realm = if body.auto_setup_network.unwrap_or(false) {
         // Find a free realm which has an IPv4 NAT IP
         let assigned_realm = sqlx::query!(
             r#"WITH inserted AS (
@@ -485,24 +514,26 @@ pub async fn add_person(
             _ => VialoError::Anyhow(e.into()),
         })?;
 
-        response.as_object_mut().unwrap().insert(
-            "network".into(),
-            json!({"realm": {"id": assigned_realm.id, "ipv4_nat": assigned_realm.ipv4_nat}}),
-        );
-    }
+        Some(CreatePersonNetworkRealm {
+            id: assigned_realm.id,
+            ipv4_nat: assigned_realm.ipv4_nat,
+        })
+    } else {
+        None
+    };
 
-    if body.enable_amenities_login.unwrap_or(false) {
-        let credentials =
-            helpers::people::generate_amenities_login(created_user.id, &mut trans).await?;
+    let amenities = if body.enable_amenities_login.unwrap_or(false) {
+        Some(helpers::people::generate_amenities_login(created_user.id, trans).await?)
+    } else {
+        None
+    };
 
-        response.as_object_mut().unwrap().insert(
-            "amenities".into(),
-            json!({"username": credentials.username, "password": credentials.pin}),
-        );
-    }
-
-    trans.commit().await?;
-    Ok((StatusCode::CREATED, Json(response)))
+    Ok(CreatedPerson {
+        id: created_user.id,
+        full_name: created_user.full_name,
+        realm,
+        amenities,
+    })
 }
 
 #[utoipa::path(put, path = "/people/{id}", request_body=CreateUserSchema, responses((status = 204, description = "Updated")))] // no body

@@ -1,5 +1,5 @@
 use serde_with::{NoneAsEmptyString, serde_as};
-use sqlx::PgExecutor;
+use sqlx::{PgConnection, PgExecutor};
 use utoipa::ToSchema;
 
 use super::{
@@ -345,15 +345,24 @@ pub async fn post_group(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let processed_i18n_fields = insert_i18n_strings(
-        &mut trans,
-        vec![("description", i18n_map(body.description))],
-    )
-    .await?;
+    let new_group = insert_group(&mut trans, body).await?;
+
+    trans.commit().await?;
+
+    Ok(Json(new_group))
+}
+
+/// Inserts a group, without app roles. The caller checks permissions.
+pub async fn insert_group(
+    db: &mut PgConnection,
+    body: CreateGroupSchema,
+) -> Result<GroupListModel, VialoError> {
+    let processed_i18n_fields =
+        insert_i18n_strings(&mut *db, vec![("description", i18n_map(body.description))]).await?;
 
     let langs = vec![String::from("en"), String::from("de")];
 
-    let new_group = sqlx::query_as!(
+    sqlx::query_as!(
         GroupListModel,
         "INSERT INTO account_groups (label,email,public,icon,description_i18n) VALUES ($1,$2,$3,$4,$5) returning id, label, email, icon, public, get_i18n_string(description_i18n, $6) AS description",
         body.label,
@@ -363,7 +372,7 @@ pub async fn post_group(
         processed_i18n_fields.get("description"),
         &langs
     )
-    .fetch_one(&mut *trans)
+    .fetch_one(&mut *db)
     .await
     .map_err(|e| {
         if is_unique_violation(&e) {
@@ -371,11 +380,48 @@ pub async fn post_group(
         } else {
             e.into()
         }
-    })?;
+    })
+}
 
-    trans.commit().await?;
+/// Sets a group's app roles to exactly `new_app_roles`. The caller checks permissions.
+pub async fn replace_app_roles(
+    db: &mut PgConnection,
+    group_id: Uuid,
+    new_app_roles: HashSet<AppRole>,
+) -> Result<(), VialoError> {
+    let current_app_roles: HashSet<AppRole> = sqlx::query!(
+        r#"SELECT role as "role: AppRole" FROM account_group_app_roles WHERE group_id = $1"#,
+        group_id
+    )
+    .fetch_all(&mut *db)
+    .await?
+    .iter()
+    .map(|m| m.role.clone())
+    .collect();
 
-    Ok(Json(new_group))
+    // Look for roles that have been removed
+    for current_role in &current_app_roles - &new_app_roles {
+        sqlx::query!(
+            "DELETE FROM account_group_app_roles WHERE group_id = $1 AND role = $2",
+            group_id,
+            current_role as AppRole
+        )
+        .execute(&mut *db)
+        .await?;
+    }
+
+    // Look for roles that have been added
+    for new_role in &new_app_roles - &current_app_roles {
+        sqlx::query!(
+            "INSERT INTO account_group_app_roles (group_id, role) VALUES ($1, $2)",
+            group_id,
+            new_role as AppRole
+        )
+        .execute(&mut *db)
+        .await?;
+    }
+
+    Ok(())
 }
 
 #[utoipa::path(delete, path = "/people/groups/{id}", responses((status = 204, description = "Deleted")))] // no body
@@ -450,37 +496,7 @@ pub async fn put_group(
 
     // We want to change app roles
     if let Some(new_app_roles) = body.app_roles {
-        let current_app_roles: HashSet<AppRole> = sqlx::query!(
-            r#"SELECT role as "role: AppRole" FROM account_group_app_roles WHERE group_id = $1"#,
-            group_id
-        )
-        .fetch_all(&mut *trans)
-        .await?
-        .iter()
-        .map(|m| m.role.clone())
-        .collect();
-
-        // Look for roles that have been removed
-        for current_role in &current_app_roles - &new_app_roles {
-            sqlx::query!(
-                "DELETE FROM account_group_app_roles WHERE group_id = $1 AND role = $2",
-                group_id,
-                current_role as AppRole
-            )
-            .execute(&mut *trans)
-            .await?;
-        }
-
-        // Look for roles that have been added
-        for new_role in &new_app_roles - &current_app_roles {
-            sqlx::query!(
-                "INSERT INTO account_group_app_roles (group_id, role) VALUES ($1, $2)",
-                group_id,
-                new_role as AppRole
-            )
-            .execute(&mut *trans)
-            .await?;
-        }
+        replace_app_roles(&mut trans, group_id, new_app_roles).await?;
     }
 
     trans.commit().await?;

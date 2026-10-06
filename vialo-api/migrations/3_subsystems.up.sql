@@ -8,7 +8,8 @@ CREATE TYPE subsystem_type AS ENUM(
   'nms',
   'email',
   'sysop',
-  'dhcp'
+  'dhcp',
+  'import'
 );
 
 CREATE TYPE job_status AS ENUM('pending', 'processing', 'done', 'error');

@@ -6,6 +6,7 @@ use utoipa::ToSchema;
 pub mod bounded_string;
 pub mod encryption;
 mod i18n;
+pub mod network;
 mod patch_option;
 pub mod people;
 mod pg_date;

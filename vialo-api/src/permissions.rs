@@ -25,7 +25,17 @@ pub enum GroupRole {
 }
 
 #[derive(
-    Clone, Debug, PartialEq, Eq, Hash, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    sqlx::Type,
+    Deserialize,
+    Serialize,
+    ToSchema,
+    strum::VariantArray,
 )]
 #[sqlx(type_name = "app_role", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]

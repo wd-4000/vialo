@@ -12,6 +12,9 @@ pub mod ws;
 #[cfg(feature = "migrate")]
 pub mod migrations;
 
+#[cfg(feature = "import")]
+pub mod import;
+
 #[cfg(feature = "nms")]
 pub mod nms;
 

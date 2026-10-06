@@ -16,7 +16,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use sqlx::query_as;
+use sqlx::{PgConnection, query_as};
 use sqlx_conditional_queries::conditional_query_as;
 use uuid::Uuid;
 
@@ -116,15 +116,26 @@ pub async fn post_realm(
     JsonE(body): JsonE<PostOrPutRealmSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user.clone(), AppRole::NetworkManager, &data.db).await?;
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+
+    let record = insert_realm(&mut conn, body).await?;
+
+    Ok((StatusCode::CREATED, Json(record)))
+}
+
+/// Validates and inserts a realm. The caller checks permissions.
+pub async fn insert_realm(
+    db: &mut PgConnection,
+    body: PostOrPutRealmSchema,
+) -> Result<RealmModel, VialoError> {
     if body.vlan.is_some_and(|v| !(1..=4094).contains(&v)) {
         return Err(VialoError::AppError(
             StatusCode::BAD_REQUEST,
             "vlan must be between 1 and 4094".into(),
         ));
     }
-    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
-    let record = query_as!(
+    Ok(query_as!(
         RealmModel,
         "INSERT INTO net_realms (ipv4_subnet, ipv4_nat, ipv6_prefix, vlan, ipv4_router, ipv4_dns) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
         body.ipv4_subnet,
@@ -134,10 +145,8 @@ pub async fn post_realm(
         body.ipv4_router,
         body.ipv4_dns
     )
-    .fetch_one(&mut *conn)
-    .await?;
-
-    Ok((StatusCode::CREATED, Json(record)))
+    .fetch_one(&mut *db)
+    .await?)
 }
 
 #[utoipa::path(post, path = "/network/realms/set_default", request_body = SetDefaultRealmSchema, responses((status = 204, description = "Updated")))] // no body

@@ -15,7 +15,7 @@ mod health;
 pub mod history;
 mod home;
 pub mod network;
-mod people;
+pub mod people;
 pub mod posts;
 pub mod rate_limit;
 pub mod util;

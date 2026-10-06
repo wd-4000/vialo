@@ -315,7 +315,8 @@ CREATE OR REPLACE FUNCTION bookable_event_trigger () RETURNS TRIGGER AS $$
 DECLARE
     kind bookable_event_kind;
 BEGIN
-    IF NEW.maintenance THEN
+    -- Imported history must not notify anyone
+    IF NEW.maintenance OR current_setting('app.subsystem', true) = 'import' THEN
         RETURN NULL;
     END IF;
 
