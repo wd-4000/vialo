@@ -7,7 +7,7 @@ use crate::http::util::{grab_authd_conn_user, grab_trans};
 use crate::{AppState, health, http::history::models::Subsystem, impl_jsonb_embed};
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::Query;
-use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::postgres::types::PgRange;
@@ -67,7 +67,8 @@ pub async fn taken_slots(
 pub struct Transition {
     pub schema_id: i32,
     pub begins: NaiveDate,
-    pub schedule: Vec<NaiveTime>,
+    /// strings, because `time` allows 24:00:00 and `NaiveTime` doesn't >:(
+    pub schedule: Vec<String>,
     pub slot_price: i32,
 }
 
@@ -134,34 +135,17 @@ pub async fn slot_schemas(
     // Reuse allowed assets
     let asset_ids: Vec<i32> = assets.iter().map(|j| j.id).collect();
 
-    let page_query = query_as!(
+    let pages = query_as!(
         SchemaPages,
         r#"SELECT coalesce(transitions, ARRAY[]::jsonb[]) as "transitions!: Vec<Transition>", coalesce(ARRAY_AGG(asset_id), ARRAY[]::integer[]) as "assets!" FROM (SELECT ARRAY_AGG(jsonb_build_object('schema_id', bsa.schema_id, 'begins', bsa.begins, 'schedule', bs.schedule, 'slot_price', slot_price) ORDER BY bsa.begins) as transitions, bsa.asset_id FROM bookable_schema_assignments bsa JOIN bookable_schemas bs ON bs.id = bsa.schema_id WHERE bsa.asset_id = ANY($1) AND bsa.begins <= $2 AND (bsa.begins > $3 OR bsa.begins = (SELECT MAX(begins) FROM bookable_schema_assignments WHERE asset_id = bsa.asset_id AND begins <= $3)) group by bsa.asset_id) group by transitions;"#,
         &asset_ids,
         opts.to,
         opts.from
     )
-    .fetch_all(&data.db);
+    .fetch_all(&data.db)
+    .await?;
 
-    if let Ok(pages) = page_query.await {
-        // let mut evil: HashMap<Vec<i32>, Vec<&SchemaAssignments>> = HashMap::new();
-        // for record in schema_assignments.iter() {
-        //     if let Some(key_real) = &record.assets {
-        //         match evil.get_mut::<Vec<i32>>(key_real) {
-        //             Some(v) => {
-        //                 v.push(record);
-        //             }
-        //             None => {
-        //                 evil.insert(key_real.clone(), vec![record]);
-        //             }
-        //         }
-        //     }
-        // }
-
-        return Ok((StatusCode::OK, Json(SlotSchemaResponse { pages, assets })));
-    }
-
-    Err(VialoError::NotFound())
+    Ok((StatusCode::OK, Json(SlotSchemaResponse { pages, assets })))
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
