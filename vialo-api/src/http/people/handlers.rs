@@ -1,9 +1,8 @@
 use super::{
     models::{
         AccountModel, AccountModelForOverview, CreatePersonNetworkRealm, CreatePersonResponse,
-        CurrentRoomOccupantsViewModel,
-        GroupStubListModelWithRole, LeaseModelWithEmbeddedSublease, LedgerEntryType,
-        PeopleLookupModel, PersonOverviewModel, PersonOverviewNetworkModel,
+        CurrentRoomOccupantsViewModel, GroupStubListModelWithRole, LeaseModelWithEmbeddedSublease,
+        LedgerEntryType, PeopleLookupModel, PersonOverviewModel, PersonOverviewNetworkModel,
         PersonalTransactionModel, TransactionStatus,
     },
     schemas::{CreateUserSchema, UserFilterOptions},
@@ -15,7 +14,7 @@ use crate::printer::{self, models::JobData};
 use crate::{
     AppState, helpers,
     http::util::{
-        JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
+        JsonE, ListOptions, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
         is_unique_violation,
         models::{AccountEmbed, AccountPersonEmbed, GroupEmbed, ProductEmbed, RoomEmbed},
     },
@@ -237,17 +236,20 @@ pub async fn get_person_capabilities_me(
     get_person_capabilities_impl(id, data).await
 }
 
-#[utoipa::path(get, path = "/people/{id}/groups", responses((status = 200, description = "OK", body=Vec<GroupStubListModelWithRole>)))]
+#[utoipa::path(get, path = "/people/{id}/groups", params(ListOptions), responses((status = 200, description = "OK", body=Vec<GroupStubListModelWithRole>)))]
 pub async fn get_person_groups(
     Path(id_path): Path<Uuid>,
+    Query(opts): Query<ListOptions>,
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
+
     if user.id != id_path {
         check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
     }
 
-    let groups = sqlx::query_as!(GroupStubListModelWithRole, "select id, label, role::text from account_group_memberships agm join account_groups ag on agm.group_id = ag.id WHERE account_id = $1", id_path)
+    let groups = sqlx::query_as!(GroupStubListModelWithRole, "select id, label, role::text from account_group_memberships agm join account_groups ag on agm.group_id = ag.id WHERE account_id = $1 ORDER BY ag.label, ag.id LIMIT $2 OFFSET $3", id_path, limit, offset)
         .fetch_all(&data.db).await?;
     Ok(Json(groups))
 }
