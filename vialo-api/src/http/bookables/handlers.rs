@@ -47,6 +47,7 @@ pub async fn list_bookables(
     State(data): State<Arc<AppState>>,
     caller: BookableCaller,
 ) -> Result<impl IntoResponse, VialoError> {
+    let paginate = opts.limit.is_some() || opts.page.is_some();
     let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
     let langs = opts
@@ -73,10 +74,15 @@ pub async fn list_bookables(
             FROM
                 bookable_asset_status
             WHERE (account_bookable_perm_exists({user_id_o}, asset_type_id, 'view'::bookable_perm) OR asset_type_id = ANY({kiosk_types:Vec<i32>}))
-            {#asset_type} ORDER BY id LIMIT {limit} OFFSET {offset}"#,
+            {#asset_type} ORDER BY id {#pagination}"#,
             #asset_type = match (opts.asset_types) {
                 Some(at) => "AND asset_type_id = ANY({at:Vec<i32>})",
                 None => "",
+            },
+            // opt-in, so live subscribers get a complete baseline
+            #pagination = match (paginate) {
+                true => "LIMIT {limit} OFFSET {offset}",
+                false => "",
             },
     )
     .fetch_all(&data.db)

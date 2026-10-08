@@ -100,9 +100,14 @@ async fn auth_allows(
     kiosk: Option<Arc<KioskConfig>>,
     min_perm: BookablePerm,
     allow_public: bool,
-    asset_type_id: i32,
+    asset_type_id: Option<i32>,
     auth: &Auth,
 ) -> bool {
+    // Wildcards are filtered per event; only reject those that can never pass
+    let Some(asset_type_id) = asset_type_id else {
+        return allow_public || *auth != Auth::Anonymous;
+    };
+
     auth_filter(
         db.clone(),
         kiosk,
@@ -137,7 +142,7 @@ impl BookableChannel {
 
     pub async fn subscribe(
         &self,
-        asset_type_id: i32,
+        asset_type_id: Option<i32>,
         auth: Auth,
         slot: crate::events::SlotMap<i32>,
         notify: Arc<Notify>,
@@ -158,8 +163,8 @@ impl BookableChannel {
         }
     }
 
-    pub async fn broadcast(&self, routing_key: i32, coalesce_key: i32, value: BookableAssetStatus) {
-        self.inner.broadcast(routing_key, coalesce_key, value).await;
+    pub async fn broadcast(&self, asset_type_id: i32, items: Vec<(i32, BookableAssetStatus)>) {
+        self.inner.broadcast(asset_type_id, items).await;
     }
 }
 
@@ -191,7 +196,7 @@ impl BookableQueueChannel {
 
     pub async fn subscribe(
         &self,
-        asset_type_id: i32,
+        asset_type_id: Option<i32>,
         auth: Auth,
         slot: crate::events::SlotMap<i32>,
         notify: Arc<Notify>,
@@ -212,7 +217,7 @@ impl BookableQueueChannel {
         }
     }
 
-    pub async fn broadcast(&self, routing_key: i32, coalesce_key: i32, value: BookableAssetQueue) {
-        self.inner.broadcast(routing_key, coalesce_key, value).await;
+    pub async fn broadcast(&self, asset_type_id: i32, items: Vec<(i32, BookableAssetQueue)>) {
+        self.inner.broadcast(asset_type_id, items).await;
     }
 }

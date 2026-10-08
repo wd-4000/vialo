@@ -36,7 +36,8 @@ use futures::{sink::SinkExt, stream::StreamExt};
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
 enum WsFrame {
-    Subscription { channel: String, id: u16 },
+    /// No `id` subscribes to every routing key on the channel
+    Subscription { channel: String, id: Option<u16> },
     Auth { auth_key: String },
 }
 
@@ -133,7 +134,7 @@ async fn handle_socket(
         .map(|u| crate::events::Auth::Account(u.id))
         .unwrap_or(crate::events::Auth::Anonymous);
     let mut recv_task = tokio::spawn(async move {
-        let mut subscribed: HashSet<(String, i32)> = HashSet::new();
+        let mut subscribed: HashSet<(String, Option<i32>)> = HashSet::new();
         while let Some(Ok(msg)) = receiver.next().await {
             if let Message::Text(msg_text) = msg
                 && let Ok(frame) = serde_json::from_str::<WsFrame>(msg_text.as_str())
@@ -155,7 +156,7 @@ async fn handle_socket(
                         continue;
                     }
                     WsFrame::Subscription { channel, id } => {
-                        let id: i32 = id.into();
+                        let id: Option<i32> = id.map(Into::into);
                         let key = (channel.clone(), id);
                         if subscribed.insert(key) {
                             match channel.as_str() {

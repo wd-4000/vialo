@@ -561,6 +561,9 @@ async fn publish_bookables(
     .collect();
 
     let mut fresh: HashMap<i32, (BookableAssetStatus, BookableAssetQueue)> = HashMap::new();
+    // grouped by asset type so each channel runs its auth filter once per type
+    let mut changed_statuses: HashMap<i32, Vec<(i32, BookableAssetStatus)>> = HashMap::new();
+    let mut changed_queues: HashMap<i32, Vec<(i32, BookableAssetQueue)>> = HashMap::new();
 
     for status in statuses {
         // An asset with nothing queued publishes empty buckets to clear the
@@ -582,21 +585,34 @@ async fn publish_bookables(
         };
 
         if changed_status {
-            app_state
-                .event_channels
-                .bookables
-                .broadcast(status.asset_type_id, status.id, status.clone())
-                .await;
+            changed_statuses
+                .entry(status.asset_type_id)
+                .or_default()
+                .push((status.id, status.clone()));
         }
         if changed_queue {
-            app_state
-                .event_channels
-                .bookable_queues
-                .broadcast(queue.asset_type_id, queue.id, queue.clone())
-                .await;
+            changed_queues
+                .entry(queue.asset_type_id)
+                .or_default()
+                .push((queue.id, queue.clone()));
         }
 
         fresh.insert(status.id, (status, queue));
+    }
+
+    for (asset_type_id, items) in changed_statuses {
+        app_state
+            .event_channels
+            .bookables
+            .broadcast(asset_type_id, items)
+            .await;
+    }
+    for (asset_type_id, items) in changed_queues {
+        app_state
+            .event_channels
+            .bookable_queues
+            .broadcast(asset_type_id, items)
+            .await;
     }
 
     *cache = fresh;

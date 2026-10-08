@@ -39,7 +39,8 @@ struct Subscriber<K> {
 /// in the event of backpressure the most recent value for each asset is delivered
 pub struct StatusChannel<K, V> {
     name: String,
-    subscribers: tokio::sync::RwLock<HashMap<K, Vec<Subscriber<K>>>>,
+    /// `None` subscribes to every routing key
+    subscribers: tokio::sync::RwLock<HashMap<Option<K>, Vec<Subscriber<K>>>>,
     auth_filter: OnceLock<AuthCallback<K>>,
     _phantom: std::marker::PhantomData<V>,
 }
@@ -66,7 +67,13 @@ impl<K: Hash + Eq + Clone + Debug + Serialize + Send + Sync + 'static, V: Serial
         );
     }
 
-    pub async fn subscribe(&self, key: K, auth: Auth, slot: SlotMap<K>, notify: Arc<Notify>) {
+    pub async fn subscribe(
+        &self,
+        key: Option<K>,
+        auth: Auth,
+        slot: SlotMap<K>,
+        notify: Arc<Notify>,
+    ) {
         self.subscribers
             .write()
             .await
@@ -79,54 +86,66 @@ impl<K: Hash + Eq + Clone + Debug + Serialize + Send + Sync + 'static, V: Serial
             });
     }
 
-    pub async fn broadcast(&self, routing_key: K, coalesce_key: K, value: V) {
-        let envelope = EventEnvelope {
-            __vlo_channel: self.name.clone(),
-            __vlo_id: routing_key.clone(),
-            data: value,
-        };
-        let json = Arc::new(serde_json::to_string(&envelope).unwrap_or_default());
+    /// Deliver `items` as (coalesce_key, value) pairs under one routing key
+    pub async fn broadcast(&self, routing_key: K, items: Vec<(K, V)>) {
+        let keys = [Some(routing_key.clone()), None];
 
         // collect subscriber auths under read lock, then run filter outside lock
-        let authorized = {
+        let auths: HashSet<Auth> = {
             let subs = self.subscribers.read().await;
-            let Some(list) = subs.get(&routing_key) else {
-                return;
-            };
+            keys.iter()
+                .filter_map(|k| subs.get(k))
+                .flatten()
+                .map(|s| s.auth.clone())
+                .collect()
+        };
+        if auths.is_empty() || items.is_empty() {
+            return;
+        }
 
-            if let Some(filter) = self.auth_filter.get() {
-                let auths: Vec<Auth> = list.iter().map(|s| s.auth.clone()).collect();
-                // drop read lock before running the async filter
-                drop(subs);
-                Some(filter(routing_key.clone(), auths).await)
-            } else {
-                drop(subs);
-                None
-            }
+        let authorized = match self.auth_filter.get() {
+            Some(filter) => Some(filter(routing_key.clone(), auths.into_iter().collect()).await),
+            None => None,
         };
 
-        // prune unauthorized, deliver to remaining
-        {
-            let mut subs = self.subscribers.write().await;
-            if let Some(list) = subs.get_mut(&routing_key) {
-                if let Some(ref authorized) = authorized {
-                    list.retain(|sub| authorized.contains(&sub.auth));
-                }
+        let messages: Vec<((String, K), Arc<String>)> = items
+            .into_iter()
+            .map(|(coalesce_key, value)| {
+                let envelope = EventEnvelope {
+                    __vlo_channel: self.name.clone(),
+                    __vlo_id: routing_key.clone(),
+                    data: value,
+                };
+                let json = serde_json::to_string(&envelope).unwrap_or_default();
+                ((self.name.clone(), coalesce_key), Arc::new(json))
+            })
+            .collect();
 
-                list.retain(|sub| match (sub.slot.upgrade(), sub.notify.upgrade()) {
-                    (Some(slot), Some(notify)) => {
-                        slot.lock()
-                            .unwrap()
-                            .insert((self.name.clone(), coalesce_key.clone()), Arc::clone(&json));
-                        notify.notify_one();
-                        true
+        // unauthorized subscribers are skipped, not pruned: the filter is rerun per
+        // broadcast, so regaining access resumes delivery
+        let mut subs = self.subscribers.write().await;
+        for key in keys {
+            let Some(list) = subs.get_mut(&key) else {
+                continue;
+            };
+
+            list.retain(|sub| {
+                let (Some(slot), Some(notify)) = (sub.slot.upgrade(), sub.notify.upgrade()) else {
+                    return false;
+                };
+                if authorized.as_ref().is_none_or(|a| a.contains(&sub.auth)) {
+                    let mut slot = slot.lock().unwrap();
+                    for (k, json) in &messages {
+                        slot.insert(k.clone(), Arc::clone(json));
                     }
-                    _ => false,
-                });
-
-                if list.is_empty() {
-                    subs.remove(&routing_key);
+                    drop(slot);
+                    notify.notify_one();
                 }
+                true
+            });
+
+            if list.is_empty() {
+                subs.remove(&key);
             }
         }
     }
