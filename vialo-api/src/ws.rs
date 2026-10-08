@@ -31,14 +31,13 @@ use crate::AppState;
 use crate::http::util::{User, middleware::auth_middleware};
 use futures::{sink::SinkExt, stream::StreamExt};
 
-/// Subscription first, so a frame carrying both channel/id and auth_key can't
-/// be mistaken for the auth-only variant
 #[derive(Deserialize, Debug)]
-#[serde(untagged)]
+#[serde(tag = "op", rename_all = "snake_case")]
 enum WsFrame {
+    Auth { key: String },
     /// No `id` subscribes to every routing key on the channel
-    Subscription { channel: String, id: Option<u16> },
-    Auth { auth_key: String },
+    Subscribe { channel: String, id: Option<u16> },
+    Unsubscribe { channel: String, id: Option<u16> },
 }
 
 pub fn main(app_state: Arc<AppState>) -> Router {
@@ -135,57 +134,57 @@ async fn handle_socket(
         .unwrap_or(crate::events::Auth::Anonymous);
     let mut recv_task = tokio::spawn(async move {
         let mut subscribed: HashSet<(String, Option<i32>)> = HashSet::new();
+        let mut has_subscribed = false;
+        let channels = &state.event_channels;
         while let Some(Ok(msg)) = receiver.next().await {
             if let Message::Text(msg_text) = msg
                 && let Ok(frame) = serde_json::from_str::<WsFrame>(msg_text.as_str())
             {
                 match frame {
-                    WsFrame::Auth { auth_key } => {
+                    WsFrame::Auth { key } => {
                         // The key only counts before the first subscription
-                        if subscribed.is_empty()
+                        if !has_subscribed
                             && state
                                 .config
                                 .bookables
                                 .as_ref()
                                 .and_then(|b| b.kiosk.as_ref())
-                                .is_some_and(|k| k.matches(&auth_key))
+                                .is_some_and(|k| k.matches(&key))
                         {
                             socket_auth = crate::events::Auth::Kiosk;
                             debug!("kiosk authenticated");
                         }
-                        continue;
                     }
-                    WsFrame::Subscription { channel, id } => {
+                    WsFrame::Subscribe { channel, id } => {
                         let id: Option<i32> = id.map(Into::into);
-                        let key = (channel.clone(), id);
-                        if subscribed.insert(key) {
-                            match channel.as_str() {
-                                "bookables" => {
-                                    state
-                                        .event_channels
-                                        .bookables
-                                        .subscribe(
-                                            id,
-                                            socket_auth.clone(),
-                                            Arc::clone(&slot_recv),
-                                            Arc::clone(&notify_recv),
-                                        )
-                                        .await;
-                                }
-                                "bookables/queues" => {
-                                    state
-                                        .event_channels
-                                        .bookable_queues
-                                        .subscribe(
-                                            id,
-                                            socket_auth.clone(),
-                                            Arc::clone(&slot_recv),
-                                            Arc::clone(&notify_recv),
-                                        )
-                                        .await;
-                                }
-                                _ => {}
+                        if !subscribed.insert((channel.clone(), id)) {
+                            continue;
+                        }
+                        has_subscribed = true;
+                        let auth = socket_auth.clone();
+                        let slot = Arc::clone(&slot_recv);
+                        let notify = Arc::clone(&notify_recv);
+                        match channel.as_str() {
+                            "bookables" => {
+                                channels.bookables.subscribe(id, auth, slot, notify).await
                             }
+                            "bookables/queues" => {
+                                channels.bookable_queues.subscribe(id, auth, slot, notify).await
+                            }
+                            _ => {}
+                        }
+                    }
+                    WsFrame::Unsubscribe { channel, id } => {
+                        let id: Option<i32> = id.map(Into::into);
+                        if !subscribed.remove(&(channel.clone(), id)) {
+                            continue;
+                        }
+                        match channel.as_str() {
+                            "bookables" => channels.bookables.unsubscribe(id, &slot_recv).await,
+                            "bookables/queues" => {
+                                channels.bookable_queues.unsubscribe(id, &slot_recv).await
+                            }
+                            _ => {}
                         }
                     }
                 }

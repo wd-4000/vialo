@@ -86,6 +86,17 @@ impl<K: Hash + Eq + Clone + Debug + Serialize + Send + Sync + 'static, V: Serial
             });
     }
 
+    /// Remove this socket's subscription to `key`, `slot` identifies the socket
+    pub async fn unsubscribe(&self, key: Option<K>, slot: &SlotMap<K>) {
+        let mut subs = self.subscribers.write().await;
+        if let Some(list) = subs.get_mut(&key) {
+            list.retain(|sub| !std::ptr::eq(sub.slot.as_ptr(), Arc::as_ptr(slot)));
+            if list.is_empty() {
+                subs.remove(&key);
+            }
+        }
+    }
+
     /// Deliver `items` as (coalesce_key, value) pairs under one routing key
     pub async fn broadcast(&self, routing_key: K, items: Vec<(K, V)>) {
         let keys = [Some(routing_key.clone()), None];

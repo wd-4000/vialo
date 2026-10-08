@@ -166,6 +166,14 @@ impl BookableChannel {
     pub async fn broadcast(&self, asset_type_id: i32, items: Vec<(i32, BookableAssetStatus)>) {
         self.inner.broadcast(asset_type_id, items).await;
     }
+
+    pub async fn unsubscribe(
+        &self,
+        asset_type_id: Option<i32>,
+        slot: &crate::events::SlotMap<i32>,
+    ) {
+        self.inner.unsubscribe(asset_type_id, slot).await;
+    }
 }
 
 pub struct BookableQueueChannel {
@@ -219,5 +227,13 @@ impl BookableQueueChannel {
 
     pub async fn broadcast(&self, asset_type_id: i32, items: Vec<(i32, BookableAssetQueue)>) {
         self.inner.broadcast(asset_type_id, items).await;
+    }
+
+    pub async fn unsubscribe(
+        &self,
+        asset_type_id: Option<i32>,
+        slot: &crate::events::SlotMap<i32>,
+    ) {
+        self.inner.unsubscribe(asset_type_id, slot).await;
     }
 }
