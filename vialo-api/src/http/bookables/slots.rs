@@ -1,5 +1,7 @@
+use super::appointments::{default_owner, resolve_owner};
 use super::models::{BookableAssetTranslated, BookableStatus};
 use super::permissions::{BookablePerm, require_asset_type_perm_by_asset};
+use crate::http::util::models::IdOrMeQuery;
 use crate::http::util::{JsonE, User, VialoError};
 use crate::http::util::{grab_authd_conn_user, grab_trans};
 // use crate::ketoapi::subject::Ref;
@@ -158,8 +160,13 @@ pub struct BookSlotSchemaSlot {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct BookSlotSchema {
+    /// 0 unless booking for yourself
     pub expected_sum_total: i32,
     pub slots: Vec<BookSlotSchemaSlot>,
+    /// Defaults to me, anyone else (or null, held by the asset type's admins) needs admin and is free
+    #[serde(default = "default_owner", skip_serializing)]
+    #[schema(value_type = Option<IdOrMeQuery>)]
+    pub account_id: Option<IdOrMeQuery>,
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -186,6 +193,7 @@ pub async fn book_slots(
     for asset_id in &asset_ids {
         require_asset_type_perm_by_asset(user.id, *asset_id, BookablePerm::Book, &data.db).await?;
     }
+    let (owner, paid) = resolve_owner(&data.db, user.id, &body.account_id, &asset_ids).await?;
 
     // Materialize the slots (Give them concrete start and end points)
     let mut materialized_slots = query_as!(MaterializedSlots, r#"SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index,
@@ -261,6 +269,7 @@ pub async fn book_slots(
         }
 
         if let Some(price) = slot.price
+            && paid
             && expired_slot.is_none()
         {
             sum_total += price;
@@ -314,7 +323,7 @@ pub async fn book_slots(
     .fetch_one(&mut *trans)
     .await?;
 
-    if balance.is_some_and(|b| b < sum_total) {
+    if paid && balance.is_some_and(|b| b < sum_total) {
         return Err(VialoError::AppError(
             StatusCode::PAYMENT_REQUIRED,
             "insufficient_credits".into(),
@@ -329,17 +338,21 @@ pub async fn book_slots(
         ),
         ins_ledger AS (
             INSERT INTO credit_ledger (id, product, from_account, credits, created_at)
-            SELECT tx_id, 'bookable', $1, (slot->>'price')::int, NOW()
+            -- re-picking your own expired slot is free
+            SELECT tx_id, 'bookable', $1, CASE WHEN slot->>'existing_expired' IS NULL THEN (slot->>'price')::int ELSE 0 END, NOW()
             FROM input
+            WHERE $4
         )
         INSERT INTO bookable_appointments (asset_id, account_id, during, transaction_id)
         SELECT (slot->>'asset_id')::int,
-               $1,
+               $3,
                tstzrange((slot->>'begins')::timestamptz, (slot->>'ends')::timestamptz, '[)'),
-               tx_id
+               CASE WHEN $4 THEN tx_id END
         FROM input;"#,
         user.id,
         json!(materialized_slots),
+        owner,
+        paid,
     )
     .execute(&mut *trans)
     .await;

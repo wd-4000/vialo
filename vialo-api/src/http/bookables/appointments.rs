@@ -1,13 +1,16 @@
 use super::permissions::{
-    AssetTypeScope, BookableCaller, BookablePerm, require_asset_type_perm, resolve_asset_type_scope,
+    AssetTypeScope, BookableCaller, BookablePerm, require_asset_type_perm,
+    require_asset_type_perm_by_asset, resolve_asset_type_scope,
 };
-use crate::bookables::CancellationReason;
+use crate::bookables::{CancellationReason, MaintenanceRefund};
 use crate::helpers::{PgDateTime, encryption, grab_authd_conn_subsystem};
 use crate::http::history::models::Subsystem;
 use crate::http::people::models::TransactionStatus;
-use crate::http::util::models::{AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery, ListOrAllQuery};
+use crate::http::util::models::{
+    AccountEmbed, IdOrAllQuery, IdOrMeOrAllQuery, IdOrMeQuery, ListOrAllQuery,
+};
 use crate::http::util::{
-    MaybeJsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
+    JsonE, MaybeJsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
 };
 use crate::{AppState, health, impl_jsonb_embed};
 use axum::extract::{ConnectInfo, Path};
@@ -18,9 +21,11 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::Query;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{query, query_scalar};
+use serde_with::{DurationSeconds, serde_as};
+use sqlx::postgres::types::PgInterval;
+use sqlx::{PgPool, query, query_scalar};
 use sqlx_conditional_queries::conditional_query_as;
 use std::i64;
 use std::net::SocketAddr;
@@ -80,7 +85,8 @@ pub struct BookableAppointmentModel {
     pub cancellation_reason: Option<CancellationReason>,
     #[schema(format = DateTime)]
     pub activated: Option<chrono::DateTime<chrono::Utc>>,
-    pub maintenance: Option<bool>,
+    pub maintenance: Option<MaintenanceRefund>,
+    pub maintenance_refund_rolling_lead: Option<i64>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -95,7 +101,8 @@ pub struct BookableAppointmentListModel {
     pub cancellation_reason: Option<CancellationReason>,
     #[schema(format = DateTime)]
     pub activated: Option<chrono::DateTime<chrono::Utc>>,
-    pub maintenance: Option<bool>,
+    pub maintenance: Option<MaintenanceRefund>,
+    pub maintenance_refund_rolling_lead: Option<i64>,
 }
 
 #[derive(Deserialize, Debug, Default, ToSchema)]
@@ -135,13 +142,43 @@ pub async fn activate(
         }
     };
 
-    // Implicit permission check in the query
+    // Implicit permission check in the query: the owner or an admin. Groups only own on admin types, so their members are admins.
     let mut conn = grab_authd_conn_user(&data.db, user_id).await?;
 
     let res = query!(
-        "UPDATE bookable_appointments SET activated = NOW() WHERE id = $1 AND account_id = $2",
+        "UPDATE bookable_appointments ba SET activated = NOW()
+         FROM bookable_assets b
+         WHERE ba.id = $1 AND b.id = ba.asset_id
+           AND (ba.account_id = $2 OR account_bookable_perm_exists($2, b.asset_type_id, 'admin'))",
         id,
         user_id
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    if res.rows_affected() != 1 {
+        return Err(VialoError::NotFound());
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Switch maintenance power back off
+#[utoipa::path(post, path = "/bookables/appointments/{id}/deactivate", responses((status = 204, description = "Deactivated")))]
+pub async fn deactivate(
+    Path(id): Path<Uuid>,
+    Extension(user): Extension<User>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+
+    let res = query!(
+        "UPDATE bookable_appointments ba SET activated = NULL
+         FROM bookable_assets b
+         WHERE ba.id = $1 AND b.id = ba.asset_id AND ba.maintenance IS NOT NULL
+           AND account_bookable_perm_exists($2, b.asset_type_id, 'admin')",
+        id,
+        user.id
     )
     .execute(&mut *conn)
     .await?;
@@ -182,15 +219,23 @@ async fn kiosk_activate(
         ));
     }
 
+    let Some(account_id) = record.account_id else {
+        return Err(VialoError::AppError(
+            StatusCode::FORBIDDEN,
+            "invalid_pin".into(),
+        ));
+    };
+
     let stored = query_scalar!(
         "SELECT amenities_pin FROM accounts_people WHERE id = $1",
-        record.account_id
+        account_id
     )
     .fetch_optional(&data.db)
     .await?
     .flatten();
 
     // No credentials and a wrong PIN are indistinguishable here on purpose.
+    // Group and admin-held appointments have no PIN to check.
     let Some(stored) = stored else {
         return Err(VialoError::AppError(
             StatusCode::FORBIDDEN,
@@ -214,7 +259,7 @@ async fn kiosk_activate(
     let res = query!(
         "UPDATE bookable_appointments SET activated = NOW() WHERE id = $1 AND account_id = $2 AND activated IS NULL",
         id,
-        record.account_id,
+        account_id,
     )
     .execute(&mut *conn)
     .await?;
@@ -255,7 +300,7 @@ pub async fn delete_appointment(
     .await?;
 
     let mut is_admin = false;
-    if owner_check.account_id != user.id {
+    if owner_check.account_id != Some(user.id) {
         require_asset_type_perm(
             Some(user.id),
             owner_check.asset_type_id,
@@ -291,7 +336,7 @@ pub async fn delete_appointment(
           coalesce(cl.credits, 0) as credits,
           coalesce(cl.credits - cl.credits_refunded, 0) AS refundable_credits,
           cl.from_account,
-          ba.maintenance,
+          ba.maintenance IS NOT NULL AS "is_maintenance!",
           b.asset_type_id,
           COALESCE(p.refund_percent, 0) AS current_refund_percent
         FROM bookable_appointments ba
@@ -319,7 +364,8 @@ pub async fn delete_appointment(
     .fetch_one(&mut *trans)
     .await?;
 
-    if appointment.activated.is_some() {
+    // Activation only switches the power on maintenance
+    if appointment.activated.is_some() && !appointment.is_maintenance {
         return Err(VialoError::AppError(
             StatusCode::FORBIDDEN,
             "already_activated".to_string(),
@@ -385,7 +431,7 @@ pub async fn delete_appointment(
     }
 
     let result = sqlx::query!(
-        "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = $2 WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",
+        "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = $2 WHERE id = $1 AND cancelled_at IS NULL AND (activated IS NULL OR maintenance IS NOT NULL)",
         appointment.id,
         body.cancellation_reason.unwrap_or(CancellationReason::User) as CancellationReason
     )
@@ -445,13 +491,14 @@ pub async fn list(
             ba.cancelled_at,
             ba.cancellation_reason as "cancellation_reason: CancellationReason",
             ba.activated,
-            ba.maintenance
+            ba.maintenance as "maintenance: MaintenanceRefund",
+            EXTRACT(EPOCH FROM ba.maintenance_refund_rolling_lead)::bigint as maintenance_refund_rolling_lead
         FROM
             bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true
             {#permission} {#account} {#asset_types} {#from} {#to} {#cancelled}
             ORDER BY ba.during, ba.id LIMIT {limit} OFFSET {offset}"#,
             #account_info = match(&resolved_account_id){
-                  IdOrAllQuery::All => r#"jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account: AccountEmbed","#,
+                  IdOrAllQuery::All => r#"CASE WHEN ba.account_id IS NOT NULL THEN jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) END AS "account: AccountEmbed","#,
                   _ => r#"null AS "account: AccountEmbed","#
             },
             #permission = match (scope) {
@@ -517,7 +564,8 @@ pub async fn get(
             ba.cancelled_at,
             ba.cancellation_reason as "cancellation_reason: CancellationReason",
             ba.activated,
-            ba.maintenance,
+            ba.maintenance as "maintenance: MaintenanceRefund",
+            EXTRACT(EPOCH FROM ba.maintenance_refund_rolling_lead)::bigint as maintenance_refund_rolling_lead,
             {#transaction_info}
         FROM
             bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id
@@ -532,7 +580,7 @@ pub async fn get(
             ) clr ON true
             WHERE ba.id = {id} AND (ba.account_id = {user_id} OR account_bookable_perm_exists({user_id}, b.asset_type_id, 'admin'::bookable_perm))"#,
             #account_info = match(opts.account_info){
-                 true => r#"jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) AS "account: AccountEmbed","#,
+                 true => r#"CASE WHEN ba.account_id IS NOT NULL THEN jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) END AS "account: AccountEmbed","#,
                 false => r#"null AS "account: AccountEmbed","#
             },
             #transaction_info= match(opts.transaction_info){
@@ -547,4 +595,197 @@ pub async fn get(
     .await?;
 
     Ok((StatusCode::OK, Json(record)))
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct AppointmentIdModel {
+    pub id: Uuid,
+}
+
+/// Absent defaults to me, null is held by the asset type's admins
+pub fn default_owner() -> Option<IdOrMeQuery> {
+    Some(IdOrMeQuery::Me)
+}
+
+/// Resolves whom a booking is for, and whether the caller pays (only for themselves).
+/// Anyone else needs admin, and a group owner has to be admin on the type itself.
+pub async fn resolve_owner(
+    db: &PgPool,
+    user_id: Uuid,
+    owner: &Option<IdOrMeQuery>,
+    asset_ids: &[i32],
+) -> Result<(Option<Uuid>, bool), VialoError> {
+    let owner = match owner {
+        Some(IdOrMeQuery::Me) => return Ok((Some(user_id), true)),
+        Some(IdOrMeQuery::Id(id)) if *id == user_id => return Ok((Some(user_id), true)),
+        Some(IdOrMeQuery::Id(id)) => Some(*id),
+        None => None,
+    };
+
+    for asset_id in asset_ids {
+        require_asset_type_perm_by_asset(user_id, *asset_id, BookablePerm::Admin, db).await?;
+    }
+
+    if let Some(owner) = owner {
+        let allowed = query_scalar!(
+            r#"SELECT EXISTS (SELECT 1 FROM accounts_people WHERE id = $1)
+                OR (EXISTS (SELECT 1 FROM account_groups WHERE id = $1) AND NOT EXISTS (
+                    SELECT 1 FROM bookable_assets b
+                    WHERE b.id = ANY($2)
+                      AND NOT EXISTS (
+                        SELECT 1 FROM bookable_asset_type_group_perms p
+                        WHERE p.group_id = $1 AND p.asset_type_id = b.asset_type_id AND p.perm >= 'admin'
+                      )
+                )) AS "allowed!""#,
+            owner,
+            asset_ids
+        )
+        .fetch_one(db)
+        .await?;
+
+        if !allowed {
+            return Err(VialoError::AppError(
+                StatusCode::BAD_REQUEST,
+                "invalid_owner".into(),
+            ));
+        }
+    }
+
+    Ok((owner, false))
+}
+
+#[serde_as]
+#[derive(Deserialize, Debug, ToSchema)]
+pub struct PostAppointmentMaintenance {
+    pub refund: MaintenanceRefund,
+    /// None = cancel overlapping appointments now, else each one this long before it begins
+    #[serde_as(as = "Option<DurationSeconds<i64>>")]
+    #[schema(value_type = Option<i64>)]
+    pub rolling_lead: Option<TimeDelta>,
+}
+
+#[derive(Deserialize, Debug, ToSchema)]
+pub struct PostAppointmentBody {
+    /// Clamped to now
+    pub begins: DateTime<Utc>,
+    /// None = open-ended
+    pub ends: Option<DateTime<Utc>>,
+    /// Absent: me, or nobody for maintenance. Null: held by the asset type's admins
+    #[serde(default, with = "::serde_with::rust::double_option")]
+    #[schema(value_type = Option<IdOrMeQuery>)]
+    pub account_id: Option<Option<IdOrMeQuery>>,
+    /// Cancels and maybe refunds overlapping appointments, immediately unless rolling_lead is set
+    pub maintenance: Option<PostAppointmentMaintenance>,
+}
+
+/// Book any range free of charge, or schedule maintenance. Admin only.
+#[utoipa::path(post, path = "/bookables/{id}/appointments", request_body = PostAppointmentBody, responses((status = 201, description = "Created", body=AppointmentIdModel), (status = 400, description = "Overlap or invalid owner")))]
+pub async fn post_appointment(
+    Path(asset_id): Path<i32>,
+    Extension(user): Extension<User>,
+    State(data): State<Arc<AppState>>,
+    JsonE(body): JsonE<PostAppointmentBody>,
+) -> Result<impl IntoResponse, VialoError> {
+    require_asset_type_perm_by_asset(user.id, asset_id, BookablePerm::Admin, &data.db).await?;
+
+    let owner = match (&body.maintenance, body.account_id) {
+        (Some(_), None | Some(None)) => None,
+        (Some(_), Some(Some(_))) => {
+            return Err(VialoError::AppError(
+                StatusCode::BAD_REQUEST,
+                "invalid_owner".into(),
+            ));
+        }
+        (None, account_id) => {
+            let account_id = account_id.unwrap_or_else(default_owner);
+            resolve_owner(&data.db, user.id, &account_id, &[asset_id])
+                .await?
+                .0
+        }
+    };
+
+    // Past appointments would otherwise be canceled, or block the insert
+    let begins = body.begins.max(Utc::now());
+    if body.ends.is_some_and(|ends| ends <= begins) {
+        return Err(VialoError::AppError(
+            StatusCode::BAD_REQUEST,
+            "appointment_during".into(),
+        ));
+    }
+
+    /* Maintenance Zone */
+    let lead = body.maintenance.as_ref().and_then(|m| m.rolling_lead);
+    if lead.is_some_and(|l| l < TimeDelta::zero()) {
+        return Err(VialoError::AppError(
+            StatusCode::BAD_REQUEST,
+            "rolling_lead must be >= 0".into(),
+        ));
+    }
+    let lead = lead
+        .map(PgInterval::try_from)
+        .transpose()
+        .map_err(|e| VialoError::AppError(StatusCode::BAD_REQUEST, e.to_string()))?;
+    let refund = body.maintenance.map(|m| m.refund);
+    /* Maintenance Zone End */
+
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+    let mut trans = grab_trans(&mut conn).await?;
+
+    if let Some(refund) = &refund
+        && lead.is_none()
+    {
+        query!(
+            r#"WITH cancelled AS (
+                UPDATE bookable_appointments
+                SET cancelled_at = now(), cancellation_reason = 'maintenance'
+                WHERE asset_id = $1
+                  AND maintenance IS NULL
+                  AND cancelled_at IS NULL
+                  AND during && tstzrange($2, $3, '[)')
+                RETURNING transaction_id
+            )
+            INSERT INTO credit_ledger (to_account, refund_of, credits, product)
+            SELECT cl.from_account, cl.id, cl.credits - cl.credits_refunded, cl.product
+            FROM cancelled c
+            JOIN credit_ledger cl ON cl.id = c.transaction_id
+            WHERE $4 AND cl.credits - cl.credits_refunded > 0"#,
+            asset_id,
+            begins,
+            body.ends,
+            *refund == MaintenanceRefund::Refund,
+        )
+        .execute(&mut *trans)
+        .await?;
+    }
+
+    let result = query_scalar!(
+        "INSERT INTO bookable_appointments (asset_id, account_id, during, maintenance, maintenance_refund_rolling_lead)
+         VALUES ($1, $2, tstzrange($3, $4, '[)'), $5, $6) RETURNING id",
+        asset_id,
+        owner,
+        begins,
+        body.ends,
+        refund as Option<MaintenanceRefund>,
+        lead,
+    )
+    .fetch_one(&mut *trans)
+    .await;
+
+    // Includes a booking that slipped in after the cancellations
+    let id = match result {
+        Ok(id) => id,
+        Err(sqlx::Error::Database(db_err))
+            if db_err.constraint() == Some("no_overlapping_appointments_per_asset") =>
+        {
+            return Err(VialoError::AppError(
+                StatusCode::BAD_REQUEST,
+                "overlap".to_string(),
+            ));
+        }
+        Err(e) => return Err(e.into()),
+    };
+
+    trans.commit().await?;
+
+    Ok((StatusCode::CREATED, Json(AppointmentIdModel { id })))
 }

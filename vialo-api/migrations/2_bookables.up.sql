@@ -93,7 +93,7 @@ CREATE TABLE bookable_asset_type_group_perms (
   UNIQUE NULLS NOT DISTINCT (group_id, asset_type_id)
 );
 
-CREATE TYPE bookable_appointment_cancellation_reason AS ENUM('expired', 'user', 'admin');
+CREATE TYPE bookable_appointment_cancellation_reason AS ENUM('expired', 'user', 'admin', 'maintenance');
 
 CREATE TYPE bookable_event_kind AS ENUM('booked', 'upcoming', 'canceled', 'expired');
 
@@ -112,23 +112,44 @@ SELECT ap.id AS account_id,
 FROM accounts_people ap
 LEFT JOIN bookable_notification_settings s ON s.account_id = ap.id;
 
+-- Whether maintenance refunds the appointments it cancels, NULL on regular appointments
+CREATE TYPE bookable_maintenance_refund AS ENUM ('refund', 'no_refund');
+
 CREATE TABLE bookable_appointments (
   id uuid PRIMARY KEY default gen_random_uuid(),
   asset_id int NOT NULL REFERENCES bookable_assets (id),
   transaction_id uuid REFERENCES credit_ledger (id),
-  account_id uuid NOT NULL REFERENCES accounts (id), -- No cascade here, we want to make sure appointments are refunded appropriately.
+  account_id uuid REFERENCES accounts (id), -- NULL: held by the asset type's admins. No cascade here, we want to make sure appointments are refunded appropriately.
   during tstzrange NOT NULL,
-  created_at timestamptz DEFAULT NOW(),
+  created_at timestamptz NOT NULL DEFAULT NOW(),
   activated timestamptz,
   cancelled_at timestamptz,
   cancellation_reason bookable_appointment_cancellation_reason,
-  maintenance boolean not null default false,
+
+  maintenance bookable_maintenance_refund,
+  -- NULL: overlapping appointments are canceled when the maintenance is created
+  -- else: each one is canceled this long before it begins
+  maintenance_refund_rolling_lead interval CHECK (maintenance_refund_rolling_lead >= interval '0'),
+  CHECK (maintenance IS NOT NULL OR maintenance_refund_rolling_lead IS NULL),
+  CHECK (maintenance IS NULL OR account_id IS NULL),
+
   reminded_at timestamptz, -- upcoming notification handled (sent or skipped)
+
+  -- Nothing may overlap except rolling maintenance over appointments created before it
   CONSTRAINT no_overlapping_appointments_per_asset EXCLUDE USING GIST (
     asset_id
     WITH
       =,
       during
+    WITH
+      &&,
+      (
+        CASE
+          WHEN maintenance IS NULL THEN tstzrange(NULL, created_at, '(]')
+          WHEN maintenance_refund_rolling_lead IS NULL THEN tstzrange(NULL, NULL)
+          ELSE tstzrange(created_at, NULL, '[)')
+        END
+      )
     WITH
       &&
   )
@@ -156,9 +177,9 @@ SELECT
   ba.asset_type_id,
   ba.connector,
   ba.connector_output_id,
-  -- an active appointment overshadows quick_unlock
+  -- an active appointment or maintenance overshadows quick_unlock
   CASE
-    WHEN y.status = 'active' THEN 'active'::bookable_status_type
+    WHEN y.status IN ('active', 'maintenance') THEN y.status
     ELSE COALESCE(
       x.status,
       y.status,
@@ -166,17 +187,22 @@ SELECT
     )
   END as status,
   CASE
-    WHEN y.status = 'active' THEN upper(y.during)
+    WHEN y.status IN ('active', 'maintenance') THEN upper(y.during)
     WHEN COALESCE(x.during, y.during) IS NOT NULL THEN COALESCE(
       upper(COALESCE(x.during, y.during)),
       'infinity'::timestamptz
     )
   END as ends,
   CASE
-    WHEN y.status = 'active' THEN lower(y.during)
+    WHEN y.status IN ('active', 'maintenance') THEN lower(y.during)
     ELSE lower(COALESCE(x.during, y.during))
   END as begins,
-  y.appointment_id
+  y.appointment_id,
+  -- maintenance is switched by hand through its activation
+  CASE
+    WHEN y.status = 'maintenance' THEN y.activated IS NOT NULL
+    ELSE COALESCE(x.status, y.status) IN ('active', 'quick_unlock')
+  END IS TRUE as powered
 FROM
   bookable_assets ba
   LEFT JOIN LATERAL (
@@ -189,15 +215,16 @@ FROM
       apa.during as during,
       apa.asset_id,
       apa.id as appointment_id,
+      apa.activated,
       CASE
-        WHEN apa.maintenance THEN 'maintenance'::bookable_status_type
+        WHEN apa.maintenance IS NOT NULL THEN 'maintenance'::bookable_status_type
         WHEN apa.activated IS NOT NULL
         OR NOT bs.requires_activation THEN 'active'::bookable_status_type
         ELSE 'waiting'::bookable_status_type
       END AS status
     FROM
       bookable_appointments apa
-      JOIN bookable_schema_assignments bsa ON bsa.asset_id = apa.asset_id
+      LEFT JOIN bookable_schema_assignments bsa ON bsa.asset_id = apa.asset_id
       AND bsa.begins = (
         SELECT
           MAX(begins)
@@ -207,11 +234,13 @@ FROM
           asset_id = apa.asset_id
           AND begins <= now()
       )
-      JOIN bookable_schemas bs ON bs.id = bsa.schema_id
+      LEFT JOIN bookable_schemas bs ON bs.id = bsa.schema_id
     WHERE
       apa.asset_id = ba.id
       AND apa.during @> now()
       AND apa.cancelled_at IS NULL
+    ORDER BY
+      apa.maintenance IS NULL
     LIMIT
       1
   ) y ON y.asset_id = ba.id;
@@ -227,10 +256,10 @@ WITH q AS (
     lower(apa.during) as begins,
     COALESCE(upper(apa.during), 'infinity'::timestamptz) as ends,
     CASE
-      WHEN apa.maintenance THEN NULL
+      WHEN apa.maintenance IS NOT NULL THEN NULL
       ELSE cro.room_name
     END as room,
-    apa.maintenance,
+    apa.maintenance IS NOT NULL as maintenance,
     CASE
       WHEN COALESCE(upper(apa.during), 'infinity'::timestamptz) <= now() THEN 'previous'
       WHEN apa.during @> now() THEN 'current'
@@ -315,8 +344,8 @@ CREATE OR REPLACE FUNCTION bookable_event_trigger () RETURNS TRIGGER AS $$
 DECLARE
     kind bookable_event_kind;
 BEGIN
-    -- Imported history must not notify anyone
-    IF NEW.maintenance OR current_setting('app.subsystem', true) = 'import' THEN
+    -- Only people get notified (maintenance, group and admin-held appointments don't), and imported history must not notify anyone
+    IF NOT EXISTS (SELECT 1 FROM accounts_people WHERE id = NEW.account_id) OR current_setting('app.subsystem', true) = 'import' THEN
         RETURN NULL;
     END IF;
 

@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use super::{Importer, Ref, api_error};
 use crate::{
-    bookables::CancellationReason,
+    bookables::{CancellationReason, MaintenanceRefund},
     helpers::I18nMap,
     http::bookables::{
         asset_types::{BookableTypePermRow, PostBookableTypeSchema, insert_asset_type},
@@ -15,15 +15,15 @@ use crate::{
 
 pub struct AppointmentImport {
     pub asset_id: i32,
-    /// A person, or e.g. the responsible group for maintenance
-    pub account_id: Uuid,
+    /// None for maintenance
+    pub account_id: Option<Uuid>,
     pub begins: DateTime<Utc>,
     /// None = open-ended
     pub ends: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub activated: Option<DateTime<Utc>>,
     pub cancelled: Option<(DateTime<Utc>, CancellationReason)>,
-    pub maintenance: bool,
+    pub maintenance: Option<MaintenanceRefund>,
     pub transaction_id: Option<Uuid>,
 }
 
@@ -110,7 +110,7 @@ impl Importer {
         }
 
         // The slot has to exist in the schema assigned at that point
-        if !a.maintenance {
+        if a.maintenance.is_none() {
             let aligned = sqlx::query_scalar!(
                 r#"SELECT EXISTS (
                     SELECT 1 FROM (
@@ -145,7 +145,7 @@ impl Importer {
             a.activated,
             cancelled_at,
             cancellation_reason as Option<CancellationReason>,
-            a.maintenance,
+            a.maintenance as Option<MaintenanceRefund>,
             a.transaction_id
         )
         .fetch_one(self.conn())

@@ -59,6 +59,8 @@ pub fn assemble_queues(rows: Vec<QueueRow>) -> Vec<BookableAssetQueue> {
             });
         match row.bucket.as_str() {
             "previous" => queue.previous.push(entry),
+            // Maintenance prevails over regular appointment
+            "current" if queue.current.as_ref().is_some_and(|c| c.maintenance) => {}
             "current" => queue.current = Some(entry),
             _ => queue.upcoming.push(entry),
         }
@@ -90,10 +92,9 @@ pub async fn sync_connectors(app_state: &AppState) -> Result<(), anyhow::Error> 
     .await?;
 
     for connector in connectors {
-        let statuses = query_as!(
-            BookableAssetStatusWithConnector,
+        let statuses = query!(
             r#"SELECT id as "id!",
-            status as "status!: BookableStatus",
+            powered as "powered!",
             begins,
             ends as "ends: PgDateTime",
             connector as "connector!",
@@ -110,11 +111,10 @@ pub async fn sync_connectors(app_state: &AppState) -> Result<(), anyhow::Error> 
             .into_iter()
             .map(|s| OutputPost {
                 id: s.connector_output_id,
-                action: match s.status {
-                    BookableStatus::Active | BookableStatus::QuickUnlock => {
-                        netio::models::Action::On
-                    }
-                    _ => netio::models::Action::Off,
+                action: if s.powered {
+                    netio::models::Action::On
+                } else {
+                    netio::models::Action::Off
                 },
             })
             .collect();
@@ -157,7 +157,7 @@ pub async fn auto_activate_appointments(app_state: &AppState) -> Result<(), anyh
     SET activated = NOW()
     WHERE ba.activated IS NULL
     AND ba.cancelled_at IS NULL
-    AND ba.maintenance = false
+    AND ba.maintenance IS NULL
     AND lower(ba.during) <= now()
     AND NOT (
         SELECT bs.requires_activation
@@ -210,7 +210,9 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
     ) cs
     JOIN credit_ledger cl ON ba.transaction_id = cl.id
     JOIN accounts_people ap ON ap.id = ba.account_id
-    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance = false AND cs.requires_activation AND cs.expiry_refund_percent IS NOT NULL AND greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period <= NOW()"#,
+    WHERE ba.activated IS NULL AND cancelled_at IS NULL AND ba.maintenance IS NULL
+        AND cs.requires_activation AND cs.expiry_refund_percent IS NOT NULL
+        AND greatest(lower(ba.during), ba.created_at) + cs.activation_grace_period <= NOW()"#,
     )
     .fetch_all(&app_state.db)
     .await?;
@@ -244,6 +246,47 @@ pub async fn expire_appointments(app_state: &AppState) -> Result<(), anyhow::Err
     Ok(())
 }
 
+/// Cancel appointments under rolling maintenance once its lead is reached, refunding them in full if it says so.
+pub async fn cancel_rolling_maintenance_overlaps(
+    app_state: &AppState,
+) -> Result<(), anyhow::Error> {
+    let mut conn = grab_authd_conn_subsystem(&app_state.db, "bookable")
+        .await
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+
+    query!(
+        r#"WITH due AS (
+            -- an appointment can straddle two blocks, refunding wins
+            SELECT DISTINCT ON (ba.id) ba.id, ba.transaction_id, m.maintenance = 'refund' AS refund
+            FROM bookable_appointments ba
+            JOIN bookable_appointments m ON m.asset_id = ba.asset_id AND m.during && ba.during
+            WHERE ba.maintenance IS NULL
+              AND ba.cancelled_at IS NULL
+              AND coalesce(upper(ba.during), 'infinity'::timestamptz) > now()
+              AND m.cancelled_at IS NULL
+              AND m.maintenance_refund_rolling_lead IS NOT NULL
+              AND lower(ba.during) - m.maintenance_refund_rolling_lead <= now()
+            ORDER BY ba.id, m.maintenance = 'refund' DESC
+        ),
+        cancelled AS (
+            UPDATE bookable_appointments ba
+            SET cancelled_at = now(), cancellation_reason = 'maintenance'
+            FROM due
+            WHERE ba.id = due.id AND ba.cancelled_at IS NULL
+            RETURNING due.transaction_id, due.refund
+        )
+        INSERT INTO credit_ledger (to_account, refund_of, credits, product)
+        SELECT cl.from_account, cl.id, cl.credits - cl.credits_refunded, cl.product
+        FROM cancelled c
+        JOIN credit_ledger cl ON cl.id = c.transaction_id
+        WHERE c.refund AND cl.credits - cl.credits_refunded > 0"#
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    Ok(())
+}
+
 /// Send upcoming reminders. Appointments booked inside their grace period are skipped.
 pub async fn remind_upcoming(app_state: &AppState) -> Result<(), anyhow::Error> {
     let mut conn = grab_authd_conn_subsystem(&app_state.db, "bookable")
@@ -258,11 +301,11 @@ pub async fn remind_upcoming(app_state: &AppState) -> Result<(), anyhow::Error> 
           AND 'upcoming' = ANY(p.events)
           AND ba.reminded_at IS NULL
           AND ba.cancelled_at IS NULL
-          AND NOT ba.maintenance
+          AND ba.maintenance IS NULL
           AND lower(ba.during) > now()
           AND lower(ba.during) - make_interval(mins => p.upcoming_minutes) <= now()
         RETURNING ba.id,
-          ba.account_id,
+          ba.account_id as "account_id!",
           lower(ba.during) as "begins!",
           upper(ba.during) as "ends!",
           COALESCE(ba.created_at > lower(ba.during) - make_interval(mins => p.upcoming_minutes), false) as "booked_late!",
@@ -307,7 +350,7 @@ async fn publish_bookable_event(app_state: &AppState, payload: &str) -> Result<(
     let notification: BookableEventNotification = serde_json::from_str(payload)?;
 
     let Some(appointment) = query!(
-        r#"SELECT ba.account_id,
+        r#"SELECT ba.account_id as "account_id!",
         lower(ba.during) as "begins!",
         upper(ba.during) as "ends!",
         ba.cancellation_reason as "cancellation_reason: CancellationReason",
@@ -394,8 +437,17 @@ async fn next_wakeup(app_state: &AppState) -> tokio::time::Instant {
           WHERE 'upcoming' = ANY(p.events)
             AND ba.reminded_at IS NULL
             AND ba.cancelled_at IS NULL
-            AND NOT ba.maintenance
+            AND ba.maintenance IS NULL
             AND lower(ba.during) > now()),
+        -- next rolling maintenance cancellation
+        (SELECT MIN(lower(ba.during) - m.maintenance_refund_rolling_lead)
+           FROM bookable_appointments ba
+           JOIN bookable_appointments m ON m.asset_id = ba.asset_id AND m.during && ba.during
+          WHERE m.maintenance_refund_rolling_lead IS NOT NULL
+            AND m.cancelled_at IS NULL
+            AND ba.maintenance IS NULL
+            AND ba.cancelled_at IS NULL
+            AND lower(ba.during) - m.maintenance_refund_rolling_lead > now()),
         -- quick unlocks are ranges too, and end the same way
         (SELECT MIN(upper(ba.quick_unlock))
            FROM bookable_assets ba
@@ -464,6 +516,7 @@ pub async fn main(
     let mut cache: HashMap<i32, (BookableAssetStatus, BookableAssetQueue)> = HashMap::new();
 
     loop {
+        cancel_rolling_maintenance_overlaps(&app_state).await?;
         auto_activate_appointments(&app_state).await?;
         expire_appointments(&app_state).await?;
         remind_upcoming(&app_state).await?;

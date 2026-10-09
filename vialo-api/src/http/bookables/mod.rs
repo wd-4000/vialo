@@ -54,6 +54,10 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/appointments/{id}/cancel",
             post(appointments::delete_appointment),
         )
+        .route(
+            "/appointments/{id}/deactivate",
+            post(appointments::deactivate),
+        )
         .route("/slots/taken", get(slots::taken_slots))
         .route("/slots/schemas", get(slots::slot_schemas))
         .merge(booking_routes)
@@ -64,6 +68,7 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             delete(schema_assignments::delete),
         )
         .route("/{id}/schema_assignments", get(schema_assignments::list))
+        .route("/{id}/appointments", post(appointments::post_appointment))
         .route_layer(middleware::from_fn_with_state(
             app_state.clone(),
             super::util::middleware::auth_required,

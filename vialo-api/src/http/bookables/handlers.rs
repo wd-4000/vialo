@@ -182,6 +182,24 @@ pub async fn quick_unlock(
         }
     };
 
+    // Power is switched by hand during maintenance
+    let in_maintenance = query_scalar!(
+        r#"SELECT EXISTS (
+            SELECT 1 FROM bookable_appointments
+            WHERE asset_id = $1 AND maintenance IS NOT NULL AND cancelled_at IS NULL AND during @> now()
+        ) AS "in_maintenance!""#,
+        id
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+
+    if in_maintenance {
+        return Err(VialoError::AppError(
+            StatusCode::CONFLICT,
+            "maintenance".into(),
+        ));
+    }
+
     let res = query!(
         "UPDATE bookable_assets SET quick_unlock = tstzrange(now(), now() + '1 minute', '[]') WHERE id = $1 AND (NOT (quick_unlock @> now()) OR quick_unlock IS NULL)",
         id
