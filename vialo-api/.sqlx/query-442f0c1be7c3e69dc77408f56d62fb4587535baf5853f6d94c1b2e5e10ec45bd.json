@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH due AS (\n            -- an appointment can straddle two blocks, refunding wins\n            SELECT DISTINCT ON (ba.id) ba.id, ba.transaction_id, m.maintenance = 'refund' AS refund\n            FROM bookable_appointments ba\n            JOIN bookable_appointments m ON m.asset_id = ba.asset_id AND m.during && ba.during\n            WHERE ba.maintenance IS NULL\n              AND ba.cancelled_at IS NULL\n              AND coalesce(upper(ba.during), 'infinity'::timestamptz) > now()\n              AND m.cancelled_at IS NULL\n              AND m.maintenance_refund_rolling_lead IS NOT NULL\n              AND lower(ba.during) - m.maintenance_refund_rolling_lead <= now()\n            ORDER BY ba.id, m.maintenance = 'refund' DESC\n        ),\n        cancelled AS (\n            UPDATE bookable_appointments ba\n            SET cancelled_at = now(), cancellation_reason = 'maintenance'\n            FROM due\n            WHERE ba.id = due.id AND ba.cancelled_at IS NULL\n            RETURNING due.transaction_id, due.refund\n        )\n        INSERT INTO credit_ledger (to_account, refund_of, credits, product)\n        SELECT cl.from_account, cl.id, cl.credits - cl.credits_refunded, cl.product\n        FROM cancelled c\n        JOIN credit_ledger cl ON cl.id = c.transaction_id\n        WHERE c.refund AND cl.credits - cl.credits_refunded > 0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "442f0c1be7c3e69dc77408f56d62fb4587535baf5853f6d94c1b2e5e10ec45bd"
+}

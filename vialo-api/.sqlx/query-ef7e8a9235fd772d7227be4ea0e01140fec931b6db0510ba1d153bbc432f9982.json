@@ -31,12 +31,23 @@
               "Enum": [
                 "expired",
                 "user",
-                "admin"
+                "admin",
+                "maintenance"
               ]
             }
           }
         },
-        "Bool",
+        {
+          "Custom": {
+            "name": "bookable_maintenance_refund",
+            "kind": {
+              "Enum": [
+                "refund",
+                "no_refund"
+              ]
+            }
+          }
+        },
         "Uuid"
       ]
     },

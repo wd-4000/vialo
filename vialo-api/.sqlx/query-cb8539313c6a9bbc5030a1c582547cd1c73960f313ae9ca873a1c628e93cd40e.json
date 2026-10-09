@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH input AS MATERIALIZED (\n            SELECT j AS slot, gen_random_uuid() AS tx_id\n            FROM jsonb_array_elements($2) AS j\n        ),\n        ins_ledger AS (\n            INSERT INTO credit_ledger (id, product, from_account, credits, created_at)\n            -- re-picking your own expired slot is free\n            SELECT tx_id, 'bookable', $1, CASE WHEN slot->>'existing_expired' IS NULL THEN (slot->>'price')::int ELSE 0 END, NOW()\n            FROM input\n            WHERE $4\n        )\n        INSERT INTO bookable_appointments (asset_id, account_id, during, transaction_id)\n        SELECT (slot->>'asset_id')::int,\n               $3,\n               tstzrange((slot->>'begins')::timestamptz, (slot->>'ends')::timestamptz, '[)'),\n               CASE WHEN $4 THEN tx_id END\n        FROM input;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb8539313c6a9bbc5030a1c582547cd1c73960f313ae9ca873a1c628e93cd40e"
+}

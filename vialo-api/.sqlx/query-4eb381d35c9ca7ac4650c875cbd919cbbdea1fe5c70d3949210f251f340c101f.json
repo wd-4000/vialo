@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM accounts_people WHERE id = $1)\n                OR (EXISTS (SELECT 1 FROM account_groups WHERE id = $1) AND NOT EXISTS (\n                    SELECT 1 FROM bookable_assets b\n                    WHERE b.id = ANY($2)\n                      AND NOT EXISTS (\n                        SELECT 1 FROM bookable_asset_type_group_perms p\n                        WHERE p.group_id = $1 AND p.asset_type_id = b.asset_type_id AND p.perm >= 'admin'\n                      )\n                )) AS \"allowed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4eb381d35c9ca7ac4650c875cbd919cbbdea1fe5c70d3949210f251f340c101f"
+}

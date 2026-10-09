@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH cancelled AS (\n                UPDATE bookable_appointments\n                SET cancelled_at = now(), cancellation_reason = 'maintenance'\n                WHERE asset_id = $1\n                  AND maintenance IS NULL\n                  AND cancelled_at IS NULL\n                  AND during && tstzrange($2, $3, '[)')\n                RETURNING transaction_id\n            )\n            INSERT INTO credit_ledger (to_account, refund_of, credits, product)\n            SELECT cl.from_account, cl.id, cl.credits - cl.credits_refunded, cl.product\n            FROM cancelled c\n            JOIN credit_ledger cl ON cl.id = c.transaction_id\n            WHERE $4 AND cl.credits - cl.credits_refunded > 0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f9ca8ec84420f3c2fd24ec388afbc4c44e75bf46e7f5f0984f181cfe997179a3"
+}

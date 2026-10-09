@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n            SELECT 1 FROM bookable_appointments\n            WHERE asset_id = $1 AND maintenance IS NOT NULL AND cancelled_at IS NULL AND during @> now()\n        ) AS \"in_maintenance!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "in_maintenance!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "80038a9ea93f0c94fe3bbae00832432137f73442cfc2c55ccb55e2f6f098710f"
+}

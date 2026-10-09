@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE bookable_appointments ba SET activated = NOW()\n         FROM bookable_assets b\n         WHERE ba.id = $1 AND b.id = ba.asset_id\n           AND (ba.account_id = $2 OR account_bookable_perm_exists($2, b.asset_type_id, 'admin'))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5d6640c33daf595686b39e6a16b711b7d61fd144477b882003729704a9708183"
+}
