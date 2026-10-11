@@ -282,7 +282,7 @@ pub struct CancelAppointmentBody {
     pub expected_credits: Option<i32>,
 }
 
-/// Cancel appointment
+/// Cancel appointment or end maintenance
 #[utoipa::path(post, path = "/bookables/appointments/{id}/cancel", request_body = CancelAppointmentBody, responses((status = 204, description = "Canceled")))] // no body
 pub async fn delete_appointment(
     Path(id): Path<Uuid>,
@@ -342,7 +342,7 @@ pub async fn delete_appointment(
         FROM bookable_appointments ba
         JOIN bookable_assets b ON b.id = ba.asset_id
         LEFT JOIN credit_ledger cl ON cl.id = ba.transaction_id
-        JOIN LATERAL (
+        LEFT JOIN LATERAL (
           SELECT DISTINCT ON (asset_id) schema_id, begins
           FROM bookable_schema_assignments
           WHERE asset_id = ba.asset_id
@@ -389,6 +389,30 @@ pub async fn delete_appointment(
         ));
     }
 
+    if appointment.is_maintenance {
+        let ended = query!(
+            "UPDATE bookable_appointments SET during = tstzrange(lower(during), now(), '[)') WHERE id = $1 AND lower(during) < now()",
+            id
+        )
+        .execute(&mut *trans)
+        .await?;
+
+        if ended.rows_affected() == 0 {
+            // a running maintenance appointment keeps its history
+            query!(
+                "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = 'admin' WHERE id = $1",
+                id
+            )
+            .execute(&mut *trans)
+            .await?;
+        }
+
+        trans.commit().await?;
+
+        // there's nothing to refund so we can return early
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
     let process_refund = body.process_refund.unwrap_or(true);
 
     // The policy is a percentage of the original price, but an admin undo may already have
@@ -431,7 +455,7 @@ pub async fn delete_appointment(
     }
 
     let result = sqlx::query!(
-        "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = $2 WHERE id = $1 AND cancelled_at IS NULL AND (activated IS NULL OR maintenance IS NOT NULL)",
+        "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = $2 WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",
         appointment.id,
         body.cancellation_reason.unwrap_or(CancellationReason::User) as CancellationReason
     )

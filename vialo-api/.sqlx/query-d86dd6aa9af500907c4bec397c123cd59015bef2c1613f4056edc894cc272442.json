@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = $2 WHERE id = $1 AND cancelled_at IS NULL AND (activated IS NULL OR maintenance IS NOT NULL)",
+  "query": "UPDATE bookable_appointments SET cancelled_at = now(), cancellation_reason = $2 WHERE id = $1 AND cancelled_at IS NULL AND activated IS NULL",
   "describe": {
     "columns": [],
     "parameters": {
@@ -23,5 +23,5 @@
     },
     "nullable": []
   },
-  "hash": "2945c06a23482cc371fe47a1f73f8fef7e90c47487376b0c1f83c0ac73645f22"
+  "hash": "d86dd6aa9af500907c4bec397c123cd59015bef2c1613f4056edc894cc272442"
 }

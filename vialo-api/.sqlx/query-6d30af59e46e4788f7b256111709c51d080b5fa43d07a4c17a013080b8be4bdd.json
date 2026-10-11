@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE bookable_appointments SET during = tstzrange(lower(during), now(), '[)') WHERE id = $1 AND lower(during) < now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6d30af59e46e4788f7b256111709c51d080b5fa43d07a4c17a013080b8be4bdd"
+}
