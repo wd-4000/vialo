@@ -566,7 +566,8 @@ async fn publish_bookables(
             status as "status!: BookableStatus",
             begins,
             ends as "ends: PgDateTime",
-            appointment_id
+            appointment_id,
+            powered as "powered!"
            FROM bookable_asset_status
            ORDER BY id"#
     )

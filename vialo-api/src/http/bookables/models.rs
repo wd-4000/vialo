@@ -24,6 +24,8 @@ pub struct BookableAssetStatus {
     pub begins: Option<DateTime<Utc>>,
     pub ends: Option<PgDateTime>,
     pub appointment_id: Option<uuid::Uuid>,
+    /// Whether the connector should power the device
+    pub powered: bool,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -37,6 +39,8 @@ pub struct BookableAssetTranslatedWithStatus {
     pub begins: Option<DateTime<Utc>>,
     pub ends: Option<PgDateTime>,
     pub appointment_id: Option<uuid::Uuid>,
+    /// What vialo commands the connector, not what it measured
+    pub powered: bool,
 }
 
 #[derive(Serialize, Clone, PartialEq, ToSchema)]

@@ -70,7 +70,8 @@ pub async fn list_bookables(
                 status as "status!: BookableStatus",
                 begins,
                 ends as "ends: PgDateTime",
-                appointment_id
+                appointment_id,
+                powered as "powered!"
             FROM
                 bookable_asset_status
             WHERE (account_bookable_perm_exists({user_id_o}, asset_type_id, 'view'::bookable_perm) OR asset_type_id = ANY({kiosk_types:Vec<i32>}))
@@ -457,7 +458,8 @@ pub async fn get_bookable(
                bd.status as "status!: BookableStatus",
                begins,
                ends as "ends: PgDateTime",
-               bd.appointment_id
+               bd.appointment_id,
+               bd.powered as "powered!"
            FROM
                bookable_asset_status bd
            WHERE bd.id = $2
