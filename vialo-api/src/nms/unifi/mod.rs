@@ -25,7 +25,7 @@ impl UniFiApi {
         proxy_url: &Option<String>,
     ) -> Result<Self, anyhow::Error> {
         let hostname: String = hostname.into();
-        let mut builder = Client::builder().danger_accept_invalid_certs(true);
+        let mut builder = Client::builder().tls_danger_accept_invalid_certs(true);
 
         if hostname.starts_with("unix://") {
             #[cfg(unix)]
