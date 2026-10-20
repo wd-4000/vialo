@@ -503,6 +503,18 @@ pub async fn list(
     // Permission filter
     let scope = resolve_asset_type_scope(user_id, BookablePerm::Admin, &data.db).await?;
 
+    let account = match resolved_account_id {
+        IdOrAllQuery::One(account) => Some(account),
+        IdOrAllQuery::All => None,
+    };
+    let asset_types = opts.asset_types.as_deref();
+    let from = opts.from;
+    let to = opts.to;
+    let reasons = match &opts.include_cancelled {
+        ListOrAllQuery::All => None,
+        ListOrAllQuery::List(reasons) => Some(reasons.as_slice()),
+    };
+
     let record = conditional_query_as!(
         BookableAppointmentListModel,
         r#"SELECT
@@ -519,36 +531,26 @@ pub async fn list(
             EXTRACT(EPOCH FROM ba.maintenance_refund_rolling_lead)::bigint as maintenance_refund_rolling_lead
         FROM
             bookable_appointments ba JOIN bookable_assets b ON b.id = ba.asset_id LEFT JOIN accounts_people ap ON ba.account_id = ap.id LEFT JOIN account_groups ag ON ba.account_id = ag.id WHERE true
-            {#permission} {#account} {#asset_types} {#from} {#to} {#cancelled}
-            ORDER BY ba.during, ba.id LIMIT {limit} OFFSET {offset}"#,
-            #account_info = match(&resolved_account_id){
-                  IdOrAllQuery::All => r#"CASE WHEN ba.account_id IS NOT NULL THEN jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) END AS "account: AccountEmbed","#,
-                  _ => r#"null AS "account: AccountEmbed","#
+            {#permission}
+            AND ({account}::uuid IS NULL OR ba.account_id = {account})
+            AND ({asset_types}::int4[] IS NULL OR b.asset_type_id = ANY({asset_types}))
+            AND ba.during && tstzrange({from}, {to})
+            AND ({reasons:Option<&[CancellationReason]>}::bookable_appointment_cancellation_reason[] IS NULL
+                OR ba.cancellation_reason IS NULL OR ba.cancellation_reason = ANY({reasons}))
+            ORDER BY {#order}, ba.id LIMIT {limit} OFFSET {offset}"#,
+            // Unindexed sort so a `from` filter uses the gist index instead of walking all of during_idx
+            #order = match from {
+                Some(_) => "lower(ba.during), upper(ba.during)",
+                None => "ba.during",
+            },
+            #account_info = match account {
+                  None => r#"CASE WHEN ba.account_id IS NOT NULL THEN jsonb_build_object('id', ba.account_id, 'full_name', COALESCE(ap.full_name, ag.label), 'type', (CASE WHEN ap.id IS NOT NULL THEN 'person' ELSE 'group' END)) END AS "account: AccountEmbed","#,
+                  Some(_) => r#"null AS "account: AccountEmbed","#
             },
             #permission = match (scope) {
                 AssetTypeScope::All => "",
                 AssetTypeScope::Only(scope_asset_types) => "AND (ba.account_id = {user_id} OR b.asset_type_id = ANY({scope_asset_types:Vec<i32>}))",
                 AssetTypeScope::None => "AND ba.account_id = {user_id}",
-            },
-            #account = match (&resolved_account_id) {
-                IdOrAllQuery::All => "",
-                IdOrAllQuery::One(account) => "AND ba.account_id = {account}",
-            },
-            #asset_types = match (opts.asset_types) {
-                Some(at) => "AND b.asset_type_id = ANY({at:Vec<i32>})",
-                None => "",
-            },
-            #from = match (opts.from) {
-                Some(from) => "AND coalesce(upper(ba.during), 'infinity'::timestamptz) >= {from} ",
-                None => ""
-            },
-            #to = match (opts.to) {
-                Some(to) => "AND UPPER(ba.during) <= {to} ",
-                None => ""
-            },
-            #cancelled = match (&opts.include_cancelled) {
-                ListOrAllQuery::All => "",
-                ListOrAllQuery::List(reasons) => "AND (ba.cancellation_reason IS NULL OR ba.cancellation_reason = ANY({reasons:&[CancellationReason]}))",
             }
     )
     .fetch_all(&data.db)
@@ -579,8 +581,8 @@ pub async fn get(
     let record = conditional_query_as!(
         BookableAppointmentModel,
         r#"SELECT
-            ba.id,
-            ba.asset_id,
+            ba.id as "id!",
+            ba.asset_id as "asset_id!",
             ba.transaction_id,
             {#account_info}
             lower(ba.during) as begins,
