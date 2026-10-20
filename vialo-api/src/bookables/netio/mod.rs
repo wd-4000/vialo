@@ -15,13 +15,13 @@ impl NetioApi {
         username: String,
         password: String,
         proxy_url: &Option<String>,
-    ) -> NetioApi {
+    ) -> Self {
         let mut builder = reqwest::Client::builder();
         if let Some(proxy) = proxy_url {
             builder = builder.proxy(reqwest::Proxy::all(proxy).unwrap());
         }
 
-        NetioApi {
+        Self {
             url,
             username,
             password,
@@ -30,16 +30,14 @@ impl NetioApi {
     }
 
     pub fn get(&mut self) -> RequestBuilder {
-        self
-            .client
+        self.client
             .get(self.url.as_str())
             .header("Content-Type", "application/json")
             .basic_auth(&self.username, Some(&self.password))
     }
 
     pub fn post(&mut self) -> RequestBuilder {
-        self
-            .client
+        self.client
             .post(self.url.as_str())
             .header("Content-Type", "application/json")
             .basic_auth(&self.username, Some(&self.password))
