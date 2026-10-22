@@ -1,3 +1,5 @@
+//! Sets up the [event](crate::events) channel for WebSocket notifications for asset state changes. We receive updates from pg_notify.
+
 use crate::config::KioskConfig;
 use crate::events::{Auth, StatusChannel};
 use crate::http::bookables::models::{BookableAssetQueue, BookableAssetStatus};

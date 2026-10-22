@@ -56,3 +56,11 @@ pub enum MaintenanceRefund {
     Refund,
     NoRefund,
 }
+
+#[derive(Clone, Debug, PartialEq, sqlx::Type, Deserialize, Serialize, ToSchema)]
+#[sqlx(type_name = "bookable_connector_type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum BookableConnectorType {
+    Netio,
+    Miele,
+}

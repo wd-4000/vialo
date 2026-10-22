@@ -1,5 +1,6 @@
 use super::handlers::BookableFilterOptions;
 use crate::AppState;
+use crate::bookables::BookableConnectorType;
 use crate::helpers::PatchOption;
 use crate::helpers::encryption::{self, Encrypted};
 use crate::http::util::grab_authd_conn_user;
@@ -13,7 +14,7 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
-use sqlx::query;
+use sqlx::{query, query_as};
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
 use utoipa::ToSchema;
@@ -21,6 +22,7 @@ use utoipa::ToSchema;
 #[derive(Deserialize, Serialize, Debug, ToSchema)]
 pub struct BookableConnector {
     pub id: i32,
+    pub r#type: BookableConnectorType,
     pub endpoint: String,
     pub num_outputs: Option<i32>,
     pub device_name: Option<String>,
@@ -31,6 +33,7 @@ pub struct BookableConnector {
 #[derive(Deserialize, Debug, ToSchema)]
 pub struct BookableConnectorWithPassword {
     pub id: i32,
+    pub r#type: BookableConnectorType,
     pub endpoint: String,
     pub num_outputs: Option<i32>,
     pub device_name: Option<String>,
@@ -45,6 +48,7 @@ pub struct BookableConnectorWithPassword {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct BookableConnectorWithOptionalPassword {
     pub id: i32,
+    pub r#type: BookableConnectorType,
     pub endpoint: String,
     pub num_outputs: Option<i32>,
     pub device_name: Option<String>,
@@ -64,12 +68,13 @@ pub struct BookableConnectorPatch {
 
 #[derive(Deserialize, Debug, ToSchema)]
 pub struct BookableConnectorPost {
+    pub r#type: BookableConnectorType,
     #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub endpoint: String,
-    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
-    pub username: Option<String>,
-    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
-    pub password: Option<String>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
+    pub username: String,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
+    pub password: String,
 }
 
 #[utoipa::path(get, path = "/bookables/connectors", params(BookableFilterOptions), responses((status = 200, description = "OK", body = Vec<BookableConnector>)))]
@@ -84,6 +89,7 @@ pub async fn list(
     let record = conditional_query_as!(
         BookableConnector,
         r#"SELECT id,
+            type as "type: BookableConnectorType",
             endpoint,
             num_outputs,
             device_name,
@@ -111,12 +117,13 @@ pub async fn get(
     let record = conditional_query_as!(
         BookableConnector,
         r#"SELECT id,
-                endpoint,
-                num_outputs,
-                device_name,
-                serial_number,
-                mac::text
-            FROM bookable_connectors WHERE id = {id};"#,
+                  type as "type: BookableConnectorType",
+                  endpoint,
+                  num_outputs,
+                  device_name,
+                  serial_number,
+                  mac::text
+          FROM bookable_connectors WHERE id = {id};"#,
     )
     .fetch_one(&data.db)
     .await?;
@@ -128,31 +135,31 @@ pub async fn get(
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
-    JsonE(BookableConnectorPost {
-        endpoint,
-        username,
-        password,
-    }): JsonE<BookableConnectorPost>,
+    JsonE(body): JsonE<BookableConnectorPost>,
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
-    // Encrypt username and password if provided
-    let username = username.as_ref().map(encryption::encrypt).transpose()?;
-    let password = password.as_ref().map(encryption::encrypt).transpose()?;
+    let username = encryption::encrypt(&body.username)?;
+    let password = encryption::encrypt(&body.password)?;
 
-    let record = conditional_query_as!(
+    let record = query_as!(
         BookableConnector,
-        r#"INSERT INTO bookable_connectors (endpoint, username, password)
-        VALUES ({endpoint}, {username}, {password})
+        r#"INSERT INTO bookable_connectors (type, endpoint, username, password)
+        VALUES ($1, $2, $3, $4)
         RETURNING
             id,
+            type as "type: BookableConnectorType",
             endpoint,
             num_outputs,
             device_name,
             serial_number,
             mac::text
-        ;"#
+        ;"#,
+        body.r#type as BookableConnectorType,
+        body.endpoint,
+        username,
+        password,
     )
     .fetch_one(&mut *conn)
     .await?;
@@ -181,6 +188,7 @@ pub async fn put(
         endpoint = {endpoint} {#username} {#password} WHERE id = {id}
         RETURNING
             id,
+            type as "type: BookableConnectorType",
             endpoint,
             num_outputs,
             device_name,

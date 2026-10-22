@@ -1,14 +1,23 @@
+//! This module covers the Bookables subsystem (so, objects that can be reserved). In our case, that's a room and washing machines.
+//! - The bookable [channel] updates are published in this module too.
+//!   This is used for WS. The generic channel type is in [crate::events]
+//! - Bookable assets that are powered can have a [connector](connectors) assigned.
+//!   We run a separate task per connector type that sets the state every minute.
+//!
+//! main() runs the connector tasks and also handles appointment expiry and notification e-mails.
+//! The thread wakes up based on the monstrous query in [next_wakeup].
+//!
+//! Whenever we need a type both here and in [http](crate::http::bookables), we put it into [models].
+
 mod channel;
 pub use channel::{BookableChannel, BookableQueueChannel};
 
-use crate::helpers::{PgDateTime, encryption::Encrypted};
-use crate::http::bookables::connectors::BookableConnectorWithPassword;
+use crate::helpers::PgDateTime;
 use crate::http::bookables::models::{
     BookableAssetQueue, BookableAssetStatus, BookableQueueEntry, BookableStatus,
 };
 use crate::http::util::grab_trans;
 use crate::{AppState, helpers::grab_authd_conn_subsystem};
-use netio::models::OutputPost;
 use serde::Deserialize;
 use sqlx::{postgres::PgListener, query, query_as, query_scalar};
 use std::collections::HashMap;
@@ -20,7 +29,7 @@ use tracing::debug;
 
 mod models;
 
-mod netio;
+pub mod connectors;
 pub use models::*;
 
 pub const QUEUE_PREVIOUS_DEPTH: i64 = 2;
@@ -69,82 +78,6 @@ pub fn assemble_queues(rows: Vec<QueueRow>) -> Vec<BookableAssetQueue> {
     let mut queues: Vec<BookableAssetQueue> = queues.into_values().collect();
     queues.sort_by_key(|q| q.id);
     queues
-}
-
-pub async fn sync_connectors(app_state: &AppState) -> Result<(), anyhow::Error> {
-    let mut conn = grab_authd_conn_subsystem(&app_state.db, "bookable")
-        .await
-        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-
-    let connectors = query_as!(
-        BookableConnectorWithPassword,
-        r#"SELECT id,
-        endpoint,
-        num_outputs,
-        device_name,
-        serial_number,
-        mac::text,
-        username as "username!: Encrypted<String>",
-        password as "password!: Encrypted<String>"
-    FROM bookable_connectors;"#
-    )
-    .fetch_all(&app_state.db)
-    .await?;
-
-    for connector in connectors {
-        let statuses = query!(
-            r#"SELECT id as "id!",
-            powered as "powered!",
-            begins,
-            ends as "ends: PgDateTime",
-            connector as "connector!",
-            connector_output_id as "connector_output_id!"
-        FROM bookable_asset_status
-        WHERE connector = $1 AND connector_output_id IS NOT NULL"#,
-            connector.id
-        )
-        .fetch_all(&app_state.db)
-        .await
-        .unwrap();
-
-        let outputs: Vec<OutputPost> = statuses
-            .into_iter()
-            .map(|s| OutputPost {
-                id: s.connector_output_id,
-                action: if s.powered {
-                    netio::models::Action::On
-                } else {
-                    netio::models::Action::Off
-                },
-            })
-            .collect();
-
-        let mut api = netio::NetioApi::new(
-            connector.endpoint,
-            connector.username.expose(),
-            connector.password.expose(),
-            &app_state.config.proxy,
-        );
-
-        let res = api
-            .post()
-            .json(&netio::models::NetioPost { outputs })
-            .send()
-            .await?
-            .json::<netio::models::NetioGet>()
-            .await?;
-
-        query!(
-        "UPDATE bookable_connectors SET num_outputs = $1, device_name = $2, serial_number = $3, mac = $4::macaddr WHERE id = $5",
-        res.agent.num_outputs,
-        res.agent.device_name,
-        res.agent.serial_number,
-        res.agent.mac as String,
-        connector.id
-    ).execute(&mut *conn).await?;
-    }
-
-    Ok(())
 }
 
 pub async fn auto_activate_appointments(app_state: &AppState) -> Result<(), anyhow::Error> {
@@ -512,15 +445,19 @@ pub async fn main(
         .listen_all(["bookable_update", "bookable_event", "bookable_reschedule"])
         .await?;
 
-    // Empty on first pass, so everything broadcasts once
     let mut cache: HashMap<i32, (BookableAssetStatus, BookableAssetQueue)> = HashMap::new();
+
+    let (miele_tx, miele_rx) = watch::channel(Vec::new());
+    let mut miele_task = tokio::spawn(connectors::miele::sync(miele_rx));
+    let (netio_tx, netio_rx) = watch::channel(Vec::new());
+    let mut netio_task = tokio::spawn(connectors::netio::sync(app_state.db.clone(), netio_rx));
 
     loop {
         cancel_rolling_maintenance_overlaps(&app_state).await?;
         auto_activate_appointments(&app_state).await?;
         expire_appointments(&app_state).await?;
         remind_upcoming(&app_state).await?;
-        sync_connectors(&app_state).await?;
+        connectors::sync_connectors(&app_state, &miele_tx, &netio_tx).await?;
         publish_bookables(&app_state, &mut cache).await?;
 
         if *shutdown.borrow() {
@@ -547,6 +484,12 @@ pub async fn main(
                 if changed.is_ok() && *shutdown.borrow() {
                     break;
                 }
+            }
+            res = &mut miele_task => {
+                return Err(anyhow::anyhow!("miele sync stopped: {res:?}"));
+            }
+            res = &mut netio_task => {
+                return Err(anyhow::anyhow!("netio sync stopped: {res:?}"));
             }
         };
     }

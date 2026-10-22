@@ -1,10 +1,13 @@
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
+CREATE TYPE bookable_connector_type AS ENUM('netio', 'miele');
+
 --
 -- Bookable assets
 --
 CREATE TABLE bookable_connectors (
   id int PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  type bookable_connector_type NOT NULL,
   endpoint text NOT NULL,
   num_outputs int,
   device_name text,
@@ -338,6 +341,11 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER tg_bookable_reschedule_notification_settings
 AFTER INSERT OR UPDATE ON bookable_notification_settings FOR EACH STATEMENT
+EXECUTE FUNCTION bookable_reschedule_trigger ();
+
+-- Trigger resync based on connector updates
+CREATE TRIGGER tg_bookable_reschedule_connectors
+AFTER INSERT OR DELETE OR UPDATE OF type, endpoint, username, password ON bookable_connectors FOR EACH STATEMENT
 EXECUTE FUNCTION bookable_reschedule_trigger ();
 
 -- Appointment lifecycle events for notifications. Best-effort: missed if nobody is listening.

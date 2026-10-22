@@ -2,7 +2,7 @@ use serde::de::{self, Deserializer, Unexpected};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
-#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug)]
+#[derive(Serialize_repr, Deserialize_repr, Clone, Copy, PartialEq, Debug)]
 #[repr(u8)]
 pub enum Action {
     Off = 0,
@@ -68,7 +68,7 @@ pub struct NetioGet {
     pub outputs: Vec<Output>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct OutputPost {
     #[serde(rename = "ID")]

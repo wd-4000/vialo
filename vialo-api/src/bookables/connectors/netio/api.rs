@@ -1,12 +1,19 @@
 use reqwest::RequestBuilder;
 use std::sync::Arc;
-pub mod models;
 
+#[derive(Clone)]
 pub struct NetioApi {
     client: Arc<reqwest::Client>,
     username: String,
     password: String,
     url: String,
+}
+
+/// Same box and login
+impl PartialEq for NetioApi {
+    fn eq(&self, other: &Self) -> bool {
+        self.url == other.url && self.username == other.username && self.password == other.password
+    }
 }
 
 impl NetioApi {
