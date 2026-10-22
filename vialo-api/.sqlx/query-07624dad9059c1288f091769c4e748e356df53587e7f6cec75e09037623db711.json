@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT key as \"key!\" FROM unnest($1::bigint[]) key WHERE pg_try_advisory_xact_lock(key)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "key!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "07624dad9059c1288f091769c4e748e356df53587e7f6cec75e09037623db711"
+}

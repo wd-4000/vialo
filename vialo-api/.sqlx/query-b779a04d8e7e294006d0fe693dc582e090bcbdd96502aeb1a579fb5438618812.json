@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id,\n                  type as \"type: BookableConnectorType\",\n                  endpoint,\n                  num_outputs,\n                  device_name,\n                  serial_number,\n                  mac::text\n          FROM bookable_connectors WHERE id = $1;",
+  "query": "UPDATE bookable_connectors SET\n        endpoint = $1, discovered_at = NULL  , password = $2 WHERE id = $3\n        RETURNING\n            id,\n            type as \"type: BookableConnectorType\",\n            endpoint,\n            device_name,\n            serial_number,\n            mac::text\n        ;",
   "describe": {
     "columns": [
       {
@@ -48,17 +48,6 @@
       },
       {
         "ordinal": 3,
-        "name": "num_outputs",
-        "type_info": "Int4",
-        "origin": {
-          "Table": {
-            "table": "bookable_connectors",
-            "name": "num_outputs"
-          }
-        }
-      },
-      {
-        "ordinal": 4,
         "name": "device_name",
         "type_info": "Text",
         "origin": {
@@ -69,7 +58,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "serial_number",
         "type_info": "Text",
         "origin": {
@@ -80,7 +69,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "name": "mac",
         "type_info": "Text",
         "origin": "Expression"
@@ -88,6 +77,8 @@
     ],
     "parameters": {
       "Left": [
+        "Text",
+        "Bytea",
         "Int4"
       ]
     },
@@ -97,9 +88,8 @@
       false,
       true,
       true,
-      true,
       null
     ]
   },
-  "hash": "b09e0e5bd2f49cb0e1ada692516d7674dccebecd04eb9d81dcf7694f7fd86976"
+  "hash": "b779a04d8e7e294006d0fe693dc582e090bcbdd96502aeb1a579fb5438618812"
 }

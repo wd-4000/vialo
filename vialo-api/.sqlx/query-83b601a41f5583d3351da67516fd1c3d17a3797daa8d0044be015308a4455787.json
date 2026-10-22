@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT connector_output_id as \"output_id!\" FROM bookable_assets\n        WHERE connector = $1 AND connector_output_id IS NOT NULL ORDER BY 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "output_id!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bookable_assets",
+            "name": "connector_output_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "83b601a41f5583d3351da67516fd1c3d17a3797daa8d0044be015308a4455787"
+}

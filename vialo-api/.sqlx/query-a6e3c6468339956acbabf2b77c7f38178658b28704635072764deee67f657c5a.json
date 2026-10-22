@@ -60,7 +60,7 @@
       {
         "ordinal": 4,
         "name": "connector_output_id",
-        "type_info": "Int4",
+        "type_info": "Text",
         "origin": {
           "Table": {
             "table": "bookable_assets",

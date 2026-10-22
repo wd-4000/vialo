@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT o.id, o.connector, o.output_id, o.commission_error\n        FROM bookable_connector_outputs o\n        WHERE o.commissioned_at IS NULL\n          AND EXISTS (SELECT 1 FROM bookable_assets a\n                      WHERE a.connector = o.connector AND a.connector_output_id = o.output_id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "bookable_connector_outputs",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "connector",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bookable_connector_outputs",
+            "name": "connector"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "output_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bookable_connector_outputs",
+            "name": "output_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "commission_error",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "bookable_connector_outputs",
+            "name": "commission_error"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "d45de81bb10fe4eadb0d544475752812474264fcab083a6d826e5af20e489e53"
+}

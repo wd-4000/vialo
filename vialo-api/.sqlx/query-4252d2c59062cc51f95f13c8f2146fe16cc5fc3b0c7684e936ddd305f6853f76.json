@@ -1,37 +1,37 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id as \"id!\",\n            powered as \"powered!\",\n            connector_output_id\n        FROM bookable_asset_status\n        WHERE connector = $1",
+  "query": "SELECT asset_type_id, connector, connector_output_id FROM bookable_assets WHERE id = $1 FOR UPDATE",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!",
+        "name": "asset_type_id",
         "type_info": "Int4",
         "origin": {
           "Table": {
-            "table": "bookable_asset_status",
-            "name": "id"
+            "table": "bookable_assets",
+            "name": "asset_type_id"
           }
         }
       },
       {
         "ordinal": 1,
-        "name": "powered!",
-        "type_info": "Bool",
+        "name": "connector",
+        "type_info": "Int4",
         "origin": {
           "Table": {
-            "table": "bookable_asset_status",
-            "name": "powered"
+            "table": "bookable_assets",
+            "name": "connector"
           }
         }
       },
       {
         "ordinal": 2,
         "name": "connector_output_id",
-        "type_info": "Int4",
+        "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "bookable_asset_status",
+            "table": "bookable_assets",
             "name": "connector_output_id"
           }
         }
@@ -43,10 +43,10 @@
       ]
     },
     "nullable": [
-      true,
+      false,
       true,
       true
     ]
   },
-  "hash": "29fe6efad420481a8673b9b9e144fea04527bc84e70313aed13d304c1d49fc00"
+  "hash": "4252d2c59062cc51f95f13c8f2146fe16cc5fc3b0c7684e936ddd305f6853f76"
 }

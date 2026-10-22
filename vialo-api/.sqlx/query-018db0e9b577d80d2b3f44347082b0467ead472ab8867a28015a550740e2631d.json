@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE bookable_connector_outputs SET commissioned_at = NULL WHERE connector = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "018db0e9b577d80d2b3f44347082b0467ead472ab8867a28015a550740e2631d"
+}
