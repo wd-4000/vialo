@@ -8,17 +8,18 @@ use utoipa::ToSchema;
 #[serde(rename_all = "snake_case")]
 pub enum Change {
     AdminPasswordSet,
+    RolesAdded,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
 #[serde(tag = "code", rename_all = "snake_case")]
 pub enum CommissionError {
     Unreachable { detail: String },
-    LoginRejected,
+    LoginRejected { tries_left: Option<u64> },
+    /// Too many rejected logins
+    LoginBlocked { minutes: Option<u64> },
     OutputMissing,
-    AdminPasswordConflict,
-    MissingPermissions { missing: Vec<String> },
-    NotImplemented,
+    MissingPermissions { missing: Vec<i64> },
     Other { detail: String },
 }
 
@@ -57,7 +58,7 @@ impl From<CommissionError> for CommissionFailure {
 impl From<anyhow::Error> for CommissionError {
     fn from(e: anyhow::Error) -> Self {
         if http_status(&e) == Some(StatusCode::UNAUTHORIZED) {
-            Self::LoginRejected
+            Self::LoginRejected { tries_left: None }
         } else if e.downcast_ref::<reqwest::Error>().is_some() {
             Self::Unreachable {
                 detail: format!("{e:#}"),

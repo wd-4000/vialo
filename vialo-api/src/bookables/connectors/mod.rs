@@ -12,11 +12,11 @@
 //! 1. Discovery (also when a Connector is edited): we check that the Connector is reachable and store its Outputs in the `bookable_connector_outputs` table.
 //!    This lets us have a nice dropdown in the UI.
 //! 2. Commissioning (when an asset is linked to an Output): we make sure the Outputs are ready to sync.
-//!    In reality this means setting the Admin password and checking permissions for Miele (not implemented yet)
+//!    In reality this means setting the Admin password and checking permissions for Miele
 //!    and checking the Output still exists for Netio.
 //!
 //! Only commissioned Outputs are synced, never while they're being commissioned. Skipped or failed ones are retried
-//! in the background.
+//! in the background, except rejected logins, which would only get Miele devices to block the login.
 //!
 //! For each type, `api` holds the client implementation, `commission` the setup, and `mod` the sync.
 
@@ -399,10 +399,12 @@ async fn commission_round(db: &PgPool, proxy: &Option<String>) -> anyhow::Result
         }
     }
 
+    // Rejected logins wait for the login to change or a manual retry
     let outputs = query!(
         "SELECT o.id, o.connector, o.output_id, o.commission_error
         FROM bookable_connector_outputs o
         WHERE o.commissioned_at IS NULL
+          AND coalesce(o.commission_error->>'code', '') NOT IN ('login_rejected', 'login_blocked')
           AND EXISTS (SELECT 1 FROM bookable_assets a
                       WHERE a.connector = o.connector AND a.connector_output_id = o.output_id)"
     )
@@ -459,7 +461,7 @@ pub(crate) async fn invalidate_commissioning(
     connector: i32,
 ) -> sqlx::Result<()> {
     query!(
-        "UPDATE bookable_connector_outputs SET commissioned_at = NULL WHERE connector = $1",
+        "UPDATE bookable_connector_outputs SET commissioned_at = NULL, commission_error = NULL WHERE connector = $1",
         connector
     )
     .execute(&mut **tx)
