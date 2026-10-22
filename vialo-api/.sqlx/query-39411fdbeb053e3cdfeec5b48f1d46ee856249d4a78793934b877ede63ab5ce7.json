@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT 1 FROM pg_advisory_xact_lock($1)",
+  "query": "SELECT 1 FROM pg_advisory_xact_lock($1::int)",
   "describe": {
     "columns": [
       {
@@ -12,12 +12,12 @@
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "Int4"
       ]
     },
     "nullable": [
       null
     ]
   },
-  "hash": "224ce68ab736000020b44a9ecbd0090e70efe9753050f0abc144fd32d370103d"
+  "hash": "39411fdbeb053e3cdfeec5b48f1d46ee856249d4a78793934b877ede63ab5ce7"
 }

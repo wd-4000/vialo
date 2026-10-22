@@ -1,12 +1,12 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT o.id, o.connector, o.output_id, o.commission_error\n        FROM bookable_connector_outputs o\n        WHERE o.commissioned_at IS NULL\n          AND EXISTS (SELECT 1 FROM bookable_assets a\n                      WHERE a.connector = o.connector AND a.connector_output_id = o.output_id)",
+  "query": "SELECT o.id, o.connector, o.output_id, o.commission_error\n        FROM bookable_connector_outputs o\n        WHERE o.commissioned_at IS NULL\n          AND coalesce(o.commission_error->>'code', '') NOT IN ('login_rejected', 'login_blocked')\n          AND EXISTS (SELECT 1 FROM bookable_assets a\n                      WHERE a.connector = o.connector AND a.connector_output_id = o.output_id)",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
         "name": "id",
-        "type_info": "Int8",
+        "type_info": "Int4",
         "origin": {
           "Table": {
             "table": "bookable_connector_outputs",
@@ -58,5 +58,5 @@
       true
     ]
   },
-  "hash": "d45de81bb10fe4eadb0d544475752812474264fcab083a6d826e5af20e489e53"
+  "hash": "cedd1fd74bf0d4d0d80c07811ed9d1090e8fb8ecfec8c026d2096cff9823a7aa"
 }

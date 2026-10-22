@@ -28,7 +28,7 @@
       {
         "ordinal": 2,
         "name": "output!",
-        "type_info": "Int8",
+        "type_info": "Int4",
         "origin": {
           "Table": {
             "table": "bookable_connector_outputs",

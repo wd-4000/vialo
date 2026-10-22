@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT o.output_id,\n            o.name,\n            o.last_seen,\n            o.commissioned_at,\n            o.commission_error,\n            ARRAY(SELECT a.id FROM bookable_assets a\n                  WHERE a.connector = o.connector AND a.connector_output_id = o.output_id\n                  ORDER BY a.id) as \"assets!\"\n        FROM bookable_connector_outputs o\n        WHERE o.connector = $1\n        ORDER BY o.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "output_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bookable_connector_outputs",
+            "name": "output_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bookable_connector_outputs",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "last_seen",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "bookable_connector_outputs",
+            "name": "last_seen"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "commissioned_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "bookable_connector_outputs",
+            "name": "commissioned_at"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "commission_error",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "bookable_connector_outputs",
+            "name": "commission_error"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "assets!",
+        "type_info": "Int4Array",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "afcd503e2383df6fda275968e9782901d822cc087ae95a68008d7cd3cb0a7ee7"
+}
