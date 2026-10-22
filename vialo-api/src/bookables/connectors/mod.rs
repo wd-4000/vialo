@@ -29,6 +29,7 @@ use super::BookableConnectorType;
 use crate::AppState;
 use crate::helpers::{encryption::Encrypted, grab_authd_conn_subsystem};
 use report::{CommissionFailure, CommissionResult, Discovery};
+use reqwest::Url;
 use sqlx::{Connection, PgPool, Postgres, Transaction, query, query_as, query_scalar};
 use std::collections::HashSet;
 use std::time::Duration;
@@ -56,7 +57,7 @@ pub(crate) struct OutputStatus {
     asset_id: i32,
     powered: bool,
     /// `bookable_connector_outputs` row, also the output's advisory lock key
-    output: i64,
+    output: i32,
     /// The output ID in the connector's terms
     output_id: String,
 }
@@ -89,6 +90,16 @@ pub(crate) trait Connector {
         targets: watch::Receiver<Vec<Self::Target>>,
         db: PgPool,
     ) -> impl Future<Output = ()> + Send;
+}
+
+/// `url` with `segments` appended, each escaped as exactly one path segment
+fn with_segments(url: &Url, segments: &[&str]) -> anyhow::Result<Url> {
+    let mut url = url.clone();
+    url.path_segments_mut()
+        .map_err(|_| anyhow::anyhow!("can't be a base URL"))?
+        .pop_if_empty()
+        .extend(segments);
+    Ok(url)
 }
 
 async fn fetch_connectors(
@@ -192,12 +203,12 @@ fn publish<T: PartialEq>(tx: &watch::Sender<Vec<T>>, targets: Vec<T>) {
 /// Start a sync round: lock what we can of `keys` until the transaction ends. Commissioning holds the rest.
 async fn lock_round(
     db: &PgPool,
-    keys: Vec<i64>,
-) -> Option<(Transaction<'static, Postgres>, HashSet<i64>)> {
+    keys: Vec<i32>,
+) -> Option<(Transaction<'static, Postgres>, HashSet<i32>)> {
     let res = async {
         let mut tx = db.begin().await?;
         let locked = query_scalar!(
-            r#"SELECT key as "key!" FROM unnest($1::bigint[]) key WHERE pg_try_advisory_xact_lock(key)"#,
+            r#"SELECT key as "key!" FROM unnest($1::int[]) key WHERE pg_try_advisory_xact_lock(key)"#,
             &keys
         )
         .fetch_all(&mut *tx)
@@ -312,11 +323,11 @@ pub(crate) async fn commission_linked(
 }
 
 /// Wait out a sync round touching the output, but not forever. Held until the transaction ends.
-async fn lock_output(tx: &mut Transaction<'_, Postgres>, output: i64) -> sqlx::Result<()> {
+async fn lock_output(tx: &mut Transaction<'_, Postgres>, output: i32) -> sqlx::Result<()> {
     query_scalar!("SELECT set_config('lock_timeout', '45s', true)")
         .fetch_one(&mut **tx)
         .await?;
-    query_scalar!("SELECT 1 FROM pg_advisory_xact_lock($1)", output)
+    query_scalar!("SELECT 1 FROM pg_advisory_xact_lock($1::int)", output)
         .fetch_one(&mut **tx)
         .await?;
     Ok(())
@@ -324,7 +335,7 @@ async fn lock_output(tx: &mut Transaction<'_, Postgres>, output: i64) -> sqlx::R
 
 async fn commission_locked(
     tx: &mut Transaction<'_, Postgres>,
-    output: i64,
+    output: i32,
     connector: i32,
     output_id: &str,
     proxy: &Option<String>,

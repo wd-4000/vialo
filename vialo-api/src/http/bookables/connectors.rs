@@ -14,6 +14,7 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::Query;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as};
 use sqlx_conditional_queries::conditional_query_as;
@@ -138,6 +139,48 @@ pub async fn get(
           FROM bookable_connectors WHERE id = {id};"#,
     )
     .fetch_one(&data.db)
+    .await?;
+
+    Ok((StatusCode::OK, Json(record)))
+}
+
+/// One of a connector's outputs, as discovery found it
+#[derive(Serialize, Debug, ToSchema)]
+pub struct BookableConnectorOutput {
+    pub output_id: String,
+    pub name: Option<String>,
+    /// When discovery last found it. Older than the other outputs': missing from the latest discovery.
+    pub last_seen: Option<DateTime<Utc>>,
+    pub commissioned_at: Option<DateTime<Utc>>,
+    #[schema(value_type = Option<CommissionFailure>)]
+    pub commission_error: Option<serde_json::Value>,
+    /// Assets linked to it
+    pub assets: Vec<i32>,
+}
+
+#[utoipa::path(get, path = "/bookables/connectors/{id}/outputs", responses((status = 200, description = "OK", body = Vec<BookableConnectorOutput>)))]
+pub async fn outputs(
+    Path(id): Path<i32>,
+    Extension(user): Extension<User>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
+    let record = query_as!(
+        BookableConnectorOutput,
+        r#"SELECT o.output_id,
+            o.name,
+            o.last_seen,
+            o.commissioned_at,
+            o.commission_error,
+            ARRAY(SELECT a.id FROM bookable_assets a
+                  WHERE a.connector = o.connector AND a.connector_output_id = o.output_id
+                  ORDER BY a.id) as "assets!"
+        FROM bookable_connector_outputs o
+        WHERE o.connector = $1
+        ORDER BY o.id"#,
+        id
+    )
+    .fetch_all(&data.db)
     .await?;
 
     Ok((StatusCode::OK, Json(record)))

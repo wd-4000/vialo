@@ -25,13 +25,13 @@ pub(crate) struct NetioTarget {
 #[derive(Clone, PartialEq)]
 struct NetioOutput {
     /// Output row id, also its lock key
-    output: i64,
+    output: i32,
     post: OutputPost,
 }
 
-fn api(connector: &ConnectorRow, proxy: &Option<String>) -> NetioApi {
+fn api(connector: &ConnectorRow, proxy: &Option<String>) -> anyhow::Result<NetioApi> {
     NetioApi::new(
-        connector.endpoint.clone(),
+        &connector.endpoint,
         connector.username.expose(),
         connector.password.expose(),
         proxy,
@@ -45,7 +45,7 @@ impl Connector for Netio {
         connector: &ConnectorRow,
         proxy: &Option<String>,
     ) -> Result<Discovery, CommissionFailure> {
-        commission::discover(&api(connector, proxy)).await
+        commission::discover(&api(connector, proxy)?).await
     }
 
     async fn commission(
@@ -53,7 +53,7 @@ impl Connector for Netio {
         output_id: &str,
         proxy: &Option<String>,
     ) -> CommissionResult {
-        commission::check_output(&api(connector, proxy), output_id).await
+        commission::check_output(&api(connector, proxy)?, output_id).await
     }
 
     fn target(
@@ -84,7 +84,7 @@ impl Connector for Netio {
 
         Ok(NetioTarget {
             id: connector.id,
-            api: api(connector, proxy),
+            api: api(connector, proxy)?,
             outputs,
         })
     }

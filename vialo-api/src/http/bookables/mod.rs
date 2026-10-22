@@ -44,6 +44,7 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
                 .put(connectors::put)
                 .delete(connectors::delete),
         )
+        .route("/connectors/{id}/outputs", get(connectors::outputs))
         .route("/schemas", get(schemas::list).post(schemas::post))
         .route(
             "/schemas/{id}",

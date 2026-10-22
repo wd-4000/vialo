@@ -60,15 +60,23 @@ impl From<anyhow::Error> for CommissionError {
         if http_status(&e) == Some(StatusCode::UNAUTHORIZED) {
             Self::LoginRejected { tries_left: None }
         } else if e.downcast_ref::<reqwest::Error>().is_some() {
-            Self::Unreachable {
-                detail: format!("{e:#}"),
-            }
+            Self::Unreachable { detail: detail(&e) }
         } else {
-            Self::Other {
-                detail: format!("{e:#}"),
-            }
+            Self::Other { detail: detail(&e) }
         }
     }
+}
+
+/// The error for display and jsonb, which rejects NULs. Errors can carry whole response bodies, binary ones included.
+fn detail(e: &anyhow::Error) -> String {
+    const MAX: usize = 500;
+    let full = format!("{e:#}");
+    let mut chars = full.chars().filter(|c| !c.is_control() || *c == '\n');
+    let mut detail: String = chars.by_ref().take(MAX).collect();
+    if chars.next().is_some() {
+        detail.push('…');
+    }
+    detail
 }
 
 impl From<anyhow::Error> for CommissionFailure {

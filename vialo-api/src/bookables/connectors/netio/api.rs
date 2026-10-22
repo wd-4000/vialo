@@ -1,7 +1,8 @@
 use super::models::{NetioGet, NetioPost, OutputPost};
 use crate::bookables::connectors::error::HttpStatus;
+use crate::bookables::connectors::with_segments;
 use anyhow::{Context, Result, anyhow};
-use reqwest::RequestBuilder;
+use reqwest::{RequestBuilder, Url};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -9,7 +10,7 @@ pub struct NetioApi {
     client: Arc<reqwest::Client>,
     username: String,
     password: String,
-    url: String,
+    url: Url,
 }
 
 /// Same box and login
@@ -20,23 +21,29 @@ impl PartialEq for NetioApi {
 }
 
 impl NetioApi {
+    /// `url` is the box itself, the JSON API path is added unless it's there already
     pub fn new(
-        url: String,
+        url: &str,
         username: String,
         password: String,
         proxy_url: &Option<String>,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut builder = reqwest::Client::builder();
         if let Some(proxy) = proxy_url {
-            builder = builder.proxy(reqwest::Proxy::all(proxy).unwrap());
+            builder = builder.proxy(reqwest::Proxy::all(proxy)?);
         }
 
-        Self {
+        let mut url = Url::parse(url)?;
+        if url.path_segments().and_then(|mut s| s.next_back()) != Some("netio.json") {
+            url = with_segments(&url, &["netio.json"])?;
+        }
+
+        Ok(Self {
             url,
             username,
             password,
-            client: Arc::new(builder.build().unwrap()),
-        }
+            client: Arc::new(builder.build()?),
+        })
     }
 
     pub async fn get(&self) -> Result<NetioGet> {

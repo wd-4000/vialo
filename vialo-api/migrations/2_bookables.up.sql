@@ -20,7 +20,7 @@ CREATE TABLE bookable_connectors (
 
 -- Assets link to these, discovered by, well, discovery
 CREATE TABLE bookable_connector_outputs (
-  id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  id int PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   connector int NOT NULL REFERENCES bookable_connectors ON DELETE CASCADE,
   output_id text NOT NULL, -- Netio output number or Miele fabrication number
   name text,
