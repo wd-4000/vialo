@@ -83,7 +83,7 @@ pub struct BookableAssetTranslatedAllLanguages {
     pub asset_type_id: i32,
     pub slug: Option<String>,
     pub connector: Option<i32>,
-    pub connector_output_id: Option<i32>,
+    pub connector_output_id: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]

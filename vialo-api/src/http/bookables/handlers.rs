@@ -8,7 +8,9 @@ use super::models::{
 use super::permissions::{
     BookableCaller, BookablePerm, require_asset_type_perm, require_asset_type_perm_by_asset,
 };
+use super::connectors::{CommissionOptions, CommissioningFailedResponse, require_commissioned};
 use super::schemas::{NewSchemaInline, insert_schema};
+use crate::bookables::connectors;
 use crate::http::util::{clamp_pagination, grab_authd_conn_user, grab_trans};
 use crate::permissions::{AppRole, check_app_role};
 use crate::{
@@ -223,7 +225,8 @@ pub struct PostBookableSchema {
     #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_128")]
     pub slug: Option<String>,
     pub connector: Option<i32>,
-    pub connector_output_id: Option<i32>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_64")]
+    pub connector_output_id: Option<String>,
     /// Exactly one of asset_type_id / new_asset_type must be set.
     pub asset_type_id: Option<i32>,
     pub new_asset_type: Option<PostBookableTypeSchema>,
@@ -241,7 +244,8 @@ pub struct PutBookableSchema {
     #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_128")]
     pub slug: Option<String>,
     pub connector: Option<i32>,
-    pub connector_output_id: Option<i32>,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_64")]
+    pub connector_output_id: Option<String>,
     pub asset_type_id: i32,
 }
 
@@ -250,10 +254,11 @@ enum AssetTypeInput {
     New(PostBookableTypeSchema),
 }
 
-#[utoipa::path(post, path = "/bookables", request_body=PostBookableSchema, responses((status = 201, description = "Created", body=BoardPostIdModel)))]
+#[utoipa::path(post, path = "/bookables", params(CommissionOptions), request_body=PostBookableSchema, responses((status = 201, description = "Created", body=BoardPostIdModel), (status = 422, description = "Commissioning failed", body = CommissioningFailedResponse)))]
 pub async fn post_bookable(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
+    Query(opts): Query<CommissionOptions>,
     JsonE(body): JsonE<PostBookableSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
     // An existing type is gated per-type, but creating one needs the global role.
@@ -269,7 +274,17 @@ pub async fn post_bookable(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
+    let link = body.connector.zip(body.connector_output_id.clone());
     let record = insert_bookable(&mut trans, body).await?;
+
+    if let Some((connector, output_id)) = link
+        && !opts.skip_commissioning
+    {
+        let res =
+            connectors::commission_output(&mut trans, connector, &output_id, &data.config.proxy)
+                .await?;
+        require_commissioned(res)?;
+    }
 
     trans.commit().await?;
     Ok((StatusCode::CREATED, Json(record)))
@@ -353,22 +368,24 @@ pub async fn insert_bookable(
     Ok(record)
 }
 
-#[utoipa::path(put, path = "/bookables/{id}", request_body=PutBookableSchema, responses((status = 200, description = "Updated", body=BoardPostIdModel)))]
+#[utoipa::path(put, path = "/bookables/{id}", params(CommissionOptions), request_body=PutBookableSchema, responses((status = 200, description = "Updated", body=BoardPostIdModel), (status = 422, description = "Commissioning failed", body = CommissioningFailedResponse)))]
 pub async fn put_bookable(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
+    Query(opts): Query<CommissionOptions>,
     JsonE(body): JsonE<PutBookableSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let current_type_id = sqlx::query_scalar!(
-        "SELECT asset_type_id FROM bookable_assets WHERE id = $1 FOR UPDATE",
+    let current = sqlx::query!(
+        "SELECT asset_type_id, connector, connector_output_id FROM bookable_assets WHERE id = $1 FOR UPDATE",
         id
     )
     .fetch_one(&mut *trans)
     .await?;
+    let current_type_id = current.asset_type_id;
     require_asset_type_perm(
         Some(user.id),
         current_type_id,
@@ -385,6 +402,10 @@ pub async fn put_bookable(
         )
         .await?;
     }
+
+    let link = body.connector.zip(body.connector_output_id.clone());
+    let relinked =
+        link.is_some() && link != current.connector.zip(current.connector_output_id);
 
     let (name_langs, name_contents) =
         super::super::util::get_i18n_arg_arrays(Some(body.name.into()));
@@ -406,6 +427,16 @@ pub async fn put_bookable(
     .map_err(|e| if is_unique_violation(&e) {
         VialoError::AppError(StatusCode::CONFLICT, "slug_conflict".into())
     } else { e.into() })?;
+
+    if let Some((connector, output_id)) = link
+        && relinked
+        && !opts.skip_commissioning
+    {
+        let res =
+            connectors::commission_output(&mut trans, connector, &output_id, &data.config.proxy)
+                .await?;
+        require_commissioned(res)?;
+    }
 
     trans.commit().await?;
 

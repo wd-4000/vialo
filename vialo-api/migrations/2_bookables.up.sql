@@ -9,12 +9,25 @@ CREATE TABLE bookable_connectors (
   id int PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   type bookable_connector_type NOT NULL,
   endpoint text NOT NULL,
-  num_outputs int,
   device_name text,
   serial_number text,
   mac macaddr,
   username BYTEA NOT NULL,
-  password BYTEA NOT NULL
+  password BYTEA NOT NULL,
+  discovered_at timestamptz, -- NULL: discovery pending
+  discovery_error jsonb -- why the last attempt failed (NULL = worked)
+);
+
+-- Assets link to these, discovered by, well, discovery
+CREATE TABLE bookable_connector_outputs (
+  id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  connector int NOT NULL REFERENCES bookable_connectors ON DELETE CASCADE,
+  output_id text NOT NULL, -- Netio output number or Miele fabrication number
+  name text,
+  last_seen timestamptz, -- NULL or stale means it somehoe disappeared
+  commissioned_at timestamptz,
+  commission_error jsonb, -- why the last attempt failed (NULL = worked)
+  UNIQUE (connector, output_id)
 );
 
 CREATE TABLE bookable_asset_types (
@@ -32,7 +45,8 @@ CREATE TABLE bookable_assets (
   asset_type_id int NOT NULL REFERENCES bookable_asset_types (id) ON DELETE CASCADE,
   quick_unlock tstzrange,
   connector int REFERENCES bookable_connectors,
-  connector_output_id int
+  connector_output_id text,
+  FOREIGN KEY (connector, connector_output_id) REFERENCES bookable_connector_outputs (connector, output_id)
 );
 
 -- activation modes:
@@ -346,6 +360,11 @@ EXECUTE FUNCTION bookable_reschedule_trigger ();
 -- Trigger resync based on connector updates
 CREATE TRIGGER tg_bookable_reschedule_connectors
 AFTER INSERT OR DELETE OR UPDATE OF type, endpoint, username, password ON bookable_connectors FOR EACH STATEMENT
+EXECUTE FUNCTION bookable_reschedule_trigger ();
+
+-- Commissioning moves outputs in and out of the sync loop
+CREATE TRIGGER tg_bookable_reschedule_outputs
+AFTER UPDATE OF commissioned_at ON bookable_connector_outputs FOR EACH STATEMENT
 EXECUTE FUNCTION bookable_reschedule_trigger ();
 
 -- Appointment lifecycle events for notifications. Best-effort: missed if nobody is listening.

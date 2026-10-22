@@ -1,9 +1,10 @@
 use super::handlers::BookableFilterOptions;
 use crate::AppState;
 use crate::bookables::BookableConnectorType;
+use crate::bookables::connectors::{self, report::CommissionFailure};
 use crate::helpers::PatchOption;
-use crate::helpers::encryption::{self, Encrypted};
-use crate::http::util::grab_authd_conn_user;
+use crate::helpers::encryption;
+use crate::http::util::{grab_authd_conn_user, grab_trans};
 use crate::http::util::{JsonE, User, VialoError, clamp_pagination};
 use crate::permissions::{AppRole, check_app_role};
 use axum::{
@@ -17,32 +18,46 @@ use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as};
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
+
+#[derive(Deserialize, Debug, Default, IntoParams)]
+pub struct CommissionOptions {
+    /// Save without commissioning now, leaving it to the bookables module
+    #[serde(default)]
+    pub skip_commissioning: bool,
+}
+
+/// The 422 body when commissioning fails, as built by `require_commissioned`
+#[derive(Serialize, ToSchema)]
+pub struct CommissioningFailedResponse {
+    #[schema(example = "error")]
+    status: String,
+    #[schema(example = "commissioning_failed")]
+    code: String,
+    details: CommissionFailure,
+}
+
+/// A failed commissioning rolls the request back and goes out as a 422 with the reason
+pub(super) fn require_commissioned<T>(res: Result<T, CommissionFailure>) -> Result<T, VialoError> {
+    let failure = match res {
+        Ok(value) => return Ok(value),
+        Err(failure) => failure,
+    };
+    Err(VialoError::AppErrorWithDetails(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "commissioning_failed".into(),
+        serde_json::to_value(failure).map_err(anyhow::Error::from)?,
+    ))
+}
 
 #[derive(Deserialize, Serialize, Debug, ToSchema)]
 pub struct BookableConnector {
     pub id: i32,
     pub r#type: BookableConnectorType,
     pub endpoint: String,
-    pub num_outputs: Option<i32>,
     pub device_name: Option<String>,
     pub serial_number: Option<String>,
     pub mac: Option<String>,
-}
-
-#[derive(Deserialize, Debug, ToSchema)]
-pub struct BookableConnectorWithPassword {
-    pub id: i32,
-    pub r#type: BookableConnectorType,
-    pub endpoint: String,
-    pub num_outputs: Option<i32>,
-    pub device_name: Option<String>,
-    pub serial_number: Option<String>,
-    pub mac: Option<String>,
-    #[schema(value_type = String)]
-    pub username: Encrypted<String>,
-    #[schema(value_type = String)]
-    pub password: Encrypted<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -50,7 +65,6 @@ pub struct BookableConnectorWithOptionalPassword {
     pub id: i32,
     pub r#type: BookableConnectorType,
     pub endpoint: String,
-    pub num_outputs: Option<i32>,
     pub device_name: Option<String>,
     pub serial_number: Option<String>,
     pub mac: Option<String>,
@@ -91,7 +105,6 @@ pub async fn list(
         r#"SELECT id,
             type as "type: BookableConnectorType",
             endpoint,
-            num_outputs,
             device_name,
             serial_number,
             mac::text
@@ -119,7 +132,6 @@ pub async fn get(
         r#"SELECT id,
                   type as "type: BookableConnectorType",
                   endpoint,
-                  num_outputs,
                   device_name,
                   serial_number,
                   mac::text
@@ -131,14 +143,16 @@ pub async fn get(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(post, path = "/bookables/connectors", request_body=BookableConnectorPost, responses((status = 201, description = "Created", body=BookableConnector)))]
+#[utoipa::path(post, path = "/bookables/connectors", params(CommissionOptions), request_body=BookableConnectorPost, responses((status = 201, description = "Created", body=BookableConnector), (status = 422, description = "Commissioning failed", body = CommissioningFailedResponse)))]
 pub async fn post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
+    Query(opts): Query<CommissionOptions>,
     JsonE(body): JsonE<BookableConnectorPost>,
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+    let mut trans = grab_trans(&mut conn).await?;
 
     let username = encryption::encrypt(&body.username)?;
     let password = encryption::encrypt(&body.password)?;
@@ -151,7 +165,6 @@ pub async fn post(
             id,
             type as "type: BookableConnectorType",
             endpoint,
-            num_outputs,
             device_name,
             serial_number,
             mac::text
@@ -161,17 +174,24 @@ pub async fn post(
         username,
         password,
     )
-    .fetch_one(&mut *conn)
+    .fetch_one(&mut *trans)
     .await?;
 
+    if !opts.skip_commissioning {
+        let res = connectors::discover(&mut trans, record.id, &data.config.proxy).await?;
+        require_commissioned(res)?;
+    }
+
+    trans.commit().await?;
     Ok((StatusCode::CREATED, Json(record)))
 }
 
-#[utoipa::path(put, path = "/bookables/connectors/{id}", request_body=BookableConnectorPatch, responses((status = 200, description = "Updated", body = BookableConnector)))]
+#[utoipa::path(put, path = "/bookables/connectors/{id}", params(CommissionOptions), request_body=BookableConnectorPatch, responses((status = 200, description = "Updated", body = BookableConnector), (status = 422, description = "Commissioning failed", body = CommissioningFailedResponse)))]
 pub async fn put(
     Path(id): Path<i32>,
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
+    Query(opts): Query<CommissionOptions>,
     JsonE(BookableConnectorPatch {
         endpoint,
         username,
@@ -179,18 +199,20 @@ pub async fn put(
     }): JsonE<BookableConnectorPatch>,
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user.clone(), AppRole::BookableManager, &data.db).await?;
+    let login_changed =
+        matches!(username, PatchOption::Some(_)) || matches!(password, PatchOption::Some(_));
     let username = username.try_map(|s| encryption::encrypt(&s))?;
     let password = password.try_map(|s| encryption::encrypt(&s))?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+    let mut trans = grab_trans(&mut conn).await?;
 
     let record = conditional_query_as!(BookableConnector,
         r#"UPDATE bookable_connectors SET
-        endpoint = {endpoint} {#username} {#password} WHERE id = {id}
+        endpoint = {endpoint}, discovered_at = NULL {#username} {#password} WHERE id = {id}
         RETURNING
             id,
             type as "type: BookableConnectorType",
             endpoint,
-            num_outputs,
             device_name,
             serial_number,
             mac::text
@@ -204,9 +226,21 @@ pub async fn put(
                 PatchOption::Some(password) => ", password = {password}"
         }
     )
-    .fetch_one(&mut *conn)
+    .fetch_one(&mut *trans)
     .await?;
 
+    if login_changed {
+        connectors::invalidate_commissioning(&mut trans, id).await?;
+    }
+    if !opts.skip_commissioning {
+        let res = connectors::discover(&mut trans, id, &data.config.proxy).await?;
+        require_commissioned(res)?;
+        // Its linked devices may have moved or lost their login with it
+        let res = connectors::commission_linked(&mut trans, id, &data.config.proxy).await?;
+        require_commissioned(res)?;
+    }
+
+    trans.commit().await?;
     Ok((StatusCode::OK, Json(record)))
 }
 

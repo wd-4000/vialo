@@ -447,17 +447,15 @@ pub async fn main(
 
     let mut cache: HashMap<i32, (BookableAssetStatus, BookableAssetQueue)> = HashMap::new();
 
-    let (miele_tx, miele_rx) = watch::channel(Vec::new());
-    let mut miele_task = tokio::spawn(connectors::miele::sync(miele_rx));
-    let (netio_tx, netio_rx) = watch::channel(Vec::new());
-    let mut netio_task = tokio::spawn(connectors::netio::sync(app_state.db.clone(), netio_rx));
+    let mut connector_tasks =
+        connectors::Connectors::spawn(&app_state.db, &app_state.config.proxy);
 
     loop {
         cancel_rolling_maintenance_overlaps(&app_state).await?;
         auto_activate_appointments(&app_state).await?;
         expire_appointments(&app_state).await?;
         remind_upcoming(&app_state).await?;
-        connectors::sync_connectors(&app_state, &miele_tx, &netio_tx).await?;
+        connector_tasks.sync(&app_state).await?;
         publish_bookables(&app_state, &mut cache).await?;
 
         if *shutdown.borrow() {
@@ -485,11 +483,8 @@ pub async fn main(
                     break;
                 }
             }
-            res = &mut miele_task => {
-                return Err(anyhow::anyhow!("miele sync stopped: {res:?}"));
-            }
-            res = &mut netio_task => {
-                return Err(anyhow::anyhow!("netio sync stopped: {res:?}"));
+            res = connector_tasks.stopped() => {
+                return Err(anyhow::anyhow!("connector task stopped: {res:?}"));
             }
         };
     }

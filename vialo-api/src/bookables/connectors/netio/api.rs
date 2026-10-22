@@ -1,3 +1,6 @@
+use super::models::{NetioGet, NetioPost, OutputPost};
+use crate::bookables::connectors::error::HttpStatus;
+use anyhow::{Context, Result, anyhow};
 use reqwest::RequestBuilder;
 use std::sync::Arc;
 
@@ -36,17 +39,41 @@ impl NetioApi {
         }
     }
 
-    pub fn get(&mut self) -> RequestBuilder {
-        self.client
-            .get(self.url.as_str())
-            .header("Content-Type", "application/json")
-            .basic_auth(&self.username, Some(&self.password))
+    pub async fn get(&self) -> Result<NetioGet> {
+        self.send(self.client.get(self.url.as_str())).await
     }
 
-    pub fn post(&mut self) -> RequestBuilder {
-        self.client
-            .post(self.url.as_str())
+    pub async fn post(&self, outputs: &[OutputPost]) -> Result<NetioGet> {
+        let body = NetioPost {
+            outputs: outputs.to_vec(),
+        };
+        self.send(self.client.post(self.url.as_str()).json(&body))
+            .await
+    }
+
+    async fn send(&self, builder: RequestBuilder) -> Result<NetioGet> {
+        let response = builder
             .header("Content-Type", "application/json")
             .basic_auth(&self.username, Some(&self.password))
+            .send()
+            .await
+            .context("Failed to send request")?;
+        let status = response.status();
+        let url = response.url().clone();
+        let text = response
+            .text()
+            .await
+            .context("Failed to read response body")?;
+
+        if !status.is_success() {
+            return Err(HttpStatus {
+                status,
+                url,
+                body: text,
+            }
+            .into());
+        }
+        serde_json::from_str(&text)
+            .map_err(|e| anyhow!("Failed to parse response from {url} ({e}): {text}"))
     }
 }
