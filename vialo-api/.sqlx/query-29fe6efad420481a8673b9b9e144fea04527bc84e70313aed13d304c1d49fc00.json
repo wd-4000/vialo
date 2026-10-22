@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id as \"id!\",\n            powered as \"powered!\",\n            connector_output_id\n        FROM bookable_asset_status\n        WHERE connector = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bookable_asset_status",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "powered!",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "bookable_asset_status",
+            "name": "powered"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "connector_output_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bookable_asset_status",
+            "name": "connector_output_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "29fe6efad420481a8673b9b9e144fea04527bc84e70313aed13d304c1d49fc00"
+}
