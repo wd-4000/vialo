@@ -16,7 +16,6 @@ use sqlx::postgres::types::PgRange;
 use sqlx::{query, query_as, query_scalar};
 use sqlx_conditional_queries::conditional_query_as;
 use std::collections::HashMap;
-use std::i64;
 use std::ops::Bound;
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};

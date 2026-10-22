@@ -27,7 +27,6 @@ use serde_with::{DurationSeconds, serde_as};
 use sqlx::postgres::types::PgInterval;
 use sqlx::{PgPool, query, query_scalar};
 use sqlx_conditional_queries::conditional_query_as;
-use std::i64;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};

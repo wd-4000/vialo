@@ -30,7 +30,6 @@ use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgConnection, query, query_scalar};
 use sqlx_conditional_queries::conditional_query_as;
-use std::i64;
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 
