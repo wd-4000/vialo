@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index,\n            (((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date + bs.schedule[(j_v->>'slot_index')::int+1])::timestamptz as begins,\n            (((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date + bs.schedule[(j_v->>'slot_index')::int+2])::timestamptz as ends,\n            bs.slot_price as price, (j_v->>'asset_id')::int as asset_id,\n            NULL as \"existing_expired: Uuid\"\n        FROM bookable_schema_assignments bsa\n        JOIN jsonb_array_elements($1) WITH ORDINALITY AS j(j_v, j_i) ON bsa.begins <= ((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date AND bsa.asset_id = (j_v->>'asset_id')::int\n        JOIN bookable_schemas bs ON bsa.schema_id = bs.id\n        ORDER BY j_i, bsa.begins DESC;",
+  "query": "SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index,\n            lower(sl.range) as begins,\n            upper(sl.range) as ends,\n            bs.slot_price as price, (j_v->>'asset_id')::int as asset_id,\n            NULL as \"existing_expired: Uuid\",\n            (j_v->>'slot_index')::int + 2 <= cardinality(bs.schedule) as in_schedule,\n            coalesce(bs.schedule[(j_v->>'slot_index')::int + 1]::text = j_v->>'expected_start'\n                AND bs.schedule[(j_v->>'slot_index')::int + 2]::text = j_v->>'expected_end', false) as matches_expectation\n        FROM bookable_schema_assignments bsa\n        JOIN jsonb_array_elements($1) WITH ORDINALITY AS j(j_v, j_i) ON bsa.begins <= (j_v->>'date')::date AND bsa.asset_id = (j_v->>'asset_id')::int\n        JOIN bookable_schemas bs ON bsa.schema_id = bs.id\n        LEFT JOIN LATERAL slots_from_schedule(bs.schedule, (j_v->>'date')::date) sl ON sl.id = (j_v->>'slot_index')::int\n        ORDER BY j_i, bsa.begins DESC;",
   "describe": {
     "columns": [
       {
@@ -54,6 +54,18 @@
         "name": "existing_expired: Uuid",
         "type_info": "Text",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "in_schedule",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "matches_expectation",
+        "type_info": "Bool",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -68,8 +80,10 @@
       null,
       false,
       null,
+      null,
+      null,
       null
     ]
   },
-  "hash": "1d4e3a57e297d2b03ad1da23476c0e379e2e53e747000f1c5ec8ee29b9526c36"
+  "hash": "b37bd287d3990d6317018b9bfbf7f659a6bb09ce8ef1eba1e9e71cb3759ee66c"
 }

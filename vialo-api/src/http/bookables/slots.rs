@@ -21,9 +21,24 @@ use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
+/// Longest from..=to window the slot endpoints serve, page with consecutive windows beyond that
+const MAX_SLOT_WINDOW_DAYS: i64 = 31;
+
+fn check_slot_window(from: NaiveDate, to: NaiveDate) -> Result<(NaiveDate, NaiveDate), VialoError> {
+    if !(1..=MAX_SLOT_WINDOW_DAYS).contains(&((to - from).num_days() + 1)) {
+        return Err(VialoError::AppError(
+            StatusCode::BAD_REQUEST,
+            format!("from..=to must span 1 to {} days", MAX_SLOT_WINDOW_DAYS),
+        ));
+    }
+
+    Ok((from, to))
+}
+
 #[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct TakenSlotQuery {
     pub from: NaiveDate,
+    /// Inclusive, at most 31 days including `from`
     pub to: NaiveDate,
     pub asset_id: Option<Vec<i32>>,
     pub asset_type_id: Option<Vec<i32>>,
@@ -33,12 +48,13 @@ pub struct TakenSlotQuery {
 pub struct TakenSlots(HashMap<String, HashMap<String, Vec<i32>>>);
 impl_jsonb_embed!(TakenSlots);
 
-#[utoipa::path(get, path = "/bookables/slots/taken", params(TakenSlotQuery), responses((status = 200, description = "OK", body=TakenSlots)))]
+#[utoipa::path(get, path = "/bookables/slots/taken", params(TakenSlotQuery), responses((status = 200, description = "OK", body=TakenSlots),(status = 400, description = "from..=to is reversed or longer than 31 days")))]
 pub async fn taken_slots(
     Query(opts): Query<TakenSlotQuery>,
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
+    let (from, to) = check_slot_window(opts.from, opts.to)?;
     let asset_types = opts.asset_type_id.filter(|v| !v.is_empty());
     let asset_ids = opts.asset_id.filter(|v| !v.is_empty());
 
@@ -54,8 +70,8 @@ pub async fn taken_slots(
         ) d"#,
         asset_types.as_deref(),
         asset_ids.as_deref(),
-        opts.from,
-        opts.to,
+        from,
+        to,
         user.id
     )
     .fetch_one(&data.db)
@@ -83,6 +99,7 @@ pub struct SchemaPages {
 #[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct SlotSchemaQuery {
     pub from: NaiveDate,
+    /// Inclusive, at most 31 days including `from`
     pub to: NaiveDate,
     pub asset_id: Option<Vec<i32>>,
     pub asset_type_id: Option<Vec<i32>>,
@@ -95,12 +112,13 @@ pub struct SlotSchemaResponse {
     pub assets: Vec<BookableAssetTranslated>,
 }
 
-#[utoipa::path(get, path = "/bookables/slots/schemas", params(SlotSchemaQuery), responses((status = 200, description = "OK", body=SlotSchemaResponse)))]
+#[utoipa::path(get, path = "/bookables/slots/schemas", params(SlotSchemaQuery), responses((status = 200, description = "OK", body=SlotSchemaResponse),(status = 400, description = "from..=to is reversed or longer than 31 days")))]
 pub async fn slot_schemas(
     Query(opts): Query<SlotSchemaQuery>,
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, VialoError> {
+    let (from, to) = check_slot_window(opts.from, opts.to)?;
     let langs = opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
@@ -140,8 +158,8 @@ pub async fn slot_schemas(
         SchemaPages,
         r#"SELECT coalesce(transitions, ARRAY[]::jsonb[]) as "transitions!: Vec<Transition>", coalesce(ARRAY_AGG(asset_id), ARRAY[]::integer[]) as "assets!" FROM (SELECT ARRAY_AGG(jsonb_build_object('schema_id', bsa.schema_id, 'begins', bsa.begins, 'schedule', bs.schedule, 'slot_price', slot_price) ORDER BY bsa.begins) as transitions, bsa.asset_id FROM bookable_schema_assignments bsa JOIN bookable_schemas bs ON bs.id = bsa.schema_id WHERE bsa.asset_id = ANY($1) AND bsa.begins <= $2 AND (bsa.begins > $3 OR bsa.begins = (SELECT MAX(begins) FROM bookable_schema_assignments WHERE asset_id = bsa.asset_id AND begins <= $3)) group by bsa.asset_id) group by transitions;"#,
         &asset_ids,
-        opts.to,
-        opts.from
+        to,
+        from
     )
     .fetch_all(&data.db)
     .await?;
@@ -152,9 +170,11 @@ pub async fn slot_schemas(
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct BookSlotSchemaSlot {
     pub asset_id: i32,
+    pub date: NaiveDate,
     pub slot_index: u16,
-    pub expected_start: DateTime<Utc>,
-    pub expected_end: Option<DateTime<Utc>>,
+    /// Wall-clock bounds as the schedule showed them, e.g. "12:00:00". Rejected if it's changed since
+    pub expected_start: String,
+    pub expected_end: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -179,9 +199,15 @@ pub struct MaterializedSlots {
     pub asset_id: Option<i32>,
     pub price: Option<i32>,
     pub existing_expired: Option<Uuid>,
+    /// Whether slot_index is in the schedule at all, to tell a bad index from a slot skipped that day
+    #[serde(skip)]
+    pub in_schedule: Option<bool>,
+    /// Whether the schedule still has the bounds the client saw
+    #[serde(skip)]
+    pub matches_expectation: Option<bool>,
 }
 
-#[utoipa::path(post, path = "/bookables/slots/book", request_body = BookSlotSchema, responses((status = 200, description = "Booked", body=Vec<MaterializedSlots>),(status = 400, description = "Slot expectation failed"),(status = 400, description = "Slot index failure"),(status = 400, description = "Slot info failure")))]
+#[utoipa::path(post, path = "/bookables/slots/book", request_body = BookSlotSchema, responses((status = 200, description = "Booked", body=Vec<MaterializedSlots>),(status = 400, description = "Slot expectation failed"),(status = 400, description = "Slot index failure"),(status = 400, description = "Slot info failure"),(status = 400, description = "Slot skipped by a DST change that day")))]
 pub async fn book_slots(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
@@ -194,19 +220,24 @@ pub async fn book_slots(
     }
     let (owner, paid) = resolve_owner(&data.db, user.id, &body.account_id, &asset_ids).await?;
 
-    // Materialize the slots (Give them concrete start and end points)
+    // Materialize the slots (Give them concrete start and end points). Through
+    // slots_from_schedule, so they match get_taken_slots across DST changes.
     let mut materialized_slots = query_as!(MaterializedSlots, r#"SELECT DISTINCT ON (j_i) bsa.schema_id, (j_i-1) as index,
-            (((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date + bs.schedule[(j_v->>'slot_index')::int+1])::timestamptz as begins,
-            (((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date + bs.schedule[(j_v->>'slot_index')::int+2])::timestamptz as ends,
+            lower(sl.range) as begins,
+            upper(sl.range) as ends,
             bs.slot_price as price, (j_v->>'asset_id')::int as asset_id,
-            NULL as "existing_expired: Uuid"
+            NULL as "existing_expired: Uuid",
+            (j_v->>'slot_index')::int + 2 <= cardinality(bs.schedule) as in_schedule,
+            coalesce(bs.schedule[(j_v->>'slot_index')::int + 1]::text = j_v->>'expected_start'
+                AND bs.schedule[(j_v->>'slot_index')::int + 2]::text = j_v->>'expected_end', false) as matches_expectation
         FROM bookable_schema_assignments bsa
-        JOIN jsonb_array_elements($1) WITH ORDINALITY AS j(j_v, j_i) ON bsa.begins <= ((j_v->>'expected_start')::timestamptz AT TIME ZONE current_setting('TIMEZONE'))::date AND bsa.asset_id = (j_v->>'asset_id')::int
+        JOIN jsonb_array_elements($1) WITH ORDINALITY AS j(j_v, j_i) ON bsa.begins <= (j_v->>'date')::date AND bsa.asset_id = (j_v->>'asset_id')::int
         JOIN bookable_schemas bs ON bsa.schema_id = bs.id
+        LEFT JOIN LATERAL slots_from_schedule(bs.schedule, (j_v->>'date')::date) sl ON sl.id = (j_v->>'slot_index')::int
         ORDER BY j_i, bsa.begins DESC;"#, json!(body.slots)).fetch_all(&data.db)
         .await?;
 
-    // Verify the slots and the client's expectations (if present)
+    // Verify the slots and the client's expectations
     let mut sum_total = 0;
 
     // Check for existing expired slots from this user
@@ -237,33 +268,39 @@ pub async fn book_slots(
         let expected_slot: &BookSlotSchemaSlot = body.slots.get(idx).ok_or(
             VialoError::AppError(StatusCode::BAD_REQUEST, "slot_index".to_string()),
         )?;
-        if let (Some(real_start), Some(real_end)) = (slot.begins, slot.ends) {
-            if real_end < chrono::Utc::now() {
-                return Err(VialoError::AppErrorWithDetails(
-                    StatusCode::BAD_REQUEST,
-                    "slot_has_passed".to_string(),
-                    json!(slot),
-                ));
-            }
-            if let Some(expected_end) = expected_slot.expected_end
-                && (expected_slot.expected_start != real_start || expected_end != real_end)
-            {
-                tracing::debug!(
-                    "expected_start: {:?}, real_start: {:?}, expected_end: {:?}, real_end: {:?}",
-                    expected_slot.expected_start,
-                    real_start,
-                    expected_end,
-                    real_end
-                );
-                return Err(VialoError::AppError(
-                    StatusCode::BAD_REQUEST,
-                    "slot_expectation".to_string(),
-                ));
-            }
-        } else {
+        if slot.in_schedule != Some(true) {
             return Err(VialoError::AppError(
                 StatusCode::BAD_REQUEST,
                 "slot_index".to_string(),
+            ));
+        }
+        if slot.matches_expectation != Some(true) {
+            tracing::debug!(
+                "expected {}..{} at slot {} on {}, schema {} says otherwise",
+                expected_slot.expected_start,
+                expected_slot.expected_end,
+                expected_slot.slot_index,
+                expected_slot.date,
+                slot.schema_id
+            );
+            return Err(VialoError::AppError(
+                StatusCode::BAD_REQUEST,
+                "slot_expectation".to_string(),
+            ));
+        }
+        let Some(real_end) = slot.ends else {
+            // Swallowed by a spring-forward gap, see slots_from_schedule
+            return Err(VialoError::AppErrorWithDetails(
+                StatusCode::BAD_REQUEST,
+                "slot_nonexistent".to_string(),
+                json!(slot),
+            ));
+        };
+        if real_end < chrono::Utc::now() {
+            return Err(VialoError::AppErrorWithDetails(
+                StatusCode::BAD_REQUEST,
+                "slot_has_passed".to_string(),
+                json!(slot),
             ));
         }
 
