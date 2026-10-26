@@ -1,5 +1,6 @@
 -- Accounts, Groups and Credits
 CREATE EXTENSION citext;
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements; -- needs shared_preload_libraries, see vialo/compose.yaml
 
 --
 -- Internationalized strings
