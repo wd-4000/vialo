@@ -82,7 +82,7 @@ CREATE TABLE bookable_schema_assignments (
   begins date NOT NULL,
   asset_id int NOT NULL REFERENCES bookable_assets (id) ON DELETE CASCADE,
   schema_id int NOT NULL REFERENCES bookable_schemas (id) ON DELETE CASCADE,
-  PRIMARY KEY (begins, asset_id)
+  PRIMARY KEY (asset_id, begins) -- lookups are always "this asset's latest assignment as of a date"
 );
 
 CREATE OR REPLACE FUNCTION enforce_bsa_asset_type () RETURNS trigger AS $$
@@ -137,7 +137,7 @@ CREATE TABLE bookable_appointments (
   asset_id int NOT NULL REFERENCES bookable_assets (id),
   transaction_id uuid REFERENCES credit_ledger (id),
   account_id uuid REFERENCES accounts (id), -- NULL: held by the asset type's admins. No cascade here, we want to make sure appointments are refunded appropriately.
-  during tstzrange NOT NULL,
+  during tstzrange NOT NULL CHECK (NOT isempty(during)), -- empty ranges slip past the overlap constraint
   created_at timestamptz NOT NULL DEFAULT NOW(),
   activated timestamptz,
   cancelled_at timestamptz,
@@ -394,28 +394,23 @@ CREATE TRIGGER tg_bookable_event_appointments
 AFTER INSERT OR UPDATE OF cancelled_at ON bookable_appointments FOR EACH ROW
 EXECUTE FUNCTION bookable_event_trigger ();
 
-CREATE OR REPLACE FUNCTION slots_from_schedule (schedule time[], reference_date DATE) RETURNS table (id int, range tstzrange) LANGUAGE plpgsql AS $$
-    DECLARE
-    prel time;
-    el time;
-    i int = 0;
-    BEGIN
-        FOREACH el IN ARRAY schedule
-        LOOP
-            IF prel IS NOT NULL THEN
-
-                RETURN QUERY SELECT i as id, tstzrange(
-                    (reference_date + prel)::timestamptz,
-                    (reference_date + el)::timestamptz,
-                    '[)'
-                ) as range;
-                i:= i+ 1;
-            END IF;
-
-            prel := el;
-        END LOOP;
-    END
-    $$;
+-- Materialize slots in a given schedule
+--
+-- Wall-clock times inside a spring-forward DST->Summer Time transition resolve an hour later.
+-- That can push a slot's beginning past the next one. We clamp each slot's bounds to the one's
+-- after it, so slots never overlap. So slots that wind up nonexistent are skipped. Those keep their index though,
+-- so ids still line up with the schedule.
+--
+-- Plain SQL so the planner inlines it, STABLE since it reads the TimeZone setting.
+CREATE OR REPLACE FUNCTION slots_from_schedule (schedule time[], reference_date DATE) RETURNS table (id int, range tstzrange) LANGUAGE sql STABLE AS $$
+    SELECT k::int - 1, tstzrange(b, nb, '[)') FROM (
+        SELECT k, b, lead(b) OVER (ORDER BY k) AS nb FROM (
+            SELECT k, min((reference_date + t)::timestamptz) OVER (ORDER BY k DESC) AS b
+            FROM unnest(schedule) WITH ORDINALITY AS u(t, k)
+        ) s
+    ) s2
+    WHERE b < nb
+$$;
 
 CREATE FUNCTION account_bookable_perm_exists (acid uuid, at_id int, min_perm bookable_perm) RETURNS boolean LANGUAGE sql STABLE AS $$
     SELECT (
@@ -436,35 +431,40 @@ CREATE FUNCTION account_bookable_perm_exists (acid uuid, at_id int, min_perm boo
     )
 $$;
 
+-- Get the taken booking slots for a given set of assets and date range
+--
+-- Unavailable slot indices per day and asset: booked ones, plus the ones a DST
+-- gap swallows that day, so clients never have to work those out themselves.
+--
+-- Bookings are merged once per asset and day, then checked against each slot.
+-- schedule is joined rather than passed as a subquery so slots_from_schedule
+-- inlines.
+--
+-- jit is off since generic plans (sqlx prepares everything) can't see
+-- the dates, guess 1000 days and spend ~200ms compiling a ~3ms query.
 CREATE OR REPLACE FUNCTION get_taken_slots (
   p_asset_ids int[],
   p_start_date DATE,
   p_end_date DATE
-) RETURNS table (date date, assets jsonb) LANGUAGE plpgsql AS $$
-    BEGIN
-        RETURN QUERY (SELECT
-                j_series_data.j::date as date,
-            jsonb_object_agg(sq.asset_id, f.g) as assets
-        FROM
-            (
-                SELECT
-                    bsa.asset_id,
-                    bsa.schema_id,
-                    bsa.begins,
-                    LEAD(bsa.begins, 1) OVER (PARTITION BY bsa.asset_id ORDER BY bsa.begins) AS next_begins_date
-                FROM
-                    bookable_schema_assignments bsa
-                WHERE bsa.asset_id = ANY(p_asset_ids)
-            ) AS sq,
-        LATERAL (
-            SELECT *
-            FROM generate_series(
-                GREATEST(sq.begins, p_start_date),
-                LEAST(COALESCE(sq.next_begins_date, p_end_date), p_end_date) - interval '1 day',
-                '1 day'::interval
-            ) AS j
-        ) AS j_series_data,
-        LATERAL (SELECT ARRAY(select distinct u.id from (SELECT * FROM slots_from_schedule((SELECT schedule FROM bookable_schemas WHERE id = sq.schema_id), j_series_data.j::date)) u WHERE (SELECT range_agg(ba.during) FROM bookable_appointments ba WHERE ba.asset_id = sq.asset_id AND ba.cancelled_at IS NULL AND ba.during && tstzrange(j_series_data.j::date + '00:00'::time, j_series_data.j::date + '23:59'::time, '[]')) && u.range ORDER BY 1) as g) as f WHERE cardinality(f.g) > 0
-        GROUP BY j_series_data.j::date);
-    end;
-    $$;
+) RETURNS table (date date, assets jsonb) LANGUAGE sql STABLE SET jit = off AS $$
+    SELECT ad.day, jsonb_object_agg(ad.asset_id, u.ids)
+    FROM (
+        SELECT a.id AS asset_id, g::date AS day, cur.schema_id
+        FROM unnest(p_asset_ids) a(id)
+        CROSS JOIN generate_series(p_start_date, p_end_date, interval '1 day') g
+        JOIN LATERAL (SELECT schema_id FROM bookable_schema_assignments WHERE asset_id = a.id AND begins <= g::date ORDER BY begins DESC LIMIT 1) cur ON true
+    ) ad
+    JOIN bookable_schemas bs ON bs.id = ad.schema_id
+    CROSS JOIN LATERAL (
+        SELECT range_agg(ba.during) AS booked FROM bookable_appointments ba
+        WHERE ba.asset_id = ad.asset_id AND ba.cancelled_at IS NULL AND ba.during && tstzrange(ad.day::timestamptz, (ad.day + 1)::timestamptz)
+    ) b
+    CROSS JOIN LATERAL (
+        SELECT array_agg(i ORDER BY i) AS ids
+        FROM generate_series(0, cardinality(bs.schedule) - 2) i
+        LEFT JOIN slots_from_schedule(bs.schedule, ad.day) sl ON sl.id = i
+        WHERE sl.id IS NULL OR b.booked && sl.range
+    ) u
+    WHERE u.ids IS NOT NULL
+    GROUP BY ad.day
+$$;
