@@ -1,4 +1,5 @@
 FROM rust:1-slim
 RUN apt-get update -qq && apt-get install -y -qq libssl-dev pkg-config && rm -rf /var/lib/apt/lists/*
+RUN cargo install sqlx-cli --version 0.9.0 --locked --no-default-features --features postgres
 WORKDIR /workspace/vialo
 CMD ["sleep", "infinity"]
