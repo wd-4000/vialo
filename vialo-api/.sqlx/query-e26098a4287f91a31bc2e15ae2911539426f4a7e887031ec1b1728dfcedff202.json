@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO app_group_perms (app_id, group_id)\n        SELECT DISTINCT $1::int, group_id FROM unnest($2::uuid[]) AS p(group_id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e26098a4287f91a31bc2e15ae2911539426f4a7e887031ec1b1728dfcedff202"
+}

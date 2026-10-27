@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE apps a SET index = o.pos::int\n        FROM unnest($1::int[]) WITH ORDINALITY AS o(id, pos) WHERE a.id = o.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c6f951641284fa2f4b8cf063136dc1eb5aba456cb0efd86ccb124b4dd357f549"
+}

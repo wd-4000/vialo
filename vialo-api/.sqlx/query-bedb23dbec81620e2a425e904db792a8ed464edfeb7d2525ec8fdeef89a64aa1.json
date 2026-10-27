@@ -1,0 +1,91 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id, get_i18n_all_string_translations(a.label) AS label, a.url, a.icon, a.index, a.captive,\n        ARRAY(SELECT group_id FROM app_group_perms WHERE app_id = a.id) AS \"group_ids!: Vec<Option<Uuid>>\"\n        FROM apps a WHERE a.id = $1 AND (account_role_exists($2, 'settings_manager') OR EXISTS (\n            SELECT 1 FROM app_group_perms ag\n            LEFT JOIN account_group_memberships agm ON ag.group_id = agm.group_id AND agm.account_id = $2\n            WHERE ag.app_id = a.id AND (ag.group_id IS NULL OR agm.account_id IS NOT NULL)\n        ))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "apps",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "url",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "apps",
+            "name": "url"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "icon",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "apps",
+            "name": "icon"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "index",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "apps",
+            "name": "index"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "captive",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "apps",
+            "name": "captive"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "group_ids!: Vec<Option<Uuid>>",
+        "type_info": "UuidArray",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "bedb23dbec81620e2a425e904db792a8ed464edfeb7d2525ec8fdeef89a64aa1"
+}

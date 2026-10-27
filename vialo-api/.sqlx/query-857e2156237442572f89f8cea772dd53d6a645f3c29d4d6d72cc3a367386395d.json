@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO apps (label, url, icon, index, captive)\n        VALUES ($1, $2, $3, COALESCE($4, (SELECT COALESCE(MAX(index), 0) + 1 FROM apps)), $5) RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "apps",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Text",
+        "Int4",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "857e2156237442572f89f8cea772dd53d6a645f3c29d4d6d72cc3a367386395d"
+}

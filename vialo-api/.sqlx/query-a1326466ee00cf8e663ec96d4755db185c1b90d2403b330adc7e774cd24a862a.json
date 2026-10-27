@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id, get_i18n_string(a.label, $1) AS label, a.url, a.icon, a.index, a.captive\n    FROM apps a JOIN app_group_perms ag ON a.id = ag.app_id\n    LEFT JOIN account_group_memberships agm ON ag.group_id = agm.group_id AND agm.account_id = $2\n    WHERE ag.group_id IS NULL OR agm.account_id IS NOT NULL\n    GROUP BY a.id ORDER BY a.index, a.id ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "apps",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "url",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "apps",
+            "name": "url"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "icon",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "apps",
+            "name": "icon"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "index",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "apps",
+            "name": "index"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "captive",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "apps",
+            "name": "captive"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "a1326466ee00cf8e663ec96d4755db185c1b90d2403b330adc7e774cd24a862a"
+}

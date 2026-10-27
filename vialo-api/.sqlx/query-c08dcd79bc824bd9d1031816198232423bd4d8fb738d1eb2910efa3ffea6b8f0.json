@@ -25,6 +25,7 @@
                 "board_manager",
                 "home_manager",
                 "network_manager",
+                "settings_manager",
                 "history_viewer",
                 "health_viewer"
               ]
