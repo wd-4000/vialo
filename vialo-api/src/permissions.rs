@@ -46,6 +46,7 @@ pub enum AppRole {
     BoardManager,
     HomeManager,
     NetworkManager,
+    SettingsManager,
     HistoryViewer,
     HealthViewer,
 }

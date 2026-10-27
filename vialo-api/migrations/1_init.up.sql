@@ -266,6 +266,7 @@ CREATE TYPE app_role AS ENUM(
   'board_manager',
   'home_manager',
   'network_manager',
+  'settings_manager',
   'history_viewer',
   'health_viewer'
 );

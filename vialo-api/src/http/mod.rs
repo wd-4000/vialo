@@ -7,6 +7,7 @@ use axum::{
     routing::get,
 };
 use tower_http::trace::TraceLayer;
+mod apps;
 pub mod bookables;
 mod config;
 pub mod docs;
@@ -91,6 +92,7 @@ pub async fn create_router(app_state: Arc<AppState>) -> Router {
         .nest("/bookables", bookables::create_router(app_state.clone()))
         .nest("/posts", posts::create_router(app_state.clone()))
         .nest("/home", home::create_router(app_state.clone()))
+        .nest("/apps", apps::create_router(app_state.clone()))
         .route_layer(middleware::from_fn_with_state(
             app_state.clone(),
             rate_limit::authenticated,

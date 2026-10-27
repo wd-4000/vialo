@@ -13,10 +13,13 @@ use crate::printer::{self, models::JobData};
 
 use crate::{
     AppState, helpers,
-    http::util::{
-        JsonE, ListOptions, User, VialoError, clamp_pagination, grab_authd_conn_user, grab_trans,
-        is_unique_violation,
-        models::{AccountEmbed, AccountPersonEmbed, GroupEmbed, ProductEmbed, RoomEmbed},
+    http::{
+        apps::{App, fetch_apps},
+        util::{
+            JsonE, ListOptions, User, VialoError, clamp_pagination, grab_authd_conn_user,
+            grab_trans, is_unique_violation,
+            models::{AccountEmbed, AccountPersonEmbed, GroupEmbed, ProductEmbed, RoomEmbed},
+        },
     },
 };
 use crate::{helpers::PgDate, permissions::check_app_role};
@@ -28,13 +31,13 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::Query;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{Postgres, Transaction, query, query_scalar};
 use sqlx_conditional_queries::conditional_query_as;
 use std::{ops::DerefMut, sync::Arc};
 use tokio::try_join;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 // "SELECT cl.id, from_account, to_account, credits, cl.created_at,
@@ -177,11 +180,18 @@ pub struct AccountCapabilities {
     // These boolean flags represent "derived" access based on group memberships
     pub can_manage_some_bookables: bool,
     pub can_interact_with_some_boards: bool,
+    pub apps: Vec<App>,
+}
+
+#[derive(Deserialize, ToSchema, IntoParams)]
+pub struct PersonCapabilitiesQuery {
+    pub lang: Option<Vec<String>>,
 }
 
 async fn get_person_capabilities_impl(
     target_id: Uuid,
     data: Arc<AppState>,
+    opts: PersonCapabilitiesQuery,
 ) -> Result<impl IntoResponse, VialoError> {
     let roles_future = sqlx::query_scalar!(
         r#"SELECT agra.role as "role: AppRole"
@@ -218,13 +228,19 @@ async fn get_person_capabilities_impl(
     )
     .fetch_one(&data.db);
 
-    let (roles, can_manage_some_bookables, can_interact_with_some_boards) =
-        tokio::try_join!(roles_future, bookable_future, board_future)?;
+    let langs = opts
+        .lang
+        .unwrap_or(vec![String::from("en"), String::from("de")]);
+    let apps_future = fetch_apps(&data.db, Some(target_id), &langs, None);
+
+    let (roles, can_manage_some_bookables, can_interact_with_some_boards, apps) =
+        tokio::try_join!(roles_future, bookable_future, board_future, apps_future)?;
 
     Ok(Json(AccountCapabilities {
         roles,
         can_manage_some_bookables,
         can_interact_with_some_boards,
+        apps,
     }))
 }
 
@@ -232,8 +248,9 @@ async fn get_person_capabilities_impl(
 pub async fn get_person_capabilities_me(
     Extension(User { id, .. }): Extension<User>,
     State(data): State<Arc<AppState>>,
+    Query(opts): Query<PersonCapabilitiesQuery>,
 ) -> Result<impl IntoResponse, VialoError> {
-    get_person_capabilities_impl(id, data).await
+    get_person_capabilities_impl(id, data, opts).await
 }
 
 #[utoipa::path(get, path = "/people/{id}/groups", params(ListOptions), responses((status = 200, description = "OK", body=Vec<GroupStubListModelWithRole>)))]
