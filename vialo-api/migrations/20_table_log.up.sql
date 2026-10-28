@@ -233,7 +233,7 @@ create trigger tg_table_log
 after insert
 or
 update
-or delete on account_group_memberships for each row
+or delete on account_group_memberships_manual for each row
 execute FUNCTION table_log_trigger ('uuid', 'group_id');
 
 create trigger tg_table_log
@@ -303,6 +303,7 @@ declare
     'subsystem_jobs',
     'health_events',
     'accounts', -- derived from accounts_people/account_groups
+    'account_group_memberships_derived', -- derived from account_group_source_rules
     'i18n_index', -- autoincrement
     'import_refs'
   ];

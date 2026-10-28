@@ -395,7 +395,7 @@ async fn main() {
             .unwrap();
 
             sqlx::query!(
-                "insert into account_group_memberships (group_id, account_id, role) VALUES ($1, $2, 'manager');", group_id, uuid
+                "insert into account_group_memberships_manual (group_id, account_id, role) VALUES ($1, $2, 'manager');", group_id, uuid
             )
             .execute(&mut *trans)
             .await
@@ -508,6 +508,15 @@ async fn main() {
             "bookable_connectors",
             shutdown_rx.clone(),
             move |shutdown| vialo_api::bookables::main(asp.clone(), shutdown),
+        ))
+    }));
+
+    subsystems.push(("memberships", {
+        let asp = asp.clone();
+        tokio::spawn(run_subsystem(
+            "memberships",
+            shutdown_rx.clone(),
+            move |shutdown| vialo_api::memberships::main(asp.clone(), shutdown),
         ))
     }));
 

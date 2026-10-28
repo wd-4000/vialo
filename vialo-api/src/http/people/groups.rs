@@ -1,10 +1,10 @@
 use serde_with::{NoneAsEmptyString, serde_as};
-use sqlx::{PgConnection, PgExecutor};
+use sqlx::{PgConnection, PgExecutor, Postgres, Transaction};
 use utoipa::ToSchema;
 
 use super::{
-    models::{GroupListModel, GroupMemberModel},
-    schemas::GroupFilterOptions,
+    models::{GroupListModel, GroupMemberModel, GroupSourceRule, GroupSourceType},
+    schemas::{GroupFilterOptions, GroupMemberFilterOptions},
 };
 use crate::{
     AppState,
@@ -76,13 +76,23 @@ pub async fn list_groups(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/people/groups/{group_id}/members", params(GroupFilterOptions), responses((status = 200, description = "OK", body=Vec<GroupMemberModel>)))]
+#[utoipa::path(get, path = "/people/groups/{group_id}/members", params(GroupMemberFilterOptions), responses((status = 200, description = "OK", body=Vec<GroupMemberModel>)))]
 pub async fn list_group_members(
     Path(group_id): Path<Uuid>,
-    Query(opts): Query<GroupFilterOptions>,
+    Query(opts): Query<GroupMemberFilterOptions>,
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    if opts.include_source {
+        check_manager_of_group_or_app_role(
+            user.clone(),
+            group_id,
+            AppRole::AccountManager,
+            &data.db,
+        )
+        .await?;
+    }
+
     // Private group members are only visible to group members themselves or AccountManagers.
     if check_app_role(user.clone(), AppRole::AccountManager, &data.db)
         .await
@@ -117,13 +127,18 @@ pub async fn list_group_members(
             a.id as "id!",
             COALESCE(a.full_name, a.label, i.full_name) AS "full_name?",
             CASE WHEN r.id IS NOT NULL THEN jsonb_build_object('label', r.label, 'id', r.id) ELSE NULL END AS "room: RoomEmbed",
-            agm.role as "role: GroupRole"
+            agm.role as "role!: GroupRole",
+            {#source}
         FROM
             accounts_people a
             FULL JOIN identities i ON i.id = a.auth_id
             LEFT JOIN res_leases l ON a.id = l.tenant_id
             LEFT JOIN res_rooms r ON l.room_id = r.id JOIN account_group_memberships agm ON a.id = agm.account_id WHERE agm.group_id = {group_id} {#wh_search} ORDER BY (a.id IS NULL) DESC, (i.id IS NULL) DESC, r.label DESC LIMIT {limit} OFFSET {offset}"#,
-            #wh_search = match (opts.search){
+            #source = match opts.include_source {
+                true => r#"(SELECT d.source FROM account_group_memberships_derived d WHERE d.account_id = agm.account_id AND d.group_id = agm.group_id) AS "source: GroupSourceType""#,
+                false => r#"NULL::group_source_type AS "source: GroupSourceType""#,
+            },
+            #wh_search = match opts.search {
                 Some(src) => "AND COALESCE(a.full_name, a.label) ILIKE '%' || {src} || '%' OR r.label ILIKE '%' || {src} || '%'",
                 _ => ""
             }
@@ -242,7 +257,7 @@ pub async fn get_group(
             r#"SELECT ag.id, ag.label, ag.email, ag.icon, ag.public, get_i18n_all_string_translations(ag.description_i18n) AS description, COALESCE(
                 array_agg(agra.role) FILTER (WHERE agra.role IS NOT NULL),
                 '{}'::app_role[]
-            ) as "app_roles!: Vec<AppRole>" FROM account_groups ag LEFT JOIN account_group_app_roles agra ON ag.id = agra.group_id WHERE id = $1 GROUP BY ag.id"#,
+            ) as "app_roles!: Vec<AppRole>", get_group_source_rules(ag.id) AS "source_rules!: Vec<GroupSourceRule>" FROM account_groups ag LEFT JOIN account_group_app_roles agra ON ag.id = agra.group_id WHERE id = $1 GROUP BY ag.id"#,
             id
         )
         .fetch_one(&data.db)
@@ -257,7 +272,7 @@ pub async fn get_group(
             r#"SELECT ag.id, ag.label, ag.email, ag.icon, ag.public, get_i18n_string(ag.description_i18n, $2) AS description, COALESCE(
                 array_agg(agra.role) FILTER (WHERE agra.role IS NOT NULL),
                 '{}'::app_role[]
-            ) as "app_roles!: Vec<AppRole>" FROM account_groups ag LEFT JOIN account_group_app_roles agra ON ag.id = agra.group_id WHERE id = $1 GROUP BY ag.id"#,
+            ) as "app_roles!: Vec<AppRole>", get_group_source_rules(ag.id) AS "source_rules!: Vec<GroupSourceRule>" FROM account_groups ag LEFT JOIN account_group_app_roles agra ON ag.id = agra.group_id WHERE id = $1 GROUP BY ag.id"#,
             id,
             &langs
         )
@@ -280,13 +295,23 @@ pub async fn delete_account(
         .await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
-    sqlx::query!(
-        "DELETE FROM account_group_memberships WHERE group_id = $1 AND account_id = $2",
+    let rows_affected = sqlx::query!(
+        "DELETE FROM account_group_memberships_manual WHERE group_id = $1 AND account_id = $2",
         group_id,
         account_id
     )
-    .fetch_one(&mut *conn)
-    .await?;
+    .execute(&mut *conn)
+    .await?
+    .rows_affected();
+
+    if rows_affected == 0 {
+        return Err(
+            match is_derived_member(&mut *conn, group_id, account_id).await? {
+                true => VialoError::AppError(StatusCode::CONFLICT, "membership_derived".into()),
+                false => VialoError::NotFound(),
+            },
+        );
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -309,7 +334,7 @@ pub async fn add_account(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     sqlx::query!(
-        "INSERT INTO account_group_memberships (group_id, account_id, role) VALUES ($1, $2, $3)",
+        "INSERT INTO account_group_memberships_manual (group_id, account_id, role) VALUES ($1, $2, $3)",
         group_id,
         body.account_id,
         body.role.unwrap_or(GroupRole::Member) as GroupRole
@@ -332,6 +357,8 @@ pub struct CreateGroupSchema {
     pub icon: Option<String>,
     pub public: bool,
     pub app_roles: Option<HashSet<AppRole>>,
+    /// NULL = leave unchanged
+    pub source_rules: Option<Vec<GroupSourceRule>>,
     pub description: Option<I18nMap>,
 }
 
@@ -352,17 +379,20 @@ pub async fn post_group(
     Ok(Json(new_group))
 }
 
-/// Inserts a group, without app roles. The caller checks permissions.
+/// Inserts a group including app roles & rules. The caller checks permissions.
 pub async fn insert_group(
-    db: &mut PgConnection,
+    trans: &mut Transaction<'_, Postgres>,
     body: CreateGroupSchema,
 ) -> Result<GroupListModel, VialoError> {
-    let processed_i18n_fields =
-        insert_i18n_strings(&mut *db, vec![("description", i18n_map(body.description))]).await?;
+    let processed_i18n_fields = insert_i18n_strings(
+        &mut *trans,
+        vec![("description", i18n_map(body.description))],
+    )
+    .await?;
 
     let langs = vec![String::from("en"), String::from("de")];
 
-    sqlx::query_as!(
+    let new_group = sqlx::query_as!(
         GroupListModel,
         "INSERT INTO account_groups (label,email,public,icon,description_i18n) VALUES ($1,$2,$3,$4,$5) returning id, label, email, icon, public, get_i18n_string(description_i18n, $6) AS description",
         body.label,
@@ -372,7 +402,7 @@ pub async fn insert_group(
         processed_i18n_fields.get("description"),
         &langs
     )
-    .fetch_one(&mut *db)
+    .fetch_one(&mut **trans)
     .await
     .map_err(|e| {
         if is_unique_violation(&e) {
@@ -380,7 +410,17 @@ pub async fn insert_group(
         } else {
             e.into()
         }
-    })
+    })?;
+
+    if let Some(app_roles) = body.app_roles {
+        replace_app_roles(&mut *trans, new_group.id, app_roles).await?;
+    }
+
+    if let Some(source_rules) = body.source_rules {
+        replace_source_rules(&mut *trans, new_group.id, source_rules).await?;
+    }
+
+    Ok(new_group)
 }
 
 async fn current_app_roles(
@@ -427,6 +467,76 @@ pub async fn replace_app_roles(
         .execute(&mut *db)
         .await?;
     }
+
+    Ok(())
+}
+
+/// Sets a group's membership rules to exactly `source_rules`. The caller checks permissions.
+pub async fn replace_source_rules(
+    db: &mut PgConnection,
+    group_id: Uuid,
+    source_rules: Vec<GroupSourceRule>,
+) -> Result<(), VialoError> {
+    let mut source_groups = Vec::new();
+    for source_rule in &source_rules {
+        match source_rule {
+            GroupSourceRule::Floor { .. } => {}
+            GroupSourceRule::GroupId { group_id, .. } => source_groups.push(*group_id),
+            GroupSourceRule::GroupType { group_type, .. } => {
+                if *group_type != GroupSourceType::Floor {
+                    return Err(VialoError::AppError(
+                        StatusCode::BAD_REQUEST,
+                        "nested_rule".into(),
+                    ));
+                }
+            }
+        }
+    }
+
+    // Rules only go one level deep: no group_id rules reading groups that have group_id/group_type rules themselves
+    if !source_groups.is_empty() {
+        let nested = sqlx::query_scalar!(
+            r#"SELECT (
+                $1::uuid = ANY($2::uuid[])
+                OR EXISTS (SELECT 1 FROM account_group_source_rules WHERE type != 'floor' AND group_id = ANY($2))
+                OR EXISTS (SELECT 1 FROM account_group_source_rules WHERE source_group_id = $1)
+            ) AS "nested!""#,
+            group_id,
+            &source_groups
+        )
+        .fetch_one(&mut *db)
+        .await?;
+
+        if nested {
+            return Err(VialoError::AppError(
+                StatusCode::BAD_REQUEST,
+                "nested_rule".into(),
+            ));
+        }
+    }
+
+    sqlx::query!(
+        "DELETE FROM account_group_source_rules WHERE group_id = $1",
+        group_id
+    )
+    .execute(&mut *db)
+    .await?;
+
+    sqlx::query!(
+        r#"INSERT INTO account_group_source_rules (group_id, type, floor, source_group_id, source_group_type, source_role)
+        SELECT $1, r.type, r.floor, r.group_id, r.group_type, r.role
+        FROM jsonb_to_recordset($2) AS r(type group_source_type, floor int, group_id uuid, group_type group_source_type, role group_role)"#,
+        group_id,
+        sqlx::types::Json(&source_rules) as _
+    )
+    .execute(&mut *db)
+    .await
+    .map_err(|e| match e.as_database_error() {
+        Some(d) if d.is_foreign_key_violation() => {
+            VialoError::AppError(StatusCode::BAD_REQUEST, "unknown_source_group".into())
+        }
+        _ => e.into(),
+    })?;
 
     Ok(())
 }
@@ -501,12 +611,29 @@ pub async fn put_group(
         }
     })?;
 
-    // We want to change app roles. Group managers may edit their group, but not what it grants.
+    // Group managers may edit their group, but not what it grants (something something privilege escalation)
+
+    // We want to change app roles
     if let Some(new_app_roles) = body.app_roles
         && current_app_roles(&mut trans, group_id).await? != new_app_roles
     {
         check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
         replace_app_roles(&mut trans, group_id, new_app_roles).await?;
+    }
+
+    // We want to change the rules (hell yes)
+    if let Some(new_source_rules) = body.source_rules {
+        let current_source_rules = sqlx::query_scalar!(
+            r#"SELECT get_group_source_rules($1) AS "source_rules!: Vec<GroupSourceRule>""#,
+            group_id
+        )
+        .fetch_one(&mut *trans)
+        .await?;
+
+        if current_source_rules != new_source_rules {
+            check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
+            replace_source_rules(&mut trans, group_id, new_source_rules).await?;
+        }
     }
 
     trans.commit().await?;
@@ -530,14 +657,50 @@ pub async fn patch_account(
         .await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
-    sqlx::query!(
-        "UPDATE account_group_memberships SET role = $3 WHERE group_id = $1 AND account_id = $2",
+    // Derived membership already makes them a member, so drop the manual override
+    if body.role == GroupRole::Member && is_derived_member(&mut *conn, group_id, account_id).await?
+    {
+        sqlx::query!(
+            "DELETE FROM account_group_memberships_manual WHERE group_id = $1 AND account_id = $2",
+            group_id,
+            account_id
+        )
+        .execute(&mut *conn)
+        .await?;
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
+    // Upsert, as derived members have no manual row yet
+    let rows_affected = sqlx::query!(
+        "INSERT INTO account_group_memberships_manual (group_id, account_id, role)
+         SELECT $1, $2, $3 WHERE EXISTS (SELECT 1 FROM account_group_memberships WHERE group_id = $1 AND account_id = $2)
+         ON CONFLICT (account_id, group_id) DO UPDATE SET role = EXCLUDED.role",
         group_id,
         account_id,
         body.role as GroupRole
     )
-    .fetch_one(&mut *conn)
-    .await?;
+    .execute(&mut *conn)
+    .await?
+    .rows_affected();
+
+    if rows_affected == 0 {
+        return Err(VialoError::NotFound());
+    }
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Whether the membership comes from an account_group_source_rules rule
+async fn is_derived_member<'c, T: PgExecutor<'c>>(
+    db: T,
+    group_id: Uuid,
+    account_id: Uuid,
+) -> Result<bool, VialoError> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM account_group_memberships_derived WHERE group_id = $1 AND account_id = $2) AS "derived!""#,
+        group_id,
+        account_id
+    )
+    .fetch_one(db)
+    .await?)
 }

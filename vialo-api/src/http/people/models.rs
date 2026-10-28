@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::{
     helpers::{I18nMap, PgDate},
     http::util::models::{AccountEmbed, AccountPersonEmbed, ProductEmbed, RoomEmbed},
+    impl_jsonb_embed,
     permissions::{AppRole, GroupRole},
 };
 
@@ -17,7 +18,40 @@ pub struct GroupMemberModel {
     pub full_name: Option<String>,
     pub room: Option<RoomEmbed>,
     pub role: GroupRole,
+    /// Rule the membership comes from. NULL = manual only, or not requested.
+    pub source: Option<GroupSourceType>,
 }
+
+#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
+#[sqlx(type_name = "group_source_type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum GroupSourceType {
+    Floor,
+    GroupId,
+    GroupType,
+}
+
+/// Rule that puts people into a group automatically
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum GroupSourceRule {
+    /// Current tenants of a floor
+    Floor { floor: i32 },
+    /// Members of another group
+    GroupId {
+        group_id: Uuid,
+        /// NULL = any role
+        role: Option<GroupRole>,
+    },
+    /// Members of every group that has a rule of this type. Only `floor` for now.
+    GroupType {
+        group_type: GroupSourceType,
+        /// NULL = any role
+        role: Option<GroupRole>,
+    },
+}
+
+impl_jsonb_embed!(GroupSourceRule);
 
 #[derive(Serialize, Debug, ToSchema)]
 pub struct CurrentRoomOccupantsViewModel {
@@ -55,6 +89,7 @@ pub struct GroupGetModel {
     pub icon: Option<String>,
     pub public: bool,
     pub app_roles: Vec<AppRole>,
+    pub source_rules: Vec<GroupSourceRule>,
     pub description: Option<String>,
 }
 
@@ -67,6 +102,7 @@ pub struct GroupGetModelAllLanguages {
     pub icon: Option<String>,
     pub public: bool,
     pub app_roles: Vec<AppRole>,
+    pub source_rules: Vec<GroupSourceRule>,
     #[schema(value_type = Option<I18nMap>)]
     pub description: Option<JsonValue>,
 }

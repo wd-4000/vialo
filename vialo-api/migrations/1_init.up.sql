@@ -211,12 +211,83 @@ CREATE TABLE account_groups (
 
 CREATE TYPE group_role AS ENUM('member', 'manager');
 
-CREATE TABLE account_group_memberships (
+CREATE TABLE account_group_memberships_manual (
   account_id uuid NOT NULL REFERENCES accounts_people (id) ON DELETE CASCADE,
   group_id uuid NOT NULL REFERENCES account_groups (id),
   role group_role NOT NULL,
   PRIMARY KEY (account_id, group_id)
 );
+
+CREATE INDEX account_group_memberships_manual_group_id_idx ON account_group_memberships_manual (group_id);
+
+CREATE TYPE group_source_type AS ENUM('floor', 'group_id', 'group_type');
+
+-- Rules that put people into a group automatically
+CREATE TABLE account_group_source_rules (
+  id int PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  group_id uuid NOT NULL REFERENCES account_groups (id) ON DELETE CASCADE,
+  type group_source_type NOT NULL,
+  floor int, -- type=floor: current tenants of this floor
+  source_group_id uuid REFERENCES account_groups (id) ON DELETE CASCADE, -- type=group_id: members of this group
+  source_group_type group_source_type, -- type=group_type: members of every group that has a rule of this type
+  source_role group_role, -- type=group_id/group_type: only members with this role in the source group. NULL=any role
+  CHECK ((type = 'floor') = (floor IS NOT NULL)),
+  CHECK ((type = 'group_id') = (source_group_id IS NOT NULL)),
+  CHECK ((type = 'group_type') = (source_group_type IS NOT NULL)),
+  CHECK (type != 'floor' OR source_role IS NULL),
+  CHECK (source_group_type = 'floor') -- keep rules one level deep
+);
+
+CREATE INDEX account_group_source_rules_group_id_idx ON account_group_source_rules (group_id);
+
+-- A group's rules in the API shape (GroupSourceRule)
+CREATE OR REPLACE FUNCTION get_group_source_rules (gid uuid) RETURNS jsonb[] LANGUAGE sql STABLE AS $$
+    SELECT COALESCE(array_agg(jsonb_strip_nulls(jsonb_build_object(
+        'type', type,
+        'floor', floor,
+        'group_id', source_group_id,
+        'group_type', source_group_type,
+        'role', source_role
+    )) ORDER BY id), '{}')
+    FROM account_group_source_rules
+    WHERE group_id = gid
+$$;
+
+-- Materialized from account_group_source_rules by refresh_derived_memberships()
+CREATE TABLE account_group_memberships_derived (
+  account_id uuid NOT NULL REFERENCES accounts_people (id) ON DELETE CASCADE,
+  group_id uuid NOT NULL REFERENCES account_groups (id) ON DELETE CASCADE,
+  source group_source_type NOT NULL, -- Type of the rule that produced this row; earliest enum value wins if several apply
+  PRIMARY KEY (account_id, group_id)
+);
+
+CREATE INDEX account_group_memberships_derived_group_id_idx ON account_group_memberships_derived (group_id);
+
+-- Manual rows take precedence over derived ones
+CREATE VIEW account_group_memberships AS
+SELECT
+  account_id,
+  group_id,
+  role
+FROM
+  account_group_memberships_manual
+UNION ALL
+SELECT
+  d.account_id,
+  d.group_id,
+  'member'::group_role
+FROM
+  account_group_memberships_derived d
+WHERE
+  NOT EXISTS (
+    SELECT
+      1
+    FROM
+      account_group_memberships_manual m
+    WHERE
+      m.account_id = d.account_id
+      AND m.group_id = d.group_id
+  );
 
 CREATE OR REPLACE FUNCTION enforce_account_class () RETURNS TRIGGER AS $$
 DECLARE
@@ -306,6 +377,85 @@ CREATE TABLE res_leases (
   begins date NOT NULL,
   ends date NOT NULL
 );
+
+CREATE INDEX res_leases_room_id_idx ON res_leases (room_id);
+
+CREATE INDEX res_rooms_floor_idx ON res_rooms (floor);
+
+-- Rebuild account_group_memberships_derived
+-- Run by triggers, but because of leases beginning/expiring we also need a scheduled task
+CREATE OR REPLACE FUNCTION refresh_derived_memberships () RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM pg_advisory_xact_lock(hashtext('refresh_derived_memberships'));
+
+    WITH floor_level AS (
+        SELECT l.tenant_id AS account_id, s.group_id
+        FROM account_group_source_rules s
+        JOIN res_rooms r ON r.floor = s.floor
+        JOIN res_leases l ON l.room_id = r.id
+        WHERE s.type = 'floor' AND l.begins <= CURRENT_DATE AND l.ends >= CURRENT_DATE
+    ),
+    base AS (
+        SELECT account_id, group_id, role FROM account_group_memberships_manual
+        UNION ALL
+        SELECT account_id, group_id, 'member'::group_role FROM floor_level
+    ),
+    -- (target group, rule type, role filter, group to read members from) for each group_id/group_type rule
+    rule_sources AS (
+        SELECT s.group_id, s.type, s.source_role, s.source_group_id AS from_group
+        FROM account_group_source_rules s
+        WHERE s.type = 'group_id'
+        UNION
+        SELECT s.group_id, s.type, s.source_role, s2.group_id
+        FROM account_group_source_rules s
+        JOIN account_group_source_rules s2 ON s2.type = s.source_group_type
+        WHERE s.type = 'group_type'
+    ),
+    wanted AS (
+        SELECT account_id, group_id, min(source) AS source
+        FROM (
+            SELECT account_id, group_id, 'floor'::group_source_type AS source FROM floor_level
+            UNION ALL
+            SELECT b.account_id, rs.group_id, rs.type
+            FROM rule_sources rs
+            JOIN base b ON b.group_id = rs.from_group
+            WHERE rs.source_role IS NULL OR b.role = rs.source_role
+        ) w
+        GROUP BY account_id, group_id
+    ),
+    del AS (
+        DELETE FROM account_group_memberships_derived d
+        WHERE NOT EXISTS (SELECT 1 FROM wanted w WHERE w.account_id = d.account_id AND w.group_id = d.group_id)
+    )
+    INSERT INTO account_group_memberships_derived AS d (account_id, group_id, source)
+    SELECT account_id, group_id, source FROM wanted
+    ON CONFLICT (account_id, group_id) DO UPDATE SET source = EXCLUDED.source
+    WHERE d.source IS DISTINCT FROM EXCLUDED.source;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION refresh_derived_memberships_on_change () RETURNS TRIGGER AS $$
+BEGIN
+    PERFORM refresh_derived_memberships();
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tg_refresh_derived_memberships
+AFTER INSERT OR UPDATE OR DELETE ON res_leases FOR EACH STATEMENT
+EXECUTE FUNCTION refresh_derived_memberships_on_change ();
+
+CREATE TRIGGER tg_refresh_derived_memberships
+AFTER INSERT OR UPDATE OR DELETE ON res_rooms FOR EACH STATEMENT
+EXECUTE FUNCTION refresh_derived_memberships_on_change ();
+
+CREATE TRIGGER tg_refresh_derived_memberships
+AFTER INSERT OR UPDATE OR DELETE ON account_group_source_rules FOR EACH STATEMENT
+EXECUTE FUNCTION refresh_derived_memberships_on_change ();
+
+CREATE TRIGGER tg_refresh_derived_memberships
+AFTER INSERT OR UPDATE OR DELETE ON account_group_memberships_manual FOR EACH STATEMENT
+EXECUTE FUNCTION refresh_derived_memberships_on_change ();
 
 CREATE VIEW current_room_occupants AS
 SELECT

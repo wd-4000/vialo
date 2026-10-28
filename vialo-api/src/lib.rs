@@ -6,6 +6,7 @@ pub mod health;
 pub mod helpers;
 pub mod hooks;
 pub mod http;
+pub mod memberships;
 pub mod permissions;
 pub mod ws;
 

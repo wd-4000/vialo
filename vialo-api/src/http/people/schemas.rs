@@ -1,5 +1,5 @@
 use crate::{
-    helpers::PgDate,
+    helpers::{PgDate, no},
     http::util::models::{AccountPersonEmbed, IdOrMeOrAllQuery},
 };
 use serde::{Deserialize, Serialize};
@@ -30,6 +30,15 @@ pub struct GroupFilterOptions {
     pub search: Option<String>,
     pub page: Option<i64>,
     pub limit: Option<i64>,
+}
+
+#[derive(Deserialize, Debug, Default, IntoParams)]
+pub struct GroupMemberFilterOptions {
+    pub search: Option<String>,
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+    #[serde(default = "no")]
+    pub include_source: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]

@@ -5,7 +5,7 @@ use uuid::Uuid;
 use super::{Importer, Ref, api_error};
 use crate::{
     http::people::{
-        groups::{CreateGroupSchema, insert_group, replace_app_roles},
+        groups::{CreateGroupSchema, insert_group},
         handlers::insert_person,
         schemas::{CreateRoomSchema, CreateUserSchema},
     },
@@ -28,18 +28,22 @@ impl Importer {
 
         // A failed insert would abort the whole import
         if let Some(email) = &p.person.email
-            && let Some(holder) = sqlx::query_scalar!(
-                "SELECT id FROM accounts_people WHERE email = $1",
-                email
-            )
-            .fetch_optional(self.conn())
-            .await?
+            && let Some(holder) =
+                sqlx::query_scalar!("SELECT id FROM accounts_people WHERE email = $1", email)
+                    .fetch_optional(self.conn())
+                    .await?
         {
-            self.warn(Some(r), format!("email {email} already taken by {holder}, imported without"));
+            self.warn(
+                Some(r),
+                format!("email {email} already taken by {holder}, imported without"),
+            );
             p.person.email = None;
         }
 
-        let id = insert_person(self.trans(), p.person).await.map_err(api_error)?.id;
+        let id = insert_person(self.trans(), p.person)
+            .await
+            .map_err(api_error)?
+            .id;
 
         sqlx::query!(
             "UPDATE accounts_people SET (membership_start, manually_suspended) = ($2, $3) WHERE id = $1",
@@ -69,17 +73,13 @@ impl Importer {
         Ok(id)
     }
 
-    /// Imports a group, unlike the API's POST including its app roles.
-    pub async fn group(&mut self, r: &Ref, mut g: CreateGroupSchema) -> Result<Uuid> {
+    /// Imports a group, including its app roles
+    pub async fn group(&mut self, r: &Ref, g: CreateGroupSchema) -> Result<Uuid> {
         if let Some(id) = self.existing(r, "group").await? {
             return Ok(id);
         }
 
-        let app_roles = g.app_roles.take();
-        let id = insert_group(self.conn(), g).await.map_err(api_error)?.id;
-        if let Some(app_roles) = app_roles {
-            replace_app_roles(self.conn(), id, app_roles).await.map_err(api_error)?;
-        }
+        let id = insert_group(self.trans(), g).await.map_err(api_error)?.id;
 
         self.remember(Some(r), "group", id).await?;
         Ok(id)
@@ -87,7 +87,7 @@ impl Importer {
 
     pub async fn membership(&mut self, group: Uuid, account: Uuid, role: GroupRole) -> Result<()> {
         sqlx::query!(
-            "INSERT INTO account_group_memberships (group_id, account_id, role) VALUES ($1, $2, $3)
+            "INSERT INTO account_group_memberships_manual (group_id, account_id, role) VALUES ($1, $2, $3)
              ON CONFLICT (account_id, group_id) DO NOTHING",
             group,
             account,

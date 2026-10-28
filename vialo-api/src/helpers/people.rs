@@ -141,7 +141,7 @@ pub async fn update_identity(
 
             // Add the account to the group
             sqlx::query!(
-                    "insert into account_group_memberships (group_id, account_id, role) VALUES ($1, $2, 'manager');",
+                    "insert into account_group_memberships_manual (group_id, account_id, role) VALUES ($1, $2, 'manager');",
                     group_id, account_id
                 ).execute(&mut **trans).await?;
 

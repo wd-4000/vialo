@@ -35,6 +35,16 @@ pub enum LangVariant<A, L> {
     Localized(L),
 }
 
+/// Yes!!
+pub fn yes() -> bool {
+    true
+}
+
+/// No.
+pub fn no() -> bool {
+    false
+}
+
 pub async fn grab_authd_conn_subsystem(
     db: &PgPool,
     subsystem_name: &str,

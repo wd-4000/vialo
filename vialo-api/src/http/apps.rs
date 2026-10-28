@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use crate::{
     AppState,
-    helpers::{I18nMap, LangVariant, ResponseVariant},
+    helpers::{I18nMap, LangVariant, ResponseVariant, no},
     http::util::{
         self, JsonE, User, VialoError, clamp_pagination, get_i18n_arg_arrays, grab_authd_conn_user,
         grab_trans, insert_i18n_strings,
@@ -101,10 +101,6 @@ pub struct AppIdModel {
 #[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct AppLangOptions {
     pub lang: Option<Vec<String>>,
-}
-
-fn no() -> bool {
-    false
 }
 
 #[derive(Deserialize, Debug, Default, IntoParams)]
