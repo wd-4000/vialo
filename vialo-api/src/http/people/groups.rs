@@ -347,10 +347,10 @@ pub async fn add_account(
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct CreateGroupSchema {
+pub struct GroupSchema {
     #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub label: String,
-    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde_as(deserialize_as = "NoneAsEmptyString")]
     #[schema(format = Email)]
     pub email: Option<String>,
     #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_64")]
@@ -362,11 +362,11 @@ pub struct CreateGroupSchema {
     pub description: Option<I18nMap>,
 }
 
-#[utoipa::path(post, path = "/people/groups", request_body=CreateGroupSchema, responses((status = 201, description = "Created", body=GroupListModel)))]
+#[utoipa::path(post, path = "/people/groups", request_body=GroupSchema, responses((status = 201, description = "Created", body=GroupListModel)))]
 pub async fn post_group(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
-    JsonE(body): JsonE<CreateGroupSchema>,
+    JsonE(body): JsonE<GroupSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
     check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
@@ -382,7 +382,7 @@ pub async fn post_group(
 /// Inserts a group including app roles & rules. The caller checks permissions.
 pub async fn insert_group(
     trans: &mut Transaction<'_, Postgres>,
-    body: CreateGroupSchema,
+    body: GroupSchema,
 ) -> Result<GroupListModel, VialoError> {
     let processed_i18n_fields = insert_i18n_strings(
         &mut *trans,
@@ -572,12 +572,12 @@ pub async fn delete_group(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(put, path = "/people/groups/{id}", request_body=CreateGroupSchema, responses((status = 204, description = "Updated")))] // no body
+#[utoipa::path(put, path = "/people/groups/{id}", request_body=GroupSchema, responses((status = 204, description = "Updated")))] // no body
 pub async fn put_group(
     Path(group_id): Path<Uuid>,
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
-    JsonE(body): JsonE<CreateGroupSchema>,
+    JsonE(body): JsonE<GroupSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
     check_manager_of_group_or_app_role(user.clone(), group_id, AppRole::AccountManager, &data.db)
         .await?;

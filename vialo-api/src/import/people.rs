@@ -5,7 +5,7 @@ use uuid::Uuid;
 use super::{Importer, Ref, api_error};
 use crate::{
     http::people::{
-        groups::{CreateGroupSchema, insert_group},
+        groups::{GroupSchema, insert_group},
         handlers::insert_person,
         schemas::{CreateRoomSchema, CreateUserSchema},
     },
@@ -74,7 +74,7 @@ impl Importer {
     }
 
     /// Imports a group, including its app roles
-    pub async fn group(&mut self, r: &Ref, g: CreateGroupSchema) -> Result<Uuid> {
+    pub async fn group(&mut self, r: &Ref, g: GroupSchema) -> Result<Uuid> {
         if let Some(id) = self.existing(r, "group").await? {
             return Ok(id);
         }
