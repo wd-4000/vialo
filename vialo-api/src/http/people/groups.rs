@@ -4,7 +4,7 @@ use utoipa::ToSchema;
 
 use super::{
     models::{GroupListModel, GroupMemberModel, GroupSourceRule, GroupSourceType},
-    schemas::{GroupFilterOptions, GroupMemberFilterOptions},
+    schemas::{GroupFilterOptions, GroupGetOptions, GroupMemberFilterOptions},
 };
 use crate::{
     AppState,
@@ -50,6 +50,13 @@ pub async fn list_groups(
     let langs = opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
+
+    let public_only = if opts.public.is_some_and(|p| p) {
+        true
+    } else {
+        check_app_role(user, crate::permissions::AppRole::AccountManager, &data.db).await?;
+        false
+    };
     // This might be red in rust-analyzer. Ignore this.
     let record = conditional_query_as!(
         GroupListModel,
@@ -61,10 +68,10 @@ pub async fn list_groups(
             public,
             get_i18n_string(description_i18n, {langs:Vec<String>}) AS description
         FROM account_groups WHERE TRUE {#public_only} {#wh_search} LIMIT {limit} OFFSET {offset}",
-        #public_only = match (check_app_role(user, crate::permissions::AppRole::AccountManager, &data.db).await.is_ok()){
-                true => "",
-                false => "AND public = true"
-            },
+        #public_only = match public_only {
+                    true => "AND public = true",
+                    false => "",
+        },
         #wh_search = match (opts.search){
             Some(src) => "AND label ILIKE '%' || {src} || '%'",
             _ => ""
@@ -170,13 +177,20 @@ pub async fn list_all_group_overview(
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]);
 
+    let public_only = if opts.public.is_some_and(|p| p) {
+        true
+    } else {
+        check_app_role(user, crate::permissions::AppRole::AccountManager, &data.db).await?;
+        false
+    };
+
     let record = conditional_query_as!(
         GroupMemberReport,
         r#"SELECT ag.id, ag.label, ag.icon, ag.email, get_i18n_string(ag.description_i18n, {langs:Vec<String>}) AS description, array_agg(jsonb_build_object('id', cro.id, 'full_name', cro.full_name, 'room', (CASE WHEN cro.room_id IS NOT NULL THEN jsonb_build_object('id', cro.room_id, 'label', cro.room_name) ELSE NULL END))) as "accounts: Vec<AccountPersonEmbed>" FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id {#public_only} GROUP BY ag.id LIMIT {limit} OFFSET {offset}"#,
-        #public_only = match (check_app_role(user, crate::permissions::AppRole::AccountManager, &data.db).await.is_ok()){
-                true => "WHERE TRUE",
-                false => "WHERE ag.public = true"
-            },
+        #public_only = match public_only {
+            true => "WHERE ag.public = true",
+            false => "",
+        },
 
     )
     .fetch_all(&data.db)
@@ -185,10 +199,10 @@ pub async fn list_all_group_overview(
     Ok((StatusCode::OK, Json(record)))
 }
 
-#[utoipa::path(get, path = "/people/groups/{id}/overview", params(GroupFilterOptions), responses((status = 200, description = "OK", body = GroupMemberReport)))]
+#[utoipa::path(get, path = "/people/groups/{id}/overview", params(GroupGetOptions), responses((status = 200, description = "OK", body = GroupMemberReport)))]
 pub async fn get_group_overview(
     Path(id): Path<Uuid>,
-    Query(opts): Query<GroupFilterOptions>,
+    Query(opts): Query<GroupGetOptions>,
     Extension(user_o): Extension<Option<User>>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
@@ -240,10 +254,10 @@ async fn check_group_visible<'c, T: PgExecutor<'c>>(
     Ok(())
 }
 
-#[utoipa::path(get, path = "/people/groups/{id}", params(GroupFilterOptions), responses((status = 200, description = "OK", body=LangVariant<GroupGetModelAllLanguages, GroupGetModel>)))]
+#[utoipa::path(get, path = "/people/groups/{id}", params(GroupGetOptions), responses((status = 200, description = "OK", body=LangVariant<GroupGetModelAllLanguages, GroupGetModel>)))]
 pub async fn get_group(
     Path(id): Path<Uuid>,
-    Query(opts): Query<GroupFilterOptions>,
+    Query(opts): Query<GroupGetOptions>,
     Extension(user): Extension<User>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {

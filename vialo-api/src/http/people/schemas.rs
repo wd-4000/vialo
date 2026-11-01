@@ -25,11 +25,17 @@ pub struct UserFilterOptions {
 }
 
 #[derive(Deserialize, Debug, Default, IntoParams)]
+pub struct GroupGetOptions {
+    pub lang: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, Debug, Default, IntoParams)]
 pub struct GroupFilterOptions {
     pub lang: Option<Vec<String>>,
     pub search: Option<String>,
     pub page: Option<i64>,
     pub limit: Option<i64>,
+    pub public: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Default, IntoParams)]
