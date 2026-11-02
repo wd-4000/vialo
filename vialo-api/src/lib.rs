@@ -6,6 +6,7 @@ pub mod health;
 pub mod helpers;
 pub mod hooks;
 pub mod http;
+pub mod media;
 pub mod memberships;
 pub mod permissions;
 pub mod ws;
@@ -31,7 +32,7 @@ use crate::{
     http::rate_limit::RateLimiters,
 };
 use sqlx::{Pool, Postgres};
-use tokio::sync::broadcast;
+use tokio::sync::{Notify, broadcast};
 
 pub struct KratosConfigs {
     pub frontend: ory_kratos_client::apis::configuration::Configuration,
@@ -51,6 +52,8 @@ pub struct AppState {
     pub config: Config,
     pub kratos_config: Option<KratosConfigs>,
     pub rate_limiters: RateLimiters,
+    /// Wakes the media worker when a job is queued
+    pub media_jobs: Notify,
 }
 
 #[macro_export]

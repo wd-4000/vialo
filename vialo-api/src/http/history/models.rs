@@ -29,6 +29,7 @@ pub enum Subsystem {
     Email,
     Sysop,
     Import,
+    Media,
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]

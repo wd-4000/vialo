@@ -11,6 +11,7 @@ use crate::http::util;
 
 pub mod boards;
 pub mod handlers;
+pub mod media;
 pub mod models;
 pub mod permissions;
 pub mod schemas;

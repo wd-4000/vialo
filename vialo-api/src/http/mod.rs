@@ -15,6 +15,7 @@ mod etc;
 mod health;
 pub mod history;
 mod home;
+pub mod media;
 pub mod network;
 pub mod people;
 pub mod posts;
@@ -91,6 +92,7 @@ pub async fn create_router(app_state: Arc<AppState>) -> Router {
         .nest("/people", people::create_router(app_state.clone()))
         .nest("/bookables", bookables::create_router(app_state.clone()))
         .nest("/posts", posts::create_router(app_state.clone()))
+        .nest("/media", media::create_router(app_state.clone()))
         .nest("/home", home::create_router(app_state.clone()))
         .nest("/apps", apps::create_router(app_state.clone()))
         .route_layer(middleware::from_fn_with_state(

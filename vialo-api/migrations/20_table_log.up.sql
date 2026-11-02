@@ -305,7 +305,8 @@ declare
     'accounts', -- derived from accounts_people/account_groups
     'account_group_memberships_derived', -- derived from account_group_source_rules
     'i18n_index', -- autoincrement
-    'import_refs'
+    'import_refs',
+    'media'
   ];
 begin
   for _sql in select concat (

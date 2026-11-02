@@ -134,6 +134,8 @@ pub struct AccountModel {
     pub phone: Option<String>,
     pub manually_suspended: Option<bool>,
     pub credit_balance: Option<i32>,
+    /// see [crate::media]
+    pub avatar_id: Option<Uuid>,
 }
 
 #[derive(Serialize, ToSchema)]

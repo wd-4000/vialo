@@ -196,7 +196,8 @@ CREATE TABLE accounts_people (
   manually_suspended boolean not null default false, -- True = No access to any syiervices.
   credit_balance int DEFAULT 0, -- NULL = unlimited credits
   amenities_username text UNIQUE, -- Amenities login username. NULL = not provisioned.
-  amenities_pin BYTEA -- Encrypted amenities login PIN
+  amenities_pin BYTEA, -- Encrypted amenities login PIN
+  avatar_id uuid -- REFERENCES media (id), added in 5_media
 );
 
 CREATE INDEX account_auth_idx ON accounts_people (auth_id);

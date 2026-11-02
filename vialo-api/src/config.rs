@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use utoipa::ToSchema;
@@ -90,6 +92,50 @@ pub struct BookablesConfig {
     pub kiosk: Option<KioskConfig>,
 }
 
+fn default_media_dir() -> PathBuf {
+    "media".into()
+}
+
+fn default_max_image_mb() -> u64 {
+    25
+}
+
+fn default_max_document_mb() -> u64 {
+    50
+}
+
+fn default_quota_mb() -> u64 {
+    1024
+}
+
+#[derive(Deserialize)]
+pub struct MediaConfig {
+    /// Root for uploads
+    #[serde(default = "default_media_dir")]
+    pub dir: PathBuf,
+    #[serde(default = "default_max_image_mb")]
+    pub max_image_mb: u64,
+    #[serde(default = "default_max_document_mb")]
+    pub max_document_mb: u64,
+    /// Total stored per user
+    #[serde(default = "default_quota_mb")]
+    pub quota_mb: u64,
+    /// Encoder threads. Defaults to all cores but one
+    pub encode_threads: Option<usize>,
+}
+
+impl Default for MediaConfig {
+    fn default() -> Self {
+        Self {
+            dir: default_media_dir(),
+            max_image_mb: default_max_image_mb(),
+            max_document_mb: default_max_document_mb(),
+            quota_mb: default_quota_mb(),
+            encode_threads: None,
+        }
+    }
+}
+
 #[cfg(feature = "migrate")]
 #[derive(Deserialize)]
 pub struct DevConfig {
@@ -112,6 +158,8 @@ pub struct Config {
     pub org: OrgConfig,
     pub ui: UiConfig,
     pub bookables: Option<BookablesConfig>,
+    #[serde(default)]
+    pub media: MediaConfig,
 
     #[cfg(feature = "migrate")]
     pub dev: Option<DevConfig>,

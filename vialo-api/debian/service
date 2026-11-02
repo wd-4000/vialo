@@ -21,11 +21,12 @@ NoNewPrivileges=yes
 # AF_UNIX: local Postgres sockets, DNS resolver, Kratos.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
-# The entire OS is read-only; ConfigurationDirectory/LogsDirectory are the
-# exceptions (systemd bind-mounts them writable even under ProtectSystem=strict).
+# Make the entire OS is read-only with ConfigurationDirectory/LogsDirectory/StateDirectory as the exceptions
 ProtectSystem=strict
 ConfigurationDirectory=vialo
 LogsDirectory=vialo-api
+# Uploaded images: set media.dir = "/var/lib/vialo-api/media"
+StateDirectory=vialo-api
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes

@@ -3,7 +3,7 @@ use super::{
     boards::BoardPerm,
     models::{
         BoardPostIdModel, BoardPostModelTranslated, BoardPostModelTranslatedAllLanguages,
-        BoardPostModelTranslatedWithPinnedOn, PostVisibility,
+        BoardPostModelTranslatedWithPinnedOn, PostMediaModel, PostVisibility,
     },
     schemas::{CreatePostSchema, PostContentFormat, PostFilterOptions},
 };
@@ -11,6 +11,7 @@ use ammonia;
 use pulldown_cmark::{Parser, html};
 
 use crate::AppState;
+use crate::media;
 use crate::helpers::LangVariant;
 use crate::http::util::{
     JsonE, User, VialoError, clamp_pagination, get_i18n_arg_arrays, grab_trans,
@@ -107,6 +108,9 @@ pub async fn list_posts(
             bp.event_from,
             bp.event_to,
             bp.created_at,
+            ARRAY(SELECT jsonb_build_object('id', m.id, 'status', m.status, 'mime', m.mime, 'size_bytes', m.size_bytes,
+                    'content', jsonb_build_object('type', m.type, 'width', m.width, 'height', m.height, 'variants', m.variants, 'filename', m.filename))
+                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS "media!: Vec<PostMediaModel>",
             CASE WHEN {pinned_on} THEN (SELECT array_agg(bpp.board_id) FROM board_pinned_posts bpp
                 WHERE bpp.post_id = bp.id
                 AND (bpp.pinned_until IS NULL OR bpp.pinned_until >= NOW())) END AS "pinned_on: Vec<i32>"
@@ -174,7 +178,7 @@ async fn check_can_post_to_board(
 pub async fn add_post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
-    JsonE(body): JsonE<CreatePostSchema>,
+    JsonE(mut body): JsonE<CreatePostSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
     /*
        PERM
@@ -182,6 +186,7 @@ pub async fn add_post(
        or by BoardManagers.
     */
     check_can_post_to_board(&user, body.board_id, &data.db).await?;
+    let media_ids = body.media.take();
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
@@ -207,7 +212,12 @@ pub async fn add_post(
     .fetch_one(&mut *trans)
     .await?;
 
+    // A new post has nothing to drop
+    if let Some(ids) = &media_ids {
+        super::media::sync_post_media(&mut trans, user.id, record.id, ids).await?;
+    }
     trans.commit().await?;
+
     if data.event_channels.posts_tx.send(record.id).is_err() {
         tracing::error!(
             post_id = record.id,
@@ -233,7 +243,7 @@ pub async fn update_post(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
-    JsonE(body): JsonE<CreatePostSchema>,
+    JsonE(mut body): JsonE<CreatePostSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
     /*
        PERM
@@ -266,6 +276,7 @@ pub async fn update_post(
         return Err(VialoError::Forbidden());
     }
 
+    let media_ids = body.media.take();
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
@@ -285,7 +296,14 @@ pub async fn update_post(
     .fetch_one(&mut *trans)
     .await?;
 
+    let dropped = match &media_ids {
+        Some(ids) => super::media::sync_post_media(&mut trans, user.id, id, ids).await?,
+        None => vec![],
+    };
     trans.commit().await?;
+    for media_id in dropped {
+        media::remove_media_dir(&media::media_dir(&data.config.media.dir, media_id)).await;
+    }
     Ok((StatusCode::OK, Json(record)))
 }
 
@@ -321,7 +339,10 @@ pub async fn get_post(
                 get_i18n_all_string_translations(bp.location) AS location,
                 bp.event_from,
                 bp.event_to,
-                bp.created_at
+                bp.created_at,
+                ARRAY(SELECT jsonb_build_object('id', m.id, 'status', m.status, 'mime', m.mime, 'size_bytes', m.size_bytes,
+                    'content', jsonb_build_object('type', m.type, 'width', m.width, 'height', m.height, 'variants', m.variants, 'filename', m.filename))
+                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS \"media!: Vec<PostMediaModel>\"
             FROM
                 board_posts bp
             WHERE bp.id = {id} AND {#VISIBILITY}",
@@ -364,7 +385,10 @@ pub async fn get_post(
                 get_i18n_string(bp.location, {langs}) AS location,
                 bp.event_from,
                 bp.event_to,
-                bp.created_at
+                bp.created_at,
+                ARRAY(SELECT jsonb_build_object('id', m.id, 'status', m.status, 'mime', m.mime, 'size_bytes', m.size_bytes,
+                    'content', jsonb_build_object('type', m.type, 'width', m.width, 'height', m.height, 'variants', m.variants, 'filename', m.filename))
+                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS \"media!: Vec<PostMediaModel>\"
             FROM
                 board_posts bp
             WHERE bp.id = {id} AND {#VISIBILITY}",
@@ -425,6 +449,11 @@ pub async fn delete_post(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
+    // Explicitly rather than by cascade, to learn which dirs to remove
+    let media_ids = sqlx::query_scalar!("DELETE FROM media WHERE post_id = $1 RETURNING id", id)
+        .fetch_all(&mut *trans)
+        .await?;
+
     let post = sqlx::query!(
         r#"DELETE FROM board_posts WHERE id = $1
         RETURNING array[title, content, location, content_html, content_plain] as "i18n_strings!""#,
@@ -441,6 +470,10 @@ pub async fn delete_post(
     .await?;
 
     trans.commit().await?;
+
+    for media_id in media_ids {
+        media::remove_media_dir(&media::media_dir(&data.config.media.dir, media_id)).await;
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -316,7 +316,8 @@ async fn get_person_impl(
         display_name,
         phone,
         manually_suspended,
-       credit_balance FROM accounts_people WHERE id = {target_id}"#
+       credit_balance,
+       avatar_id FROM accounts_people WHERE id = {target_id}"#
     )
     .fetch_one(&data.db)
     .await?;
@@ -585,7 +586,8 @@ pub async fn put_person(
                 display_name,
                 phone,
                 manually_suspended,
-               credit_balance"#,
+               credit_balance,
+               avatar_id"#,
         body.label, body.email, body.membership_end as PgDate, body.full_name, body.display_name, body.phone, id
     )
     .fetch_one(trans.deref_mut())

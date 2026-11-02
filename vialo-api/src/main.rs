@@ -362,6 +362,7 @@ async fn main() {
         config,
         kratos_config,
         rate_limiters: vialo_api::http::rate_limit::RateLimiters::new(),
+        media_jobs: tokio::sync::Notify::new(),
     });
 
     // bootstrap (Not like web dev) admin account
@@ -509,6 +510,13 @@ async fn main() {
             shutdown_rx.clone(),
             move |shutdown| vialo_api::bookables::main(asp.clone(), shutdown),
         ))
+    }));
+
+    subsystems.push(("media", {
+        let asp = asp.clone();
+        tokio::spawn(run_subsystem("media", shutdown_rx.clone(), move |shutdown| {
+            vialo_api::media::main(asp.clone(), shutdown)
+        }))
     }));
 
     subsystems.push(("memberships", {

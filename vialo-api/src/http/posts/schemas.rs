@@ -2,6 +2,7 @@ use super::models::PostVisibility;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
 
 #[derive(Deserialize, Debug, PartialEq, Eq, Hash, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -36,4 +37,7 @@ pub struct CreatePostSchema {
     pub event_from: Option<chrono::DateTime<chrono::Utc>>,
     pub event_to: Option<chrono::DateTime<chrono::Utc>>,
     pub visibility: PostVisibility,
+    /// replaces the post's media, ignored if None
+    #[serde(default)]
+    pub media: Option<Vec<Uuid>>,
 }

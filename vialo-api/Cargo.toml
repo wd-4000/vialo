@@ -16,6 +16,10 @@ migrate = []
 import = []
 email = []
 nms = ["mac_address/serde"]
+# rav1e assembly needs nasm at build time
+media-asm = ["ravif/asm"]
+# HEIF/AVIF uploads - we need to link libheif
+media-heif = ["dep:libheif-rs"]
 
 [dependencies]
 
@@ -71,4 +75,12 @@ ipnetwork = { version = "0.21.1", features = ["serde"] }
 governor = { version = "0.10.4", features = ["dashmap"] }
 dashmap = "6.2.1"
 strum = { version = "0.28.0", features = ["derive"] }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+ravif = { version = "0.13.0", default-features = false, features = ["threading"] }
+rayon = "1.12.0"
+infer = "0.22.0"
+glob = "0.3.4"
+zip = { version = "9.2.2", default-features = false }
+tokio-util = { version = "0.7.20", features = ["io"] }
+libheif-rs = { version = "3.0.0", default-features = false, features = ["v1_17"], optional = true }
 #iana-time-zone = "0.1.63"

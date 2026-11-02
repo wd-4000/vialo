@@ -1,6 +1,8 @@
-use crate::helpers::I18nMap;
+use crate::{helpers::I18nMap, impl_jsonb_embed};
 use serde::{Deserialize, Serialize};
 use sqlx::types::JsonValue;
+
+use crate::http::media::models::{MediaContent, MediaStatus};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -46,6 +48,7 @@ pub struct BoardPostModelTranslated {
     pub event_from: Option<chrono::DateTime<chrono::Utc>>,
     pub event_to: Option<chrono::DateTime<chrono::Utc>>,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub media: Vec<PostMediaModel>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -66,6 +69,7 @@ pub struct BoardPostModelTranslatedWithPinnedOn {
     pub event_from: Option<chrono::DateTime<chrono::Utc>>,
     pub event_to: Option<chrono::DateTime<chrono::Utc>>,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub media: Vec<PostMediaModel>,
     pub pinned_on: Option<Vec<i32>>,
 }
 
@@ -92,7 +96,18 @@ pub struct BoardPostModelTranslatedAllLanguages {
     pub event_from: Option<chrono::DateTime<chrono::Utc>>,
     pub event_to: Option<chrono::DateTime<chrono::Utc>>,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub media: Vec<PostMediaModel>,
 }
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct PostMediaModel {
+    pub id: Uuid,
+    pub status: MediaStatus,
+    pub mime: String,
+    pub size_bytes: i64,
+    pub content: MediaContent,
+}
+impl_jsonb_embed!(PostMediaModel);
 
 #[derive(Serialize, ToSchema)]
 pub struct BoardPostIdModel {
