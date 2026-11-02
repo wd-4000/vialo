@@ -87,7 +87,7 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             },
         ));
 
-    // Group read routes — accessible to any authenticated user.
+    // Group read routes are accessible to any authenticated user.
     // Handlers themselves filter private groups for non-managers.
     let group_read_routes = Router::new()
         .route("/groups", get(groups::list_groups))
@@ -98,7 +98,7 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(groups::list_group_members),
         );
 
-    // Group write routes — AccountManager OR group manager (checked per-handler).
+    // Group write routes: AccountManager OR group manager (checked per-handler)
     let group_write_routes = Router::new()
         .route("/groups", post(groups::post_group))
         .route(

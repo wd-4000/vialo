@@ -1,10 +1,10 @@
 use super::{
     models::RoomModel,
-    schemas::{CreateRoomSchema, UserFilterOptions},
+    schemas::CreateRoomSchema,
 };
 use crate::{
     AppState,
-    http::util::{JsonE, User, VialoError, clamp_pagination, grab_authd_conn_user, is_unique_violation},
+    http::util::{JsonE, SearchableListOptions, User, VialoError, clamp_pagination, grab_authd_conn_user, is_unique_violation},
 };
 use axum::{
     Extension, Json,
@@ -40,9 +40,9 @@ pub async fn add_room(
     Ok((StatusCode::CREATED, Json(created_room)))
 }
 
-#[utoipa::path(get, path = "/people/rooms", params(UserFilterOptions), responses((status = 200, description = "OK", body=Vec<RoomModel>)))]
+#[utoipa::path(get, path = "/people/rooms", params(SearchableListOptions), responses((status = 200, description = "OK", body=Vec<RoomModel>)))]
 pub async fn list_rooms(
-    Query(opts): Query<UserFilterOptions>,
+    Query(opts): Query<SearchableListOptions>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
     let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;

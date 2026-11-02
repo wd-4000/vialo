@@ -19,6 +19,7 @@ pub struct TransactionFilterOptions {
 pub struct UserFilterOptions {
     pub search: Option<String>,
     pub group: Option<Vec<Uuid>>,
+    pub not_group: Option<Vec<Uuid>>,
     pub page: Option<i64>,
     pub limit: Option<i64>,
     pub resident: Option<bool>,

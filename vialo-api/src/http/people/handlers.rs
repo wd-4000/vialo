@@ -68,8 +68,7 @@ pub async fn list_people(
 
     let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
 
-    // This might be red in rust-analyzer. Ignore this.
-    let record = conditional_query_as!(
+    let record = sqlx::query_as!(
         CurrentRoomOccupantsViewModel,
         r#"SELECT
             a.id as "id?",
@@ -80,19 +79,23 @@ pub async fn list_people(
             accounts_people a
             FULL JOIN identities i ON i.id = a.auth_id
             LEFT JOIN res_leases l ON a.id = l.tenant_id
-            LEFT JOIN res_rooms r ON l.room_id = r.id {#j_wh_group} {#wh_search} {#wh_resident} ORDER BY (a.id IS NULL) DESC, (i.id IS NULL) DESC, r.label DESC LIMIT {limit} OFFSET {offset}"#,
-            #j_wh_group = match(opts.group) {
-                Some(groups) => "JOIN account_group_memberships agm ON a.id = agm.account_id WHERE agm.group_id = ANY({groups:Vec<Uuid>})",
-                None => "WHERE TRUE"
-            },
-            #wh_search = match (opts.search){
-                Some(src) => "AND COALESCE(a.full_name, a.label) ILIKE '%' || {src} || '%' OR r.label ILIKE '%' || {src} || '%'",
-                _ => ""
-            },
-            #wh_resident = match (opts.resident.unwrap_or(false)){
-            true => "AND r.label IS NOT NULL",
-            _ => ""
-            }
+            LEFT JOIN res_rooms r ON l.room_id = r.id
+        WHERE
+            -- in any of the groups
+            ($1::uuid[] IS NULL OR EXISTS (SELECT 1 FROM account_group_memberships agm WHERE agm.account_id = a.id AND agm.group_id = ANY($1)))
+            -- in none of the groups
+            AND ($2::uuid[] IS NULL OR NOT EXISTS (SELECT 1 FROM account_group_memberships agm WHERE agm.account_id = a.id AND agm.group_id = ANY($2)))
+            -- search
+            AND ($3::text IS NULL OR COALESCE(a.full_name, a.label) ILIKE '%' || $3 || '%' OR r.label ILIKE '%' || $3 || '%')
+            -- only people with a room
+            AND (NOT $4 OR r.label IS NOT NULL)
+        ORDER BY (a.id IS NULL) DESC, (i.id IS NULL) DESC, r.label DESC LIMIT $5 OFFSET $6"#,
+        opts.group.as_deref(),
+        opts.not_group.as_deref(),
+        opts.search,
+        opts.resident.unwrap_or(false),
+        limit,
+        offset
     )
         .fetch_all(&data.db)
         .await?;
@@ -125,8 +128,7 @@ pub async fn lookup_people(
     check_app_role(user, AppRole::AccountManager, &data.db).await?;
 
     let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
-    // This might be red in rust-analyzer. Ignore this.
-    let record = conditional_query_as!(
+    let record = sqlx::query_as!(
         PeopleLookupModel,
         r#"SELECT
             a.id as "id",
@@ -135,19 +137,23 @@ pub async fn lookup_people(
         FROM
             accounts_people a
             LEFT JOIN res_leases l ON a.id = l.tenant_id
-            LEFT JOIN res_rooms r ON l.room_id = r.id {#j_wh_group} {#wh_search} {#wh_resident} ORDER BY r.label DESC LIMIT {limit} OFFSET {offset}"#,
-            #j_wh_group = match(opts.group) {
-                Some(groups) => "JOIN account_group_memberships agm ON a.id = agm.account_id WHERE agm.group_id = ANY({groups:Vec<Uuid>})",
-                None => "WHERE TRUE"
-            },
-            #wh_search = match (opts.search){
-                Some(src) => "AND COALESCE(a.full_name, a.label) ILIKE '%' || {src} || '%' OR r.label ILIKE '%' || {src} || '%'",
-                _ => ""
-            },
-            #wh_resident = match (opts.resident.unwrap_or(false)){
-            true => "AND r.label IS NOT NULL",
-            _ => ""
-            }
+            LEFT JOIN res_rooms r ON l.room_id = r.id
+        WHERE
+            -- in any of the groups
+            ($1::uuid[] IS NULL OR EXISTS (SELECT 1 FROM account_group_memberships agm WHERE agm.account_id = a.id AND agm.group_id = ANY($1)))
+            -- in none of the groups
+            AND ($2::uuid[] IS NULL OR NOT EXISTS (SELECT 1 FROM account_group_memberships agm WHERE agm.account_id = a.id AND agm.group_id = ANY($2)))
+            -- search
+            AND ($3::text IS NULL OR COALESCE(a.full_name, a.label) ILIKE '%' || $3 || '%' OR r.label ILIKE '%' || $3 || '%')
+            -- only people with a room
+            AND (NOT $4 OR r.label IS NOT NULL)
+        ORDER BY r.label DESC LIMIT $5 OFFSET $6"#,
+        opts.group.as_deref(),
+        opts.not_group.as_deref(),
+        opts.search,
+        opts.resident.unwrap_or(false),
+        limit,
+        offset
     )
         .fetch_all(&data.db)
         .await?;
