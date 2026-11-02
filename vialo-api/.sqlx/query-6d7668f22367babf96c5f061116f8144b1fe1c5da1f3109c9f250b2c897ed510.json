@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE subsystem_jobs SET status = 'processing', last_updated = NOW() WHERE id = (\n                SELECT id FROM subsystem_jobs WHERE subsystem = 'media' AND status = 'pending'\n                ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED)\n            RETURNING id, data AS \"data: Json<JobData>\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "subsystem_jobs",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "data: Json<JobData>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "subsystem_jobs",
+            "name": "data"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "6d7668f22367babf96c5f061116f8144b1fe1c5da1f3109c9f250b2c897ed510"
+}

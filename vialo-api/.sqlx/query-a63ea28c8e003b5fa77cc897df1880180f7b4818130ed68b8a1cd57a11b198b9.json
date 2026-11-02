@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT context AS \"context: MediaContext\" FROM media WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "context: MediaContext",
+        "type_info": {
+          "Custom": {
+            "name": "media_context",
+            "kind": {
+              "Enum": [
+                "post",
+                "avatar"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "context"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a63ea28c8e003b5fa77cc897df1880180f7b4818130ed68b8a1cd57a11b198b9"
+}

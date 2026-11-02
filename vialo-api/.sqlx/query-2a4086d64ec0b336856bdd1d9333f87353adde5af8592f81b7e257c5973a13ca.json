@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO subsystem_jobs (subsystem, data, created_at, last_updated, status) VALUES ('media', $1, NOW(), NOW(), 'pending')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2a4086d64ec0b336856bdd1d9333f87353adde5af8592f81b7e257c5973a13ca"
+}

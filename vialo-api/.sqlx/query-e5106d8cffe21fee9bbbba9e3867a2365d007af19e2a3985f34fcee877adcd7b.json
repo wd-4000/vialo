@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE subsystem_jobs SET status = CASE WHEN $2 THEN 'done'::job_status ELSE 'error'::job_status END, last_updated = NOW() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e5106d8cffe21fee9bbbba9e3867a2365d007af19e2a3985f34fcee877adcd7b"
+}

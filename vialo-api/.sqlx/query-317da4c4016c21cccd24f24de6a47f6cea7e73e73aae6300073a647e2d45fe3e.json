@@ -51,7 +51,8 @@
                 "email",
                 "sysop",
                 "dhcp",
-                "import"
+                "import",
+                "media"
               ]
             }
           }

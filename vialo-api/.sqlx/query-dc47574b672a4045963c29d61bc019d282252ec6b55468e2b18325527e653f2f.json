@@ -1,0 +1,158 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            bp.id,\n            bp.account_id,\n            bp.board_id,\n            bp.icon,\n            get_i18n_string(bp.title, $1) AS title,\n            CASE WHEN $2 THEN get_i18n_string(bp.content, $1) END AS content,\n            CASE WHEN $3 THEN get_i18n_string(bp.content_html, $1) END AS content_html,\n            CASE WHEN $4 THEN get_i18n_string(bp.content_plain, $1) END AS content_plain,\n            get_i18n_string(bp.location, $1) AS location,\n            bp.event_from,\n            bp.event_to,\n            bp.created_at,\n            ARRAY(SELECT jsonb_build_object('id', m.id, 'status', m.status, 'mime', m.mime, 'size_bytes', m.size_bytes,\n                    'content', jsonb_build_object('type', m.type, 'width', m.width, 'height', m.height, 'variants', m.variants, 'filename', m.filename))\n                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS \"media!: Vec<PostMediaModel>\",\n            CASE WHEN $5 THEN (SELECT array_agg(bpp.board_id) FROM board_pinned_posts bpp\n                WHERE bpp.post_id = bp.id\n                AND (bpp.pinned_until IS NULL OR bpp.pinned_until >= NOW())) END AS \"pinned_on: Vec<i32>\"\n        FROM board_posts bp\n        WHERE bp.id IN (\n                SELECT pin.post_id FROM board_pinned_posts pin\n                WHERE pin.board_id = ANY($6) AND (pin.pinned_until IS NULL OR pin.pinned_until >= NOW())\n                UNION ALL\n                SELECT h.id FROM board_posts h WHERE h.board_id = ANY($6)\n                    AND (h.event_to >= NOW() - interval '3 hours'\n                        OR (h.event_to IS NULL AND h.created_at > NOW() - interval '1 day')))\n            -- visibility\n            AND (bp.visibility = 'public'\n                OR ($7::uuid IS NOT NULL AND (bp.visibility = 'logged_in' OR account_board_perm_exists($7, bp.board_id, 'view'::board_perm))))\n            -- search\n            AND ($8::text IS NULL\n                OR get_i18n_string(bp.title, $1) ILIKE '%' || $8 || '%'\n                OR get_i18n_string(bp.location, $1) ILIKE '%' || $8 || '%')\n        ORDER BY (bp.event_from <= now() AND bp.event_to >= now()), bp.created_at DESC\n        LIMIT $9 OFFSET $10",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "board_posts",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "board_posts",
+            "name": "account_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "board_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "board_posts",
+            "name": "board_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "icon",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "board_posts",
+            "name": "icon"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "title",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "content",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "content_html",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "content_plain",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "location",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "event_from",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "board_posts",
+            "name": "event_from"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "event_to",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "board_posts",
+            "name": "event_to"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "board_posts",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "media!: Vec<PostMediaModel>",
+        "type_info": "JsonbArray",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 13,
+        "name": "pinned_on: Vec<i32>",
+        "type_info": "Int4Array",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Int4Array",
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      null,
+      null,
+      null,
+      null,
+      null,
+      true,
+      true,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "dc47574b672a4045963c29d61bc019d282252ec6b55468e2b18325527e653f2f"
+}

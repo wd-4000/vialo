@@ -1,0 +1,218 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.id, m.type AS \"media_type: MediaType\", m.context AS \"context: MediaContext\", m.mime,\n            m.filename, m.size_bytes, m.owner_id, m.status AS \"status: MediaStatus\", m.post_id, m.position,\n            m.width, m.height, m.variants,\n            COALESCE(bp.visibility = 'public', false) AS \"public!\",\n            COALESCE(CASE\n                WHEN m.context = 'avatar' THEN $2::uuid IS NOT NULL\n                WHEN m.post_id IS NULL THEN m.owner_id = $2\n                ELSE bp.visibility = 'public' OR ($2::uuid IS NOT NULL AND (bp.visibility = 'logged_in'\n                    OR account_board_perm_exists($2, bp.board_id, 'view'::board_perm)))\n            END, false) AS \"allowed!\"\n        FROM media m LEFT JOIN board_posts bp ON bp.id = m.post_id WHERE m.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "media_type: MediaType",
+        "type_info": {
+          "Custom": {
+            "name": "media_type",
+            "kind": {
+              "Enum": [
+                "image",
+                "document"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "type"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "context: MediaContext",
+        "type_info": {
+          "Custom": {
+            "name": "media_context",
+            "kind": {
+              "Enum": [
+                "post",
+                "avatar"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "context"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "mime",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "mime"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "filename",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "filename"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "size_bytes",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "size_bytes"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "owner_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "owner_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "status: MediaStatus",
+        "type_info": {
+          "Custom": {
+            "name": "media_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "ready",
+                "error"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "post_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "post_id"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "position",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "position"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "width",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "width"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "height",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "height"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "variants",
+        "type_info": "Int4Array",
+        "origin": {
+          "Table": {
+            "table": "media",
+            "name": "variants"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "public!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 14,
+        "name": "allowed!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "b91e27d9f011631f84089f790ffb5da287e3573b7a06a37267361d14513a5a6a"
+}

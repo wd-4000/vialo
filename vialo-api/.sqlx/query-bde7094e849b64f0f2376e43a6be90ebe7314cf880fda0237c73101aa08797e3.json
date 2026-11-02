@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE accounts_people SET avatar_id = $1 WHERE id = $2 RETURNING OLD.avatar_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "avatar_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "avatar_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "bde7094e849b64f0f2376e43a6be90ebe7314cf880fda0237c73101aa08797e3"
+}

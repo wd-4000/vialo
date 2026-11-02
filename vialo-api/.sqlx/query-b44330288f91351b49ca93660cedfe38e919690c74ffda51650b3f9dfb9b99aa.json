@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE media m SET post_id = $1, position = v.pos\n        FROM unnest($2::uuid[]) WITH ORDINALITY AS v(id, pos) WHERE m.id = v.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b44330288f91351b49ca93660cedfe38e919690c74ffda51650b3f9dfb9b99aa"
+}

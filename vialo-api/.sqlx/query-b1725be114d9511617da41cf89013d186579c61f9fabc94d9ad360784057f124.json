@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE subsystem_jobs SET status = 'pending', last_updated = NOW() WHERE subsystem = 'media' AND status = 'processing'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "b1725be114d9511617da41cf89013d186579c61f9fabc94d9ad360784057f124"
+}

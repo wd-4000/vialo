@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO media (id, type, context, mime, filename, size_bytes, owner_id, status, variants)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "media_type",
+            "kind": {
+              "Enum": [
+                "image",
+                "document"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "media_context",
+            "kind": {
+              "Enum": [
+                "post",
+                "avatar"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Text",
+        "Int8",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "media_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "ready",
+                "error"
+              ]
+            }
+          }
+        },
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4ded6039a8f3d1df9c0f2ee9a34f8ab05b845a601cb66bff060d21ea349af875"
+}
