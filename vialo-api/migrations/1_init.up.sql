@@ -206,7 +206,8 @@ CREATE TABLE account_groups (
   label text NOT NULL, -- Group name
   icon text,
   email citext UNIQUE,
-  public bool NOT NULL
+  public bool NOT NULL,
+  index int NOT NULL DEFAULT 0 -- display order
 );
 
 CREATE TYPE group_role AS ENUM('member', 'manager');

@@ -101,6 +101,7 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     // Group write routes: AccountManager OR group manager (checked per-handler)
     let group_write_routes = Router::new()
         .route("/groups", post(groups::post_group))
+        .route("/groups/order", put(groups::put_group_order))
         .route(
             "/groups/{id}",
             put(groups::put_group).delete(groups::delete_group),

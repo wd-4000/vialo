@@ -91,7 +91,7 @@ pub async fn get_home_aggregated(
 
     let groups = query_as!(
         HomeGroup,
-        r#"SELECT id, label, icon FROM account_groups WHERE public = true LIMIT $1 OFFSET $2"#,
+        r#"SELECT id, label, icon FROM account_groups WHERE public = true ORDER BY index, id LIMIT $1 OFFSET $2"#,
         limit,
         offset
     )

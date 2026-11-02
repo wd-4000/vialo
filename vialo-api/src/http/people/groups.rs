@@ -19,6 +19,7 @@ use crate::{
     },
     permissions::{AppRole, GroupRole, check_app_role, check_manager_of_group_or_app_role},
 };
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use axum::{
@@ -67,7 +68,7 @@ pub async fn list_groups(
             icon,
             public,
             get_i18n_string(description_i18n, {langs:Vec<String>}) AS description
-        FROM account_groups WHERE TRUE {#public_only} {#wh_search} LIMIT {limit} OFFSET {offset}",
+        FROM account_groups WHERE TRUE {#public_only} {#wh_search} ORDER BY index, id LIMIT {limit} OFFSET {offset}",
         #public_only = match public_only {
                     true => "AND public = true",
                     false => "",
@@ -186,7 +187,7 @@ pub async fn list_all_group_overview(
 
     let record = conditional_query_as!(
         GroupMemberReport,
-        r#"SELECT ag.id, ag.label, ag.icon, ag.email, get_i18n_string(ag.description_i18n, {langs:Vec<String>}) AS description, array_agg(jsonb_build_object('id', cro.id, 'full_name', cro.full_name, 'room', (CASE WHEN cro.room_id IS NOT NULL THEN jsonb_build_object('id', cro.room_id, 'label', cro.room_name) ELSE NULL END))) as "accounts: Vec<AccountPersonEmbed>" FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id {#public_only} GROUP BY ag.id LIMIT {limit} OFFSET {offset}"#,
+        r#"SELECT ag.id, ag.label, ag.icon, ag.email, get_i18n_string(ag.description_i18n, {langs:Vec<String>}) AS description, array_agg(jsonb_build_object('id', cro.id, 'full_name', cro.full_name, 'room', (CASE WHEN cro.room_id IS NOT NULL THEN jsonb_build_object('id', cro.room_id, 'label', cro.room_name) ELSE NULL END))) as "accounts: Vec<AccountPersonEmbed>" FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id {#public_only} GROUP BY ag.id ORDER BY ag.index, ag.id LIMIT {limit} OFFSET {offset}"#,
         #public_only = match public_only {
             true => "WHERE ag.public = true",
             false => "",
@@ -408,7 +409,7 @@ pub async fn insert_group(
 
     let new_group = sqlx::query_as!(
         GroupListModel,
-        "INSERT INTO account_groups (label,email,public,icon,description_i18n) VALUES ($1,$2,$3,$4,$5) returning id, label, email, icon, public, get_i18n_string(description_i18n, $6) AS description",
+        "INSERT INTO account_groups (label,email,public,icon,description_i18n,index) VALUES ($1,$2,$3,$4,$5,(SELECT COALESCE(MAX(index), 0) + 1 FROM account_groups)) returning id, label, email, icon, public, get_i18n_string(description_i18n, $6) AS description",
         body.label,
         body.email,
         body.public,
@@ -583,6 +584,50 @@ pub async fn delete_group(
 
     trans.commit().await?;
 
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Reorders the listed groups among the positions they already hold
+#[utoipa::path(put, path = "/people/groups/order", request_body = Vec<Uuid>, responses((status = 204, description = "Updated")))] // no body
+pub async fn put_group_order(
+    State(data): State<Arc<AppState>>,
+    Extension(user): Extension<User>,
+    JsonE(ids): JsonE<Vec<Uuid>>,
+) -> Result<impl IntoResponse, VialoError> {
+    check_app_role(user.clone(), AppRole::AccountManager, &data.db).await?;
+    let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
+    let mut trans = grab_trans(&mut conn).await?;
+
+    let existing = sqlx::query_scalar!(
+        "SELECT id FROM account_groups WHERE id = ANY($1) ORDER BY id FOR UPDATE",
+        &ids
+    )
+    .fetch_all(&mut *trans)
+    .await?;
+
+    if !ids.iter().all_unique() || existing.len() != ids.len() {
+        return Err(VialoError::AppError(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "order_mismatch".into(),
+        ));
+    }
+
+    sqlx::query!(
+        r#"UPDATE account_groups g SET index = s.index
+        FROM (
+            SELECT o.id, p.index
+            FROM unnest($1::uuid[]) WITH ORDINALITY AS o(id, pos)
+            JOIN (
+                SELECT index, row_number() OVER (ORDER BY index, id) AS pos
+                FROM account_groups WHERE id = ANY($1)
+            ) p ON p.pos = o.pos
+        ) s WHERE g.id = s.id"#,
+        &ids
+    )
+    .execute(&mut *trans)
+    .await?;
+
+    trans.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
