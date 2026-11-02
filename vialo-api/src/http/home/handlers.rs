@@ -105,7 +105,7 @@ pub async fn get_home_aggregated(
             bp.id,
             bp.icon,
             get_i18n_string(bp.title, {langs}) AS title,
-            left(get_i18n_string(bp.content_html, {langs}), 400) AS content,
+            left(get_i18n_string(bp.content_plain, {langs}), 400) AS content,
             get_i18n_string(bp.location, {langs}) AS location,
             bp.event_from,
             bp.event_to,

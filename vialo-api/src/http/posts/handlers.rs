@@ -75,65 +75,74 @@ pub async fn list_posts(
     /*
        PERM
        Logged-in users see 'public' and 'logged_in' posts (plus view-permissioned boards).
-       Anonymous users see only 'public' posts. Enforced via #VISIBILITY below.
+       Anonymous users see only 'public' posts.
     */
     let (offset, limit) = clamp_pagination(opts.limit, opts.page)?;
     let langs = &(opts
         .lang
         .unwrap_or(vec![String::from("en"), String::from("de")]));
 
+    let wants_plain = opts.content_format.contains(&PostContentFormat::Plain);
+    let wants_html = opts.content_format.contains(&PostContentFormat::Html);
+    let wants_md = opts.content_format.is_empty()
+        || opts.content_format.contains(&PostContentFormat::Markdown);
+    let uid = user_o.as_ref().map(|u| u.id);
+
+    let pinned_on = opts.pinned_on.unwrap_or(false);
+    let search = opts.search.as_deref();
+
+    // #FILTER uses a conditional so the board/age predicates remain index-friendly
     // This might be red in rust-analyzer. Ignore that.
-    let posts = conditional_query_as!(BoardPostModelTranslatedWithPinnedOn, "SELECT * FROM (SELECT
-                          bp.id,
-                          bp.account_id,
-                          bp.board_id,
-                          bp.icon,
-                          -- Use get_i18n_string for title, content, and location translations with fallback
-                          get_i18n_string(bp.title, {langs}) AS title,
-                          get_i18n_string(bp.content, {langs}) AS content,
-                          get_i18n_string(bp.location, {langs}) AS location,
-                          bp.event_from,
-                          bp.event_to,
-                          bp.created_at,
-                          {#INCLUDE_PINNING_INFO} WHERE {#CURRENT_ONLY}
-                          AND {#VISIBILITY}
-                          AND {#BOARD}
-                          GROUP BY bp.id
-                         )  WHERE {#SEARCH}
-                          ORDER BY (event_from <= now() AND event_to >= now()), created_at DESC LIMIT {limit} OFFSET {offset}",
-                          #INCLUDE_PINNING_INFO = match(opts.pinned_on) {
-                            Some(true)=> r#"array_agg(bpp.board_id) FILTER (WHERE bpp.board_id IS NOT NULL) AS pinned_on
-                            FROM board_posts bp
-                            LEFT JOIN board_pinned_posts bpp ON bpp.post_id = bp.id
-                                AND (bpp.pinned_until IS NULL OR bpp.pinned_until >= NOW())"#,
-                            _ => r#"NULL AS "pinned_on: Vec<i32>"
-                            FROM board_posts bp"#
-                          },
-                          #SEARCH = match (opts.search){
-                              Some(search) => "(title ILIKE '%' || {search} || '%' OR location ILIKE '%' || {search} || '%')",
-                              _ => "TRUE"
-                          },
-                          #CURRENT_ONLY = match (opts.current_only, &opts.board_id){
-                              (Some(false), _) => "TRUE",
-                              // Posts pinned on a requested board never age out
-                              (Some(true) | None, Some(pin_board_ids)) => r#"(EXISTS (SELECT 1 FROM board_pinned_posts pin
-                                  WHERE pin.post_id = bp.id AND pin.board_id = ANY({pin_board_ids})
-                                  AND (pin.pinned_until IS NULL OR pin.pinned_until >= NOW()))
-                                  OR CASE WHEN bp.event_to IS NOT NULL THEN bp.event_to >= NOW() - interval '3 hours' ELSE bp.created_at > NOW() - interval '1 day' END)"#,
-                              (Some(true) | None, None) => "CASE WHEN bp.event_to IS NOT NULL THEN bp.event_to >= NOW() - interval '3 hours' ELSE bp.created_at > NOW() - interval '1 day' END"
-                          },
-                          #VISIBILITY = match (user_o){
-                              Some(User {id: uid, ..} ) => "(bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists({uid}, bp.board_id, 'view'::board_perm))",
-                              _ => "bp.visibility = 'public'"
-                          },
-                          #BOARD = match (&opts.board_id){
-                              // Include posts homed on a requested board or pinned to one
-                              Some(board_ids) => r#"(bp.board_id = ANY({board_ids})
-                                  OR EXISTS (SELECT 1 FROM board_pinned_posts pin
-                                  WHERE pin.post_id = bp.id AND pin.board_id = ANY({board_ids})
-                                  AND (pin.pinned_until IS NULL OR pin.pinned_until >= NOW())))"#,
-                              _ => "TRUE"
-                          }).fetch_all(&data.db).await?;
+    let posts = conditional_query_as!(BoardPostModelTranslatedWithPinnedOn,
+        r#"SELECT
+            bp.id,
+            bp.account_id,
+            bp.board_id,
+            bp.icon,
+            get_i18n_string(bp.title, {langs}) AS title,
+            CASE WHEN {wants_md} THEN get_i18n_string(bp.content, {langs}) END AS content,
+            CASE WHEN {wants_html} THEN get_i18n_string(bp.content_html, {langs}) END AS content_html,
+            CASE WHEN {wants_plain} THEN get_i18n_string(bp.content_plain, {langs}) END AS content_plain,
+            get_i18n_string(bp.location, {langs}) AS location,
+            bp.event_from,
+            bp.event_to,
+            bp.created_at,
+            CASE WHEN {pinned_on} THEN (SELECT array_agg(bpp.board_id) FROM board_pinned_posts bpp
+                WHERE bpp.post_id = bp.id
+                AND (bpp.pinned_until IS NULL OR bpp.pinned_until >= NOW())) END AS "pinned_on: Vec<i32>"
+        FROM board_posts bp
+        WHERE {#FILTER}
+            -- visibility
+            AND (bp.visibility = 'public'
+                OR ({uid}::uuid IS NOT NULL AND (bp.visibility = 'logged_in' OR account_board_perm_exists({uid}, bp.board_id, 'view'::board_perm))))
+            -- search
+            AND ({search}::text IS NULL
+                OR get_i18n_string(bp.title, {langs}) ILIKE '%' || {search} || '%'
+                OR get_i18n_string(bp.location, {langs}) ILIKE '%' || {search} || '%')
+        ORDER BY (bp.event_from <= now() AND bp.event_to >= now()), bp.created_at DESC
+        LIMIT {limit} OFFSET {offset}"#,
+        #FILTER = match (opts.current_only.unwrap_or(true), &opts.board_id) {
+            (false, None) => "TRUE",
+            (true, None) => r#"(bp.event_to >= NOW() - interval '3 hours'
+                OR (bp.event_to IS NULL AND bp.created_at > NOW() - interval '1 day'))"#,
+            // Is on a requested board, or pinned to one
+            (false, Some(board_ids)) => r#"bp.id IN (
+                SELECT pin.post_id FROM board_pinned_posts pin
+                WHERE pin.board_id = ANY({board_ids}) AND (pin.pinned_until IS NULL OR pin.pinned_until >= NOW())
+                UNION ALL
+                SELECT h.id FROM board_posts h WHERE h.board_id = ANY({board_ids}))"#,
+            // Pinned posts never age out
+            (true, Some(board_ids)) => r#"bp.id IN (
+                SELECT pin.post_id FROM board_pinned_posts pin
+                WHERE pin.board_id = ANY({board_ids}) AND (pin.pinned_until IS NULL OR pin.pinned_until >= NOW())
+                UNION ALL
+                SELECT h.id FROM board_posts h WHERE h.board_id = ANY({board_ids})
+                    AND (h.event_to >= NOW() - interval '3 hours'
+                        OR (h.event_to IS NULL AND h.created_at > NOW() - interval '1 day')))"#
+        },
+    )
+    .fetch_all(&data.db)
+    .await?;
 
     Ok((StatusCode::OK, Json(posts)))
 }

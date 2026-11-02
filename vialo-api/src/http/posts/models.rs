@@ -55,7 +55,12 @@ pub struct BoardPostModelTranslatedWithPinnedOn {
     pub board_id: i32,
     pub icon: Option<String>,
     pub title: Option<String>,
-    pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>, // markdown
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_html: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_plain: Option<String>,
     pub location: Option<String>,
     // pub pinned_until: Option<chrono::DateTime<chrono::Utc>>,
     pub event_from: Option<chrono::DateTime<chrono::Utc>>,
