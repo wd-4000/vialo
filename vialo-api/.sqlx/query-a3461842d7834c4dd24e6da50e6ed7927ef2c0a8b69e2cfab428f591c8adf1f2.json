@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            id,\n            label,\n            email,\n            icon,\n            public,\n            get_i18n_string(description_i18n, $1) AS description\n        FROM account_groups WHERE TRUE   LIMIT $2 OFFSET $3",
+  "query": "INSERT INTO account_groups (label,email,public,icon,description_i18n,index) VALUES ($1,$2,$3,$4,$5,(SELECT COALESCE(MAX(index), 0) + 1 FROM account_groups)) returning id, label, email, icon, public, get_i18n_string(description_i18n, $6) AS description",
   "describe": {
     "columns": [
       {
@@ -72,9 +72,17 @@
     ],
     "parameters": {
       "Left": [
-        "TextArray",
-        "Int8",
-        "Int8"
+        "Text",
+        {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        },
+        "Bool",
+        "Text",
+        "Int4",
+        "TextArray"
       ]
     },
     "nullable": [
@@ -86,5 +94,5 @@
       null
     ]
   },
-  "hash": "c9467d668f29330104106a7aa37feed7397863cdba4f7457510da9c9fde1d48c"
+  "hash": "a3461842d7834c4dd24e6da50e6ed7927ef2c0a8b69e2cfab428f591c8adf1f2"
 }

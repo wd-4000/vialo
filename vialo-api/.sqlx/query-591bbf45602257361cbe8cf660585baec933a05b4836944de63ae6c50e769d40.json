@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT ag.id, ag.label, ag.icon, ag.email, get_i18n_string(ag.description_i18n, $1) AS description, array_agg(jsonb_build_object('id', cro.id, 'full_name', cro.full_name, 'room', (CASE WHEN cro.room_id IS NOT NULL THEN jsonb_build_object('id', cro.room_id, 'label', cro.room_name) ELSE NULL END))) as \"accounts: Vec<AccountPersonEmbed>\" FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id  GROUP BY ag.id LIMIT $2 OFFSET $3",
+  "query": "SELECT\n            id,\n            label,\n            email,\n            icon,\n            public,\n            get_i18n_string(description_i18n, $1) AS description\n        FROM account_groups WHERE TRUE AND public = true AND label ILIKE '%' || $2 || '%' ORDER BY index, id LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -27,17 +27,6 @@
       },
       {
         "ordinal": 2,
-        "name": "icon",
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "account_groups",
-            "name": "icon"
-          }
-        }
-      },
-      {
-        "ordinal": 3,
         "name": "email",
         "type_info": {
           "Custom": {
@@ -53,21 +42,38 @@
         }
       },
       {
-        "ordinal": 4,
-        "name": "description",
+        "ordinal": 3,
+        "name": "icon",
         "type_info": "Text",
-        "origin": "Expression"
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "icon"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "public",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "account_groups",
+            "name": "public"
+          }
+        }
       },
       {
         "ordinal": 5,
-        "name": "accounts: Vec<AccountPersonEmbed>",
-        "type_info": "JsonbArray",
+        "name": "description",
+        "type_info": "Text",
         "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
         "TextArray",
+        "Text",
         "Int8",
         "Int8"
       ]
@@ -77,9 +83,9 @@
       false,
       true,
       true,
-      null,
+      false,
       null
     ]
   },
-  "hash": "a31b5066c4154089e20d4228ff989a19401014702acf81712b8e53c9db6c36a0"
+  "hash": "591bbf45602257361cbe8cf660585baec933a05b4836944de63ae6c50e769d40"
 }

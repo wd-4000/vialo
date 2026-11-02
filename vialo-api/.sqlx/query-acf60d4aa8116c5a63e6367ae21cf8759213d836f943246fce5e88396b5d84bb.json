@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            id,\n            label,\n            email,\n            icon,\n            public,\n            get_i18n_string(description_i18n, $1) AS description\n        FROM account_groups WHERE TRUE  AND label ILIKE '%' || $2 || '%' LIMIT $3 OFFSET $4",
+  "query": "SELECT\n            id,\n            label,\n            email,\n            icon,\n            public,\n            get_i18n_string(description_i18n, $1) AS description\n        FROM account_groups WHERE TRUE   ORDER BY index, id LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -73,7 +73,6 @@
     "parameters": {
       "Left": [
         "TextArray",
-        "Text",
         "Int8",
         "Int8"
       ]
@@ -87,5 +86,5 @@
       null
     ]
   },
-  "hash": "472364127efe4b08cafd03dd7153fb33466f768295077d716737c03c20a58e5b"
+  "hash": "acf60d4aa8116c5a63e6367ae21cf8759213d836f943246fce5e88396b5d84bb"
 }

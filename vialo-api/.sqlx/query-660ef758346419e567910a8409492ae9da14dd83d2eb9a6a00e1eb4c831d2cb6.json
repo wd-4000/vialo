@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            id,\n            label,\n            email,\n            icon,\n            public,\n            get_i18n_string(description_i18n, $1) AS description\n        FROM account_groups WHERE TRUE AND public = true  LIMIT $2 OFFSET $3",
+  "query": "SELECT\n            id,\n            label,\n            email,\n            icon,\n            public,\n            get_i18n_string(description_i18n, $1) AS description\n        FROM account_groups WHERE TRUE AND public = true  ORDER BY index, id LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -86,5 +86,5 @@
       null
     ]
   },
-  "hash": "2f7fdc893e784886a8f70632b947d4c5ea6ae1cc8a9b5eaaaeacb44aa8ad4fbb"
+  "hash": "660ef758346419e567910a8409492ae9da14dd83d2eb9a6a00e1eb4c831d2cb6"
 }

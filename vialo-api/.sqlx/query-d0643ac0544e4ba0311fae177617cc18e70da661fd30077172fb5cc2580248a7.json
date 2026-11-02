@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE account_groups g SET index = s.index\n        FROM (\n            SELECT o.id, p.index\n            FROM unnest($1::uuid[]) WITH ORDINALITY AS o(id, pos)\n            JOIN (\n                SELECT index, row_number() OVER (ORDER BY index, id) AS pos\n                FROM account_groups WHERE id = ANY($1)\n            ) p ON p.pos = o.pos\n        ) s WHERE g.id = s.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d0643ac0544e4ba0311fae177617cc18e70da661fd30077172fb5cc2580248a7"
+}
