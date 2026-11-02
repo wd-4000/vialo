@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT    id,\n       label,\n     auth_id,\n      email,\n     membership_start,\n       membership_end as \"membership_end: PgDate\",\n        full_name,\n        phone,\n        manually_suspended,\n       credit_balance FROM accounts_people WHERE id = $1",
+  "query": "SELECT    id,\n       label,\n     auth_id,\n      email,\n     membership_start,\n       membership_end as \"membership_end: PgDate\",\n        full_name,\n        display_name,\n        phone,\n        manually_suspended,\n       credit_balance FROM accounts_people WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -87,6 +87,17 @@
       },
       {
         "ordinal": 7,
+        "name": "display_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "display_name"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
         "name": "phone",
         "type_info": "Text",
         "origin": {
@@ -97,7 +108,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "manually_suspended",
         "type_info": "Bool",
         "origin": {
@@ -108,7 +119,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "credit_balance",
         "type_info": "Int4",
         "origin": {
@@ -133,9 +144,10 @@
       false,
       true,
       true,
+      true,
       false,
       true
     ]
   },
-  "hash": "0ac82a069b5c2add1fb944a427f3ba91b99df15b9d223c0df226193191be2bcf"
+  "hash": "31477b85d8758bf65c4bf67a24049bc80e854be44c6ba84318c24124474e122e"
 }

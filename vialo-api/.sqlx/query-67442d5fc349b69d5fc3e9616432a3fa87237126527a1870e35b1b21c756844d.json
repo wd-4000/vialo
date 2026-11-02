@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT i.id, ap.id as \"account_id\", i.full_name, i.email, i.phone, i.room FROM identities i LEFT JOIN accounts_people ap ON ap.auth_id = i.id WHERE i.id = $1",
+  "query": "SELECT i.id, ap.id as \"account_id\", i.full_name, i.display_name, i.email, i.phone, i.room FROM identities i LEFT JOIN accounts_people ap ON ap.auth_id = i.id WHERE i.id = $1",
   "describe": {
     "columns": [
       {
@@ -38,6 +38,17 @@
       },
       {
         "ordinal": 3,
+        "name": "display_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "identities",
+            "name": "display_name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
         "name": "email",
         "type_info": "Text",
         "origin": {
@@ -48,7 +59,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "phone",
         "type_info": "Text",
         "origin": {
@@ -59,7 +70,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "room",
         "type_info": "Text",
         "origin": {
@@ -81,8 +92,9 @@
       true,
       true,
       true,
+      true,
       true
     ]
   },
-  "hash": "2af194b0388947d7a87ec0d57f27ab8c69848674e06203c76254739bf2ced030"
+  "hash": "67442d5fc349b69d5fc3e9616432a3fa87237126527a1870e35b1b21c756844d"
 }
