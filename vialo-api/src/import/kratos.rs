@@ -18,6 +18,7 @@ pub struct IdentityImport {
     pub account: Uuid,
     pub email: String,
     pub full_name: String,
+    pub display_name: Option<String>,
     pub phone: Option<String>,
     pub room: Option<String>,
     /// Any hash format Kratos can import
@@ -74,6 +75,7 @@ pub async fn provision_identity(
                 json!({
                     "email": i.email,
                     "full_name": i.full_name,
+                    "display_name": i.display_name,
                     "phone": i.phone,
                     "room": i.room,
                 }),
@@ -120,9 +122,10 @@ pub async fn provision_identity(
 
     // Admin-created identities don't go through the update_identity hook
     sqlx::query!(
-        "INSERT INTO identities (id, full_name, email, phone, room) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING",
+        "INSERT INTO identities (id, full_name, display_name, email, phone, room) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING",
         identity_id,
         i.full_name,
+        i.display_name,
         i.email,
         i.phone,
         i.room

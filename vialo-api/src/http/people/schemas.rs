@@ -70,6 +70,8 @@ pub struct ContractInfoSchema {
 pub struct CreateUserSchema {
     #[serde(deserialize_with = "crate::helpers::limit_str_len_255")]
     pub full_name: String,
+    #[serde(deserialize_with = "crate::helpers::limit_str_len_opt_255")]
+    pub display_name: Option<String>,
     #[serde_as(as = "NoneAsEmptyString")]
     #[schema(format = Email)]
     pub email: Option<String>,

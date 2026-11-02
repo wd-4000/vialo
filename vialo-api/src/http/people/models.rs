@@ -130,6 +130,7 @@ pub struct AccountModel {
     pub membership_start: Option<NaiveDate>,
     pub membership_end: Option<PgDate>,
     pub full_name: Option<String>,
+    pub display_name: Option<String>,
     pub phone: Option<String>,
     pub manually_suspended: Option<bool>,
     pub credit_balance: Option<i32>,

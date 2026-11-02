@@ -65,6 +65,7 @@ pub struct IdentityModel {
     pub id: Uuid,
     pub account_id: Option<Uuid>,
     pub full_name: Option<String>,
+    pub display_name: Option<String>,
     #[schema(format = Email)]
     pub email: Option<String>,
     pub phone: Option<String>,
@@ -96,9 +97,19 @@ pub async fn update_identity(
 ) -> Result<()> {
     // Insert/Update the identity
     sqlx::query!(
-        "INSERT INTO identities (id, email, full_name, phone, room) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO UPDATE SET (email, full_name, phone) = ($2, $3, $4)",
-        body.id, body.email, body.full_name, body.phone, body.room
+        "INSERT INTO identities (id, email, full_name, display_name, phone, room) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO UPDATE SET (email, full_name, display_name, phone) = ($2, $3, $4, $5)",
+        body.id, body.email, body.full_name, body.display_name, body.phone, body.room
     ).execute(&mut **trans).await?;
+
+    // Email and display_name can be changed by the user
+    sqlx::query!(
+        "UPDATE accounts_people SET email = $1, display_name = $2 WHERE auth_id = $3",
+        body.email,
+        body.display_name,
+        body.id
+    )
+    .execute(&mut **trans)
+    .await?;
 
     // Create initial admin account if needed
     if let (Some(email), Ok(initial_admin_email)) =

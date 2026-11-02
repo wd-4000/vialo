@@ -165,6 +165,7 @@ pub async fn auth_middleware(
                                 id: auth_id,
                                 email: trait_str("email"),
                                 full_name: trait_str("full_name"),
+                                display_name: trait_str("display_name"),
                                 phone: trait_str("phone"),
                                 room: trait_str("room"),
                                 account_id: None,

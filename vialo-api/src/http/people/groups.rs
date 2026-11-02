@@ -187,7 +187,7 @@ pub async fn list_all_group_overview(
 
     let record = conditional_query_as!(
         GroupMemberReport,
-        r#"SELECT ag.id, ag.label, ag.icon, ag.email, get_i18n_string(ag.description_i18n, {langs:Vec<String>}) AS description, array_agg(jsonb_build_object('id', cro.id, 'full_name', cro.full_name, 'room', (CASE WHEN cro.room_id IS NOT NULL THEN jsonb_build_object('id', cro.room_id, 'label', cro.room_name) ELSE NULL END))) as "accounts: Vec<AccountPersonEmbed>" FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id {#public_only} GROUP BY ag.id ORDER BY ag.index, ag.id LIMIT {limit} OFFSET {offset}"#,
+        r#"SELECT ag.id, ag.label, ag.icon, ag.email, get_i18n_string(ag.description_i18n, {langs:Vec<String>}) AS description, array_agg(jsonb_build_object('id', cro.id, 'full_name', cro.full_name, 'display_name', cro.display_name, 'room', (CASE WHEN cro.room_id IS NOT NULL THEN jsonb_build_object('id', cro.room_id, 'label', cro.room_name) ELSE NULL END))) as "accounts: Vec<AccountPersonEmbed>" FROM account_groups ag JOIN account_group_memberships agm on ag.id = agm.group_id JOIN current_room_occupants cro ON agm.account_id = cro.id {#public_only} GROUP BY ag.id ORDER BY ag.index, ag.id LIMIT {limit} OFFSET {offset}"#,
         #public_only = match public_only {
             true => "WHERE ag.public = true",
             false => "",

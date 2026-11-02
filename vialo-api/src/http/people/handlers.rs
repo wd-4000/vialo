@@ -313,6 +313,7 @@ async fn get_person_impl(
      membership_start,
        membership_end as "membership_end: PgDate",
         full_name,
+        display_name,
         phone,
         manually_suspended,
        credit_balance FROM accounts_people WHERE id = {target_id}"#
@@ -483,8 +484,8 @@ pub async fn insert_person(
     body: CreateUserSchema,
 ) -> Result<CreatedPerson, VialoError> {
     let created_user = sqlx::query!(
-        r#"INSERT INTO accounts_people (label, email, membership_end, full_name, auth_id, phone) VALUES ($1, $2, $3, $4, $5, NULLIF(btrim($6), '')) RETURNING id, full_name"#,
-        body.label, body.email, body.membership_end as PgDate, body.full_name, body.auth_id, body.phone
+        r#"INSERT INTO accounts_people (label, email, membership_end, full_name, display_name, auth_id, phone) VALUES ($1, $2, $3, $4, $5, $6, NULLIF(btrim($7), '')) RETURNING id, full_name"#,
+        body.label, body.email, body.membership_end as PgDate, body.full_name, body.display_name, body.auth_id, body.phone
     )
     .fetch_one(trans.deref_mut())
     .await
@@ -574,17 +575,18 @@ pub async fn put_person(
     let mut trans = grab_trans(&mut conn).await?;
 
     let updated_user = sqlx::query_as!(AccountModel,
-        r#"UPDATE accounts_people SET label = $1, email = $2, membership_end = $3, full_name = $4, phone = NULLIF(btrim($6), '') WHERE id = $5 RETURNING id,
+        r#"UPDATE accounts_people SET label = $1, email = $2, membership_end = $3, full_name = $4, display_name = $5, phone = NULLIF(btrim($6), '') WHERE id = $7 RETURNING id,
                label,
              auth_id,
               email,
              membership_start,
                membership_end as "membership_end: PgDate",
                 full_name,
+                display_name,
                 phone,
                 manually_suspended,
                credit_balance"#,
-        body.label, body.email, body.membership_end as PgDate, body.full_name, id, body.phone
+        body.label, body.email, body.membership_end as PgDate, body.full_name, body.display_name, body.phone, id
     )
     .fetch_one(trans.deref_mut())
     .await?;

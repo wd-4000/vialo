@@ -170,6 +170,7 @@ $$;
 CREATE TABLE identities (
   id uuid PRIMARY KEY,
   full_name text,
+  display_name text,
   email text,
   phone text,
   room text
@@ -190,6 +191,7 @@ CREATE TABLE accounts_people (
   membership_end date not null, -- Association membership end. Expired = No access.
   comms_lang text,
   full_name text,
+  display_name text,
   phone text,
   manually_suspended boolean not null default false, -- True = No access to any syiervices.
   credit_balance int DEFAULT 0, -- NULL = unlimited credits
@@ -462,6 +464,7 @@ CREATE VIEW current_room_occupants AS
 SELECT
   a.id,
   COALESCE(a.full_name, a.label) AS full_name,
+  COALESCE(a.display_name, split_part(a.full_name, ' ', 1)) AS display_name,
   r.label AS room_name,
   r.id AS room_id
 FROM

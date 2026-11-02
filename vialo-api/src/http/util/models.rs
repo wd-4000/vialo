@@ -299,6 +299,9 @@ impl_jsonb_embed!(ProductEmbed);
 pub struct AccountPersonEmbed {
     pub id: Uuid,
     pub full_name: String,
+    /// Only included in `/people/groups/overview` for now
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
     pub room: Option<RoomEmbed>,
 }
 
