@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE account_group_memberships SET role = $3 WHERE group_id = $1 AND account_id = $2",
+  "query": "INSERT INTO account_group_memberships_manual (group_id, account_id, role)\n         SELECT $1, $2, $3 WHERE EXISTS (SELECT 1 FROM account_group_memberships WHERE group_id = $1 AND account_id = $2)\n         ON CONFLICT (account_id, group_id) DO UPDATE SET role = EXCLUDED.role",
   "describe": {
     "columns": [],
     "parameters": {
@@ -22,5 +22,5 @@
     },
     "nullable": []
   },
-  "hash": "65779db91c3ddbb498c8c17152b5c903d6f8408718812d4bcf02e774acbe3f22"
+  "hash": "fadd187865c4ed2117ce11e9e83874db21d22a965e4d8a0df8a844366f6561b1"
 }

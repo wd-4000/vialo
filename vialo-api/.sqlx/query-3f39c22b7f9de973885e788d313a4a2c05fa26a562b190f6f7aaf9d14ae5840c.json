@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT ag.id, ag.label, ag.email, ag.icon, ag.public, get_i18n_all_string_translations(ag.description_i18n) AS description, COALESCE(\n                array_agg(agra.role) FILTER (WHERE agra.role IS NOT NULL),\n                '{}'::app_role[]\n            ) as \"app_roles!: Vec<AppRole>\" FROM account_groups ag LEFT JOIN account_group_app_roles agra ON ag.id = agra.group_id WHERE id = $1 GROUP BY ag.id",
+  "query": "SELECT ag.id, ag.label, ag.email, ag.icon, ag.public, get_i18n_all_string_translations(ag.description_i18n) AS description, COALESCE(\n                array_agg(agra.role) FILTER (WHERE agra.role IS NOT NULL),\n                '{}'::app_role[]\n            ) as \"app_roles!: Vec<AppRole>\", get_group_source_rules(ag.id) AS \"source_rules!: Vec<GroupSourceRule>\" FROM account_groups ag LEFT JOIN account_group_app_roles agra ON ag.id = agra.group_id WHERE id = $1 GROUP BY ag.id",
   "describe": {
     "columns": [
       {
@@ -98,6 +98,12 @@
           }
         },
         "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "source_rules!: Vec<GroupSourceRule>",
+        "type_info": "JsonbArray",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -112,8 +118,9 @@
       true,
       false,
       null,
+      null,
       null
     ]
   },
-  "hash": "08f162a3558ef48a6d87dcf821c15b5135cab0234431a57b6d67a56f8edf6fe6"
+  "hash": "3f39c22b7f9de973885e788d313a4a2c05fa26a562b190f6f7aaf9d14ae5840c"
 }

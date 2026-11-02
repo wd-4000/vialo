@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT get_group_source_rules($1) AS \"source_rules!: Vec<GroupSourceRule>\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_rules!: Vec<GroupSourceRule>",
+        "type_info": "JsonbArray",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ceeb9b95bad7500dbf193535a1088781ca34d9a027286da06dd8533ca23d990d"
+}

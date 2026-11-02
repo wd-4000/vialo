@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM account_group_source_rules WHERE group_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dca3e35f9c85012eb39ac55aa33b1b7ac81452e4f4e25a20a4bf8ab99373c054"
+}

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM account_group_memberships_derived WHERE group_id = $1 AND account_id = $2) AS \"derived!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "derived!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "05f6af1945e4d90705d92635e784a5f99a45e5f9c30398ea0b93fd9c2f2a2285"
+}

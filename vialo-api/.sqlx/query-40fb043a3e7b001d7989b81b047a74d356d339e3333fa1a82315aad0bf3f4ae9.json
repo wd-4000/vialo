@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO account_group_memberships (group_id, account_id, role) VALUES ($1, $2, $3)\n             ON CONFLICT (account_id, group_id) DO NOTHING",
+  "query": "INSERT INTO account_group_memberships_manual (group_id, account_id, role) VALUES ($1, $2, $3)",
   "describe": {
     "columns": [],
     "parameters": {
@@ -22,5 +22,5 @@
     },
     "nullable": []
   },
-  "hash": "20bfd0384a81341030bc3ba5da0b67c5d235dbb75f7b561f841a945b2753c75c"
+  "hash": "40fb043a3e7b001d7989b81b047a74d356d339e3333fa1a82315aad0bf3f4ae9"
 }

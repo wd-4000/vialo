@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO account_group_source_rules (group_id, type, floor, source_group_id, source_group_type, source_role)\n        SELECT $1, r.type, r.floor, r.group_id, r.group_type, r.role\n        FROM jsonb_to_recordset($2) AS r(type group_source_type, floor int, group_id uuid, group_type group_source_type, role group_role)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8e6ac46e9cfe5bf84bc2c5a5694549afa329ac1b7d2f430554ddf8f52b63ccec"
+}

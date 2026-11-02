@@ -1,0 +1,85 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            a.id as \"id!\",\n            COALESCE(a.full_name, a.label, i.full_name) AS \"full_name?\",\n            CASE WHEN r.id IS NOT NULL THEN jsonb_build_object('label', r.label, 'id', r.id) ELSE NULL END AS \"room: RoomEmbed\",\n            agm.role as \"role!: GroupRole\",\n            (SELECT d.source FROM account_group_memberships_derived d WHERE d.account_id = agm.account_id AND d.group_id = agm.group_id) AS \"source: GroupSourceType\"\n        FROM\n            accounts_people a\n            FULL JOIN identities i ON i.id = a.auth_id\n            LEFT JOIN res_leases l ON a.id = l.tenant_id\n            LEFT JOIN res_rooms r ON l.room_id = r.id JOIN account_group_memberships agm ON a.id = agm.account_id WHERE agm.group_id = $1 AND COALESCE(a.full_name, a.label) ILIKE '%' || $2 || '%' OR r.label ILIKE '%' || $2 || '%' ORDER BY (a.id IS NULL) DESC, (i.id IS NULL) DESC, r.label DESC LIMIT $3 OFFSET $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "full_name?",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "room: RoomEmbed",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "role!: GroupRole",
+        "type_info": {
+          "Custom": {
+            "name": "group_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "manager"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "account_group_memberships",
+            "name": "role"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "source: GroupSourceType",
+        "type_info": {
+          "Custom": {
+            "name": "group_source_type",
+            "kind": {
+              "Enum": [
+                "floor",
+                "group_id",
+                "group_type"
+              ]
+            }
+          }
+        },
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      true,
+      null
+    ]
+  },
+  "hash": "a8735e7c608293804cc20f466bdeaa373b08e241d9ebe583e6cb8d479800fefc"
+}

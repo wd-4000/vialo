@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            a.id as \"id\",\n            COALESCE(a.full_name, a.label) AS \"full_name?\",\n            jsonb_build_object('label', r.label, 'id', r.id) AS \"room: RoomEmbed\"\n        FROM\n            accounts_people a\n            LEFT JOIN res_leases l ON a.id = l.tenant_id\n            LEFT JOIN res_rooms r ON l.room_id = r.id\n        WHERE\n            -- in any of the groups\n            ($1::uuid[] IS NULL OR EXISTS (SELECT 1 FROM account_group_memberships agm WHERE agm.account_id = a.id AND agm.group_id = ANY($1)))\n            -- in none of the groups\n            AND ($2::uuid[] IS NULL OR NOT EXISTS (SELECT 1 FROM account_group_memberships agm WHERE agm.account_id = a.id AND agm.group_id = ANY($2)))\n            -- search\n            AND ($3::text IS NULL OR COALESCE(a.full_name, a.label) ILIKE '%' || $3 || '%' OR r.label ILIKE '%' || $3 || '%')\n            -- only people with a room\n            AND (NOT $4 OR r.label IS NOT NULL)\n        ORDER BY r.label DESC LIMIT $5 OFFSET $6",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "accounts_people",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "full_name?",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "room: RoomEmbed",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "Text",
+        "Bool",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "2266d3805f46c150833628fb3fd69b0d48c43fef868e52c72af4f4f64fe187fd"
+}
