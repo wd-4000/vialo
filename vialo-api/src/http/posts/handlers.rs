@@ -294,8 +294,8 @@ pub async fn update_post(
     let (location_langs, location_content) = get_i18n_arg_arrays(body.location);
 
     let record = sqlx::query_as!(BoardPostIdModel,
-        "UPDATE board_posts SET (account_id, board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain) = ($1, $2, $3, update_i18n_strings(title, $4, $5), update_i18n_strings(content, $6, $7), NOW(), update_i18n_strings(location, $8, $9), $10, $11, update_i18n_strings(content_html, $13, $14), update_i18n_strings(content_plain, $15, $16)) WHERE id = $12 RETURNING id",
-       user.id, body.board_id, body.icon, &title_langs, &title_content,  &content_langs,&content_content, &location_langs, &location_content, body.event_from, body.event_to, id, &content_html_langs,&content_html_content, &content_plain_langs,&content_plain_content
+        "UPDATE board_posts SET (account_id, board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain, visibility) = ($1, $2, $3, update_i18n_strings(title, $4, $5), update_i18n_strings(content, $6, $7), NOW(), update_i18n_strings(location, $8, $9), $10, $11, update_i18n_strings(content_html, $13, $14), update_i18n_strings(content_plain, $15, $16), $17) WHERE id = $12 RETURNING id",
+       user.id, body.board_id, body.icon, &title_langs, &title_content,  &content_langs,&content_content, &location_langs, &location_content, body.event_from, body.event_to, id, &content_html_langs,&content_html_content, &content_plain_langs,&content_plain_content, body.visibility as PostVisibility
     )
     .fetch_one(&mut *trans)
     .await?;
@@ -344,6 +344,7 @@ pub async fn get_post(
                 bp.event_from,
                 bp.event_to,
                 bp.created_at,
+                bp.visibility AS \"visibility: PostVisibility\",
                 ARRAY(SELECT jsonb_build_object('id', m.id, 'status', m.status, 'mime', m.mime, 'size_bytes', m.size_bytes,
                     'content', jsonb_build_object('type', m.type, 'width', m.width, 'height', m.height, 'variants', m.variants, 'filename', m.filename))
                 FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS \"media!: Vec<PostMediaModel>\"
@@ -390,6 +391,7 @@ pub async fn get_post(
                 bp.event_from,
                 bp.event_to,
                 bp.created_at,
+                bp.visibility AS \"visibility: PostVisibility\",
                 ARRAY(SELECT jsonb_build_object('id', m.id, 'status', m.status, 'mime', m.mime, 'size_bytes', m.size_bytes,
                     'content', jsonb_build_object('type', m.type, 'width', m.width, 'height', m.height, 'variants', m.variants, 'filename', m.filename))
                 FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS \"media!: Vec<PostMediaModel>\"

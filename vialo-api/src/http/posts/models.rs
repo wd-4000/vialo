@@ -48,6 +48,7 @@ pub struct BoardPostModelTranslated {
     pub event_from: Option<chrono::DateTime<chrono::Utc>>,
     pub event_to: Option<chrono::DateTime<chrono::Utc>>,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub visibility: PostVisibility,
     pub media: Vec<PostMediaModel>,
 }
 
@@ -96,6 +97,7 @@ pub struct BoardPostModelTranslatedAllLanguages {
     pub event_from: Option<chrono::DateTime<chrono::Utc>>,
     pub event_to: Option<chrono::DateTime<chrono::Utc>>,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub visibility: PostVisibility,
     pub media: Vec<PostMediaModel>,
 }
 
