@@ -20,6 +20,9 @@ nms = ["mac_address/serde"]
 media-asm = ["ravif/asm"]
 # HEIF/AVIF uploads - we need to link libheif
 media-heif = ["dep:libheif-rs"]
+# Builds libheif from source and links it statically (Docker/musl)
+# Needs cmake, g++ and static libde265 + libaom
+media-heif-static = ["media-heif", "libheif-rs/embedded-libheif"]
 
 [dependencies]
 

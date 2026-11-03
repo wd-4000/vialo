@@ -4,7 +4,9 @@
 FROM rust:1.99-alpine AS builder
 ARG PROFILE=release
 
-RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static
+# nasm: rav1e asm. cmake onwards: static libheif with HEVC (libde265) and AV1 (libaom)
+RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static nasm \
+    cmake g++ make pkgconf libde265-dev libde265-static aom-dev aom-static
 
 WORKDIR /usr/src/vialo
 
@@ -25,7 +27,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     echo "fn main() {}" > vialo-api/src/main.rs && \
     touch vialo-common/src/lib.rs && \
     echo "fn main() {}" > vialo-dhcp/src/main.rs && \
-    cargo build --locked --profile $PROFILE --features migrate -p vialo-api && \
+    cargo build --locked --profile $PROFILE --features migrate,media-asm,media-heif-static -p vialo-api && \
     rm -rf vialo-api/src vialo-common/src vialo-dhcp/src
 
 COPY . .
@@ -39,7 +41,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/src/vialo/target \
     TARGET_DIR=$(echo $PROFILE | sed 's/^dev$/debug/') && \
     find vialo-api vialo-common vialo-dhcp -name '*.rs' -exec touch {} + && \
-    SQLX_OFFLINE=true cargo build --locked --profile $PROFILE --features migrate -p vialo-api --bin vialo-api && \
+    SQLX_OFFLINE=true cargo build --locked --profile $PROFILE --features migrate,media-asm,media-heif-static -p vialo-api --bin vialo-api && \
     cp target/$TARGET_DIR/vialo-api /vialo-api
 # We use cached SQLX queries (SQLX_OFFLINE=true).
 # This means you need to run `cargo sqlx prepare` to update the cache!

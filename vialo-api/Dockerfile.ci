@@ -5,7 +5,9 @@
 # use the plain Dockerfile — keep the final stage of both files in sync!
 FROM rust:1.99-alpine AS chef
 
-RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static cargo-chef
+# nasm: rav1e asm. cmake onwards: static libheif with HEVC (libde265) and AV1 (libaom)
+RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static cargo-chef nasm \
+    cmake g++ make pkgconf libde265-dev libde265-static aom-dev aom-static
 
 WORKDIR /usr/src/vialo
 
@@ -25,7 +27,7 @@ ARG PROFILE=release
 # manifests/lockfile change. Env and flags must match the real build below,
 # or cargo rebuilds everything anyway.
 COPY --from=planner /usr/src/vialo/recipe.json recipe.json
-RUN cargo chef cook --profile $PROFILE --features migrate -p vialo-api --recipe-path recipe.json
+RUN cargo chef cook --profile $PROFILE --features migrate,media-asm,media-heif-static -p vialo-api --recipe-path recipe.json
 
 COPY . .
 
@@ -33,7 +35,7 @@ COPY . .
 # builds (notably the arm64 leg) don't pay for compiling it. --locked turns
 # lockfile drift into a hard error instead of a silent re-resolve.
 RUN TARGET_DIR=$(echo $PROFILE | sed 's/^dev$/debug/') && \
-    SQLX_OFFLINE=true cargo build --locked --profile $PROFILE --features migrate -p vialo-api --bin vialo-api && \
+    SQLX_OFFLINE=true cargo build --locked --profile $PROFILE --features migrate,media-asm,media-heif-static -p vialo-api --bin vialo-api && \
     cp target/$TARGET_DIR/vialo-api /vialo-api
 # We use cached SQLX queries (SQLX_OFFLINE=true).
 # This means you need to run `cargo sqlx prepare` to update the cache!
@@ -43,7 +45,7 @@ RUN TARGET_DIR=$(echo $PROFILE | sed 's/^dev$/debug/') && \
 # spec for the docs (cheap: everything but the small bin is already compiled).
 FROM builder AS spec-builder
 RUN TARGET_DIR=$(echo $PROFILE | sed 's/^dev$/debug/') && \
-    SQLX_OFFLINE=true cargo build --locked --profile $PROFILE --features migrate -p vialo-api --bin openapi-spec && \
+    SQLX_OFFLINE=true cargo build --locked --profile $PROFILE --features migrate,media-asm,media-heif-static -p vialo-api --bin openapi-spec && \
     target/$TARGET_DIR/openapi-spec /openapi.json /openapi-hooks.json
 
 FROM scratch AS openapi
