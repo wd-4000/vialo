@@ -50,6 +50,16 @@ pub fn hooks_openapi_doc() -> utoipa::openapi::OpenApi {{
     let dest = Path::new(&out_dir).join("api_doc_gen.rs");
     fs::write(&dest, content).unwrap();
 
+    // Static libde265 on x86 uses __builtin_cpu_supports, which needs libgcc.a.
+    // musl Rust links libunwind instead. link-arg goes after the libs, so ld resolves it
+    let env = |k| std::env::var(k).unwrap_or_default();
+    if std::env::var_os("CARGO_FEATURE_MEDIA_HEIF_STATIC").is_some()
+        && env("CARGO_CFG_TARGET_ENV") == "musl"
+        && env("CARGO_CFG_TARGET_ARCH") == "x86_64"
+    {
+        println!("cargo:rustc-link-arg=-lgcc");
+    }
+
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=src/http");
     println!("cargo:rerun-if-changed=src/hooks");
