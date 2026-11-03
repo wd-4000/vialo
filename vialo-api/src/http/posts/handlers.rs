@@ -327,46 +327,33 @@ pub async fn get_post(
     let wants_md = opts.content_format.is_empty()
         || opts.content_format.contains(&PostContentFormat::Markdown);
 
+    let uid = user_o.as_ref().map(|u| u.id);
+
     if langs == ["all"] {
         let post = conditional_query_as!(
             BoardPostModelTranslatedAllLanguages,
-            "SELECT
+            r#"SELECT
                 bp.id,
                 bp.account_id,
                 bp.board_id,
                 bp.icon,
-                -- Use get_i18n_string for title, content, and location translations with fallback
                 get_i18n_all_string_translations(bp.title) AS title,
-                {#CONTENT_MD},
-                {#CONTENT_PLAIN},
-                {#CONTENT_HTML},
+                CASE WHEN {wants_md} THEN get_i18n_all_string_translations(bp.content) END AS content,
+                CASE WHEN {wants_html} THEN get_i18n_all_string_translations(bp.content_html) END AS content_html,
+                CASE WHEN {wants_plain} THEN get_i18n_all_string_translations(bp.content_plain) END AS content_plain,
                 get_i18n_all_string_translations(bp.location) AS location,
                 bp.event_from,
                 bp.event_to,
                 bp.created_at,
-                bp.visibility AS \"visibility: PostVisibility\",
+                bp.visibility AS "visibility: PostVisibility",
                 ARRAY(SELECT jsonb_build_object('id', m.id, 'status', m.status, 'mime', m.mime, 'size_bytes', m.size_bytes,
                     'content', jsonb_build_object('type', m.type, 'width', m.width, 'height', m.height, 'variants', m.variants, 'filename', m.filename))
-                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS \"media!: Vec<PostMediaModel>\"
-            FROM
-                board_posts bp
-            WHERE bp.id = {id} AND {#VISIBILITY}",
-                #CONTENT_PLAIN = match wants_plain {
-                    true => "get_i18n_all_string_translations(bp.content_plain) AS content_plain",
-                    false => "NULL::jsonb as content_plain"
-                },
-                #CONTENT_HTML = match wants_html {
-                    true => "get_i18n_all_string_translations(bp.content_html) AS content_html",
-                    false => "NULL::jsonb as content_html"
-                },
-                #CONTENT_MD = match wants_md {
-                    true => "get_i18n_all_string_translations(bp.content) AS content",
-                    false => "NULL::jsonb as content"
-                },
-                #VISIBILITY = match user_o.as_ref() {
-                    Some(User {id: uid, ..}) => "(bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists({uid}, bp.board_id, 'view'::board_perm))",
-                    _ => "bp.visibility = 'public'"
-                }
+                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS "media!: Vec<PostMediaModel>"
+            FROM board_posts bp
+            WHERE bp.id = {id}
+                -- visibility
+                AND (bp.visibility = 'public'
+                    OR ({uid}::uuid IS NOT NULL AND (bp.visibility = 'logged_in' OR account_board_perm_exists({uid}, bp.board_id, 'view'::board_perm))))"#,
         )
         .fetch_optional(&data.db)
         .await?
@@ -377,43 +364,28 @@ pub async fn get_post(
         let langs = &langs;
         let post = conditional_query_as!(
             BoardPostModelTranslated,
-            "SELECT
+            r#"SELECT
                 bp.id,
                 bp.account_id,
                 bp.board_id,
                 bp.icon,
-                -- Use get_i18n_string for title, content, and location translations with fallback
                 get_i18n_string(bp.title, {langs}) AS title,
-                {#CONTENT_PLAIN},
-                {#CONTENT_HTML},
-                {#CONTENT_MD},
+                CASE WHEN {wants_md} THEN get_i18n_string(bp.content, {langs}) END AS content,
+                CASE WHEN {wants_html} THEN get_i18n_string(bp.content_html, {langs}) END AS content_html,
+                CASE WHEN {wants_plain} THEN get_i18n_string(bp.content_plain, {langs}) END AS content_plain,
                 get_i18n_string(bp.location, {langs}) AS location,
                 bp.event_from,
                 bp.event_to,
                 bp.created_at,
-                bp.visibility AS \"visibility: PostVisibility\",
+                bp.visibility AS "visibility: PostVisibility",
                 ARRAY(SELECT jsonb_build_object('id', m.id, 'status', m.status, 'mime', m.mime, 'size_bytes', m.size_bytes,
                     'content', jsonb_build_object('type', m.type, 'width', m.width, 'height', m.height, 'variants', m.variants, 'filename', m.filename))
-                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS \"media!: Vec<PostMediaModel>\"
-            FROM
-                board_posts bp
-            WHERE bp.id = {id} AND {#VISIBILITY}",
-            #CONTENT_PLAIN = match wants_plain {
-                true => "get_i18n_string(bp.content_plain, {langs}) AS content_plain",
-                false => "NULL as content_plain"
-            },
-            #CONTENT_HTML = match wants_html {
-                true => "get_i18n_string(bp.content_html, {langs}) AS content_html",
-                false => "NULL as content_html"
-            },
-            #CONTENT_MD = match wants_md {
-                true => "get_i18n_string(bp.content, {langs}) AS content",
-                false => "NULL as content"
-            },
-            #VISIBILITY = match user_o.as_ref() {
-                Some(User {id: uid, ..}) => "(bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists({uid}, bp.board_id, 'view'::board_perm))",
-                _ => "bp.visibility = 'public'"
-            }
+                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS "media!: Vec<PostMediaModel>"
+            FROM board_posts bp
+            WHERE bp.id = {id}
+                -- visibility
+                AND (bp.visibility = 'public'
+                    OR ({uid}::uuid IS NOT NULL AND (bp.visibility = 'logged_in' OR account_board_perm_exists({uid}, bp.board_id, 'view'::board_perm))))"#,
         )
         .fetch_optional(&data.db)
         .await?
