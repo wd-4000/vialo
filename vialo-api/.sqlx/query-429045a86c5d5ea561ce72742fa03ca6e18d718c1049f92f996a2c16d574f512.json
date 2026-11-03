@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                bp.id,\n                bp.account_id,\n                bp.board_id,\n                bp.icon,\n                -- Use get_i18n_string for title, content, and location translations with fallback\n                get_i18n_all_string_translations(bp.title) AS title,\n                NULL::jsonb as content,\n                get_i18n_all_string_translations(bp.content_plain) AS content_plain,\n                NULL::jsonb as content_html,\n                get_i18n_all_string_translations(bp.location) AS location,\n                bp.event_from,\n                bp.event_to,\n                bp.created_at,\n                ARRAY(SELECT jsonb_build_object('id', m.id, 'status', m.status, 'mime', m.mime, 'size_bytes', m.size_bytes,\n                    'content', jsonb_build_object('type', m.type, 'width', m.width, 'height', m.height, 'variants', m.variants, 'filename', m.filename))\n                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS \"media!: Vec<PostMediaModel>\"\n            FROM\n                board_posts bp\n            WHERE bp.id = $1 AND (bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists($2, bp.board_id, 'view'::board_perm))",
+  "query": "SELECT\n                bp.id,\n                bp.account_id,\n                bp.board_id,\n                bp.icon,\n                get_i18n_string(bp.title, $1) AS title,\n                CASE WHEN $2 THEN get_i18n_string(bp.content, $1) END AS content,\n                CASE WHEN $3 THEN get_i18n_string(bp.content_html, $1) END AS content_html,\n                CASE WHEN $4 THEN get_i18n_string(bp.content_plain, $1) END AS content_plain,\n                get_i18n_string(bp.location, $1) AS location,\n                bp.event_from,\n                bp.event_to,\n                bp.created_at,\n                bp.visibility AS \"visibility: PostVisibility\",\n                ARRAY(SELECT jsonb_build_object('id', m.id, 'status', m.status, 'mime', m.mime, 'size_bytes', m.size_bytes,\n                    'content', jsonb_build_object('type', m.type, 'width', m.width, 'height', m.height, 'variants', m.variants, 'filename', m.filename))\n                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS \"media!: Vec<PostMediaModel>\"\n            FROM board_posts bp\n            WHERE bp.id = $5\n                -- visibility\n                AND (bp.visibility = 'public'\n                    OR ($6::uuid IS NOT NULL AND (bp.visibility = 'logged_in' OR account_board_perm_exists($6, bp.board_id, 'view'::board_perm))))",
   "describe": {
     "columns": [
       {
@@ -50,31 +50,31 @@
       {
         "ordinal": 4,
         "name": "title",
-        "type_info": "Jsonb",
+        "type_info": "Text",
         "origin": "Expression"
       },
       {
         "ordinal": 5,
         "name": "content",
-        "type_info": "Jsonb",
+        "type_info": "Text",
         "origin": "Expression"
       },
       {
         "ordinal": 6,
-        "name": "content_plain",
-        "type_info": "Jsonb",
+        "name": "content_html",
+        "type_info": "Text",
         "origin": "Expression"
       },
       {
         "ordinal": 7,
-        "name": "content_html",
-        "type_info": "Jsonb",
+        "name": "content_plain",
+        "type_info": "Text",
         "origin": "Expression"
       },
       {
         "ordinal": 8,
         "name": "location",
-        "type_info": "Jsonb",
+        "type_info": "Text",
         "origin": "Expression"
       },
       {
@@ -112,6 +112,28 @@
       },
       {
         "ordinal": 12,
+        "name": "visibility: PostVisibility",
+        "type_info": {
+          "Custom": {
+            "name": "post_visibility",
+            "kind": {
+              "Enum": [
+                "public",
+                "logged_in",
+                "board"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "board_posts",
+            "name": "visibility"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
         "name": "media!: Vec<PostMediaModel>",
         "type_info": "JsonbArray",
         "origin": "Expression"
@@ -119,6 +141,10 @@
     ],
     "parameters": {
       "Left": [
+        "TextArray",
+        "Bool",
+        "Bool",
+        "Bool",
         "Int4",
         "Uuid"
       ]
@@ -136,8 +162,9 @@
       true,
       true,
       false,
+      false,
       null
     ]
   },
-  "hash": "609f0099662fa4960572a7b2b83096469e39ed69002241a914db273127afe16e"
+  "hash": "429045a86c5d5ea561ce72742fa03ca6e18d718c1049f92f996a2c16d574f512"
 }
