@@ -11,11 +11,11 @@ use ammonia;
 use pulldown_cmark::{Parser, html};
 
 use crate::AppState;
-use crate::media;
 use crate::helpers::LangVariant;
 use crate::http::util::{
     JsonE, User, VialoError, clamp_pagination, get_i18n_arg_arrays, grab_trans,
 };
+use crate::media;
 use axum::Extension;
 use axum::{
     Json,
@@ -34,6 +34,10 @@ fn render_post(
     Option<HashMap<String, String>>,
     Option<HashMap<String, String>>,
 ) {
+    // Images are use the `media:<id>` schema and resolved at the client
+    let mut sanitizer = ammonia::Builder::default();
+    sanitizer.add_url_schemes(["media"]);
+
     let content_html: &Option<HashMap<String, String>> = &content.as_ref().map(|yes_content| {
         // option
         yes_content
@@ -44,7 +48,7 @@ fn render_post(
                 let parser = Parser::new(v);
                 let mut html_buf = String::new();
                 html::push_html(&mut html_buf, parser);
-                let rendered_html = ammonia::clean(&html_buf);
+                let rendered_html = sanitizer.clean(&html_buf).to_string();
 
                 (k.clone(), rendered_html)
             })
