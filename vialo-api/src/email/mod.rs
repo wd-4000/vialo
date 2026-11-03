@@ -183,12 +183,16 @@ async fn form_email<'a>(
                 BookableEventKind::Booked => {
                     ("html/bookable_booked", "plain/bookable_booked", "booked")
                 }
-                BookableEventKind::Upcoming => {
-                    ("html/bookable_upcoming", "plain/bookable_upcoming", "upcoming")
-                }
-                BookableEventKind::Canceled => {
-                    ("html/bookable_canceled", "plain/bookable_canceled", "canceled")
-                }
+                BookableEventKind::Upcoming => (
+                    "html/bookable_upcoming",
+                    "plain/bookable_upcoming",
+                    "upcoming",
+                ),
+                BookableEventKind::Canceled => (
+                    "html/bookable_canceled",
+                    "plain/bookable_canceled",
+                    "canceled",
+                ),
                 BookableEventKind::Expired => {
                     ("html/bookable_expired", "plain/bookable_expired", "expired")
                 }
@@ -293,9 +297,20 @@ async fn notify_post_subscribers(
             url: url_prefixes.board.clone() + &post.board_id.to_string(),
         },
         title: post.title.unwrap_or_else(|| "No title".into()),
-        time: get_event_timespan(locale!("en"), post.now_local, post.event_from, post.event_to),
+        time: get_event_timespan(
+            locale!("en"),
+            post.now_local,
+            post.event_from,
+            post.event_to,
+        ),
         url: url_prefixes.post.clone() + &post.id.to_string(),
-        content_html: post.content_html,
+        // Mail clients can't authenticate to fetch media so we just drop it for now
+        content_html: post.content_html.map(|h| {
+            ammonia::Builder::default()
+                .rm_tags(["img"])
+                .clean(&h)
+                .to_string()
+        }),
         content_plain: post.content_plain,
     };
 
