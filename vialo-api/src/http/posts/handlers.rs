@@ -189,6 +189,7 @@ pub async fn add_post(
        or by BoardManagers.
     */
     check_can_post_to_board(&user, body.board_id, &data.db).await?;
+    check_post_not_empty(&body)?;
     let media_ids = body.media.take();
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
@@ -241,6 +242,30 @@ pub async fn add_post(
     Ok((StatusCode::CREATED, Json(record)))
 }
 
+/// Title and content each need something in at least one language
+fn check_post_not_empty(body: &CreatePostSchema) -> Result<(), VialoError> {
+    let any_filled = |field: &Option<HashMap<String, String>>| {
+        // The editor writes blank paragraphs as &nbsp
+        field
+            .iter()
+            .flat_map(|m| m.values())
+            .any(|v| !v.replace("&nbsp;", "").trim().is_empty())
+    };
+    if !any_filled(&body.title) {
+        return Err(VialoError::AppError(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "missing_title".into(),
+        ));
+    }
+    if !any_filled(&body.content) {
+        return Err(VialoError::AppError(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "missing_content".into(),
+        ));
+    }
+    Ok(())
+}
+
 #[utoipa::path(put, path = "/posts/{id}", request_body = CreatePostSchema, responses((status = 200, description = "Updated", body=BoardPostIdModel)))]
 pub async fn update_post(
     Path(id): Path<i32>,
@@ -278,6 +303,7 @@ pub async fn update_post(
     if !allowed {
         return Err(VialoError::Forbidden());
     }
+    check_post_not_empty(&body)?;
 
     let media_ids = body.media.take();
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;

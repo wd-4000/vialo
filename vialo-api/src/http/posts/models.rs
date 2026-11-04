@@ -7,8 +7,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
-#[sqlx(type_name = "post_visibility", rename_all = "lowercase")]
-#[serde(rename_all = "lowercase")]
+#[sqlx(type_name = "post_visibility", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum PostVisibility {
     Public,
     LoggedIn,
