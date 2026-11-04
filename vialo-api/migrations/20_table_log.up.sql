@@ -118,11 +118,13 @@ DECLARE
     p_record_key text;
     -- Columns whose changes carry no value. We Do Not Care
     -- account_people.credit_balance is just materialized from the transactions,
-    -- credit_ledger.credits_refunded from the refund rows
+    -- credit_ledger.credits_refunded from the refund rows,
+    -- media.(width/height) are taken during encoding
     p_noise_cols CONSTANT jsonb := '{
       "*": ["last_updated", "last_seen"],
       "accounts_people": ["credit_balance"],
-      "credit_ledger": ["credits_refunded"]
+      "credit_ledger": ["credits_refunded"],
+      "media": ["width", "height", "variants"]
     }';
 BEGIN
     SELECT INTO p_account_id CAST(nullif(current_setting('app.account_id', true), '') AS uuid);
@@ -305,8 +307,7 @@ declare
     'accounts', -- derived from accounts_people/account_groups
     'account_group_memberships_derived', -- derived from account_group_source_rules
     'i18n_index', -- autoincrement
-    'import_refs',
-    'media'
+    'import_refs'
   ];
 begin
   for _sql in select concat (
