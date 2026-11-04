@@ -85,13 +85,16 @@ pub async fn main(
             // Cleanup: abandoned uploads, then any dir the DB doesn't know
             let cleanup = async {
                 // Their dirs go in the pass below
+                let mut conn = grab_authd_conn_subsystem(db, "media")
+                    .await
+                    .map_err(|e| anyhow!("couldn't connect to db: {e:?}"))?;
                 let stale = sqlx::query!(
                     r#"DELETE FROM media m WHERE m.created_at < NOW() - interval '1 day' AND (
                         (m.context = 'post' AND m.post_id IS NULL)
                         OR (m.context = 'avatar' AND m.status <> 'pending'
                             AND NOT EXISTS (SELECT 1 FROM accounts_people ap WHERE ap.avatar_id = m.id)))"#
                 )
-                .execute(db)
+                .execute(&mut *conn)
                 .await?
                 .rows_affected();
                 if stale > 0 {
@@ -283,8 +286,11 @@ pub async fn main(
             }
             Err(e) => {
                 error!("Encoding media {id} failed: {e:?}");
+                let mut conn = grab_authd_conn_subsystem(db, "media")
+                    .await
+                    .map_err(|e| anyhow!("couldn't connect to db: {e:?}"))?;
                 sqlx::query!("UPDATE media SET status = 'error' WHERE id = $1", id)
-                    .execute(db)
+                    .execute(&mut *conn)
                     .await?;
                 false
             }

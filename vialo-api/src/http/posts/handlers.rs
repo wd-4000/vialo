@@ -294,8 +294,8 @@ pub async fn update_post(
     let (location_langs, location_content) = get_i18n_arg_arrays(body.location);
 
     let record = sqlx::query_as!(BoardPostIdModel,
-        "UPDATE board_posts SET (account_id, board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain, visibility) = ($1, $2, $3, update_i18n_strings(title, $4, $5), update_i18n_strings(content, $6, $7), NOW(), update_i18n_strings(location, $8, $9), $10, $11, update_i18n_strings(content_html, $13, $14), update_i18n_strings(content_plain, $15, $16), $17) WHERE id = $12 RETURNING id",
-       user.id, body.board_id, body.icon, &title_langs, &title_content,  &content_langs,&content_content, &location_langs, &location_content, body.event_from, body.event_to, id, &content_html_langs,&content_html_content, &content_plain_langs,&content_plain_content, body.visibility as PostVisibility
+        "UPDATE board_posts SET (board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain, visibility) = ($1, $2, update_i18n_strings(title, $3, $4), update_i18n_strings(content, $5, $6), NOW(), update_i18n_strings(location, $7, $8), $9, $10, update_i18n_strings(content_html, $12, $13), update_i18n_strings(content_plain, $14, $15), $16) WHERE id = $11 RETURNING id",
+       body.board_id, body.icon, &title_langs, &title_content,  &content_langs,&content_content, &location_langs, &location_content, body.event_from, body.event_to, id, &content_html_langs,&content_html_content, &content_plain_langs,&content_plain_content, body.visibility as PostVisibility
     )
     .fetch_one(&mut *trans)
     .await?;

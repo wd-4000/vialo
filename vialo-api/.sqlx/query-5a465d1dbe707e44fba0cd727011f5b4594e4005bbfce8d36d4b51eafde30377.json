@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE board_posts SET (account_id, board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain, visibility) = ($1, $2, $3, update_i18n_strings(title, $4, $5), update_i18n_strings(content, $6, $7), NOW(), update_i18n_strings(location, $8, $9), $10, $11, update_i18n_strings(content_html, $13, $14), update_i18n_strings(content_plain, $15, $16), $17) WHERE id = $12 RETURNING id",
+  "query": "UPDATE board_posts SET (board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain, visibility) = ($1, $2, update_i18n_strings(title, $3, $4), update_i18n_strings(content, $5, $6), NOW(), update_i18n_strings(location, $7, $8), $9, $10, update_i18n_strings(content_html, $12, $13), update_i18n_strings(content_plain, $14, $15), $16) WHERE id = $11 RETURNING id",
   "describe": {
     "columns": [
       {
@@ -17,7 +17,6 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Int4",
         "Text",
         "TextArray",
@@ -51,5 +50,5 @@
       false
     ]
   },
-  "hash": "6c7a90304343e436744006dc45503e294027fb8f8b1926e106a497b33f551b5b"
+  "hash": "5a465d1dbe707e44fba0cd727011f5b4594e4005bbfce8d36d4b51eafde30377"
 }
