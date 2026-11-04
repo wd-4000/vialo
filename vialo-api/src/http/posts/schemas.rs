@@ -1,5 +1,6 @@
 use super::models::PostVisibility;
 use serde::{Deserialize, Serialize};
+use serde_with::{DefaultOnNull, serde_as};
 use std::collections::{HashMap, HashSet};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
@@ -25,6 +26,7 @@ pub struct PostFilterOptions {
     pub content_format: HashSet<PostContentFormat>,
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreatePostSchema {
     pub board_id: i32,
@@ -37,7 +39,9 @@ pub struct CreatePostSchema {
     pub event_from: Option<chrono::DateTime<chrono::Utc>>,
     pub event_to: Option<chrono::DateTime<chrono::Utc>>,
     pub visibility: PostVisibility,
-    /// replaces the post's media, ignored if None
     #[serde(default)]
-    pub media: Option<Vec<Uuid>>,
+    #[serde_as(deserialize_as = "DefaultOnNull")]
+    pub media: Vec<Uuid>,
+    #[serde(default)]
+    pub cover_id: Option<Uuid>,
 }

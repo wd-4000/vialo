@@ -104,6 +104,7 @@ pub async fn get_home_aggregated(
         "SELECT
             bp.id,
             bp.icon,
+            bp.cover_id,
             get_i18n_string(bp.title, {langs}) AS title,
             left(get_i18n_string(bp.content_plain, {langs}), 400) AS content,
             get_i18n_string(bp.location, {langs}) AS location,

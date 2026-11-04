@@ -49,6 +49,7 @@ pub struct BoardPostModelTranslated {
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     pub visibility: PostVisibility,
     pub media: Vec<PostMediaModel>,
+    pub cover_id: Option<Uuid>,
     /// Whether the requesting user may edit this post
     pub can_edit: bool,
 }
@@ -71,6 +72,7 @@ pub struct BoardPostModelTranslatedWithPinnedOn {
     pub event_to: Option<chrono::DateTime<chrono::Utc>>,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     pub media: Vec<PostMediaModel>,
+    pub cover_id: Option<Uuid>,
     pub pinned_on: Option<Vec<i32>>,
 }
 
@@ -98,6 +100,7 @@ pub struct BoardPostModelTranslatedAllLanguages {
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     pub visibility: PostVisibility,
     pub media: Vec<PostMediaModel>,
+    pub cover_id: Option<Uuid>,
     /// Whether the requesting user may edit this post
     pub can_edit: bool,
 }

@@ -103,6 +103,7 @@ pub async fn list_posts(
             bp.id,
             bp.board_id,
             bp.icon,
+            bp.cover_id,
             get_i18n_string(bp.title, {langs}) AS title,
             CASE WHEN {wants_md} THEN get_i18n_string(bp.content, {langs}) END AS content,
             CASE WHEN {wants_html} THEN get_i18n_string(bp.content_html, {langs}) END AS content_html,
@@ -181,7 +182,7 @@ async fn check_can_post_to_board(
 pub async fn add_post(
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
-    JsonE(mut body): JsonE<CreatePostSchema>,
+    JsonE(body): JsonE<CreatePostSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
     /*
        PERM
@@ -190,7 +191,6 @@ pub async fn add_post(
     */
     check_can_post_to_board(&user, body.board_id, &data.db).await?;
     check_post_not_empty(&body)?;
-    let media_ids = body.media.take();
 
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
@@ -210,16 +210,14 @@ pub async fn add_post(
     .await?;
 
     let record = sqlx::query_as!(BoardPostIdModel,
-        "INSERT INTO board_posts (account_id, board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain, visibility) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8, $9, $10, $11) RETURNING id",
-        user.id, body.board_id, body.icon, processed_i18n_fields.get("title"), processed_i18n_fields.get("content"), processed_i18n_fields.get("location"), body.event_from, body.event_to, processed_i18n_fields.get("content_html"), processed_i18n_fields.get("content_plain"), body.visibility as PostVisibility
+        "INSERT INTO board_posts (account_id, board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain, visibility, cover_id) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8, $9, $10, $11, $12) RETURNING id",
+        user.id, body.board_id, body.icon, processed_i18n_fields.get("title"), processed_i18n_fields.get("content"), processed_i18n_fields.get("location"), body.event_from, body.event_to, processed_i18n_fields.get("content_html"), processed_i18n_fields.get("content_plain"), body.visibility as PostVisibility, body.cover_id
     )
     .fetch_one(&mut *trans)
     .await?;
 
     // A new post has nothing to drop
-    if let Some(ids) = &media_ids {
-        super::media::sync_post_media(&mut trans, user.id, record.id, ids).await?;
-    }
+    super::media::sync_post_media(&mut trans, user.id, record.id, &body.media, body.cover_id).await?;
     trans.commit().await?;
 
     if data.event_channels.posts_tx.send(record.id).is_err() {
@@ -271,7 +269,7 @@ pub async fn update_post(
     Path(id): Path<i32>,
     State(data): State<Arc<AppState>>,
     Extension(user): Extension<User>,
-    JsonE(mut body): JsonE<CreatePostSchema>,
+    JsonE(body): JsonE<CreatePostSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
     /*
        PERM
@@ -305,7 +303,6 @@ pub async fn update_post(
     }
     check_post_not_empty(&body)?;
 
-    let media_ids = body.media.take();
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
@@ -319,16 +316,14 @@ pub async fn update_post(
     let (location_langs, location_content) = get_i18n_arg_arrays(body.location);
 
     let record = sqlx::query_as!(BoardPostIdModel,
-        "UPDATE board_posts SET (board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain, visibility) = ($1, $2, update_i18n_strings(title, $3, $4), update_i18n_strings(content, $5, $6), NOW(), update_i18n_strings(location, $7, $8), $9, $10, update_i18n_strings(content_html, $12, $13), update_i18n_strings(content_plain, $14, $15), $16) WHERE id = $11 RETURNING id",
-       body.board_id, body.icon, &title_langs, &title_content,  &content_langs,&content_content, &location_langs, &location_content, body.event_from, body.event_to, id, &content_html_langs,&content_html_content, &content_plain_langs,&content_plain_content, body.visibility as PostVisibility
+        "UPDATE board_posts SET (board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain, visibility, cover_id) = ($1, $2, update_i18n_strings(title, $3, $4), update_i18n_strings(content, $5, $6), NOW(), update_i18n_strings(location, $7, $8), $9, $10, update_i18n_strings(content_html, $12, $13), update_i18n_strings(content_plain, $14, $15), $16, $17) WHERE id = $11 RETURNING id",
+       body.board_id, body.icon, &title_langs, &title_content,  &content_langs,&content_content, &location_langs, &location_content, body.event_from, body.event_to, id, &content_html_langs,&content_html_content, &content_plain_langs,&content_plain_content, body.visibility as PostVisibility, body.cover_id
     )
     .fetch_one(&mut *trans)
     .await?;
 
-    let dropped = match &media_ids {
-        Some(ids) => super::media::sync_post_media(&mut trans, user.id, id, ids).await?,
-        None => vec![],
-    };
+    let dropped =
+        super::media::sync_post_media(&mut trans, user.id, id, &body.media, body.cover_id).await?;
     trans.commit().await?;
     for media_id in dropped {
         media::remove_media_dir(&media::media_dir(&data.config.media.dir, media_id)).await;
@@ -361,6 +356,7 @@ pub async fn get_post(
                 bp.id,
                 bp.board_id,
                 bp.icon,
+                bp.cover_id,
                 get_i18n_all_string_translations(bp.title) AS title,
                 CASE WHEN {wants_md} THEN get_i18n_all_string_translations(bp.content) END AS content,
                 CASE WHEN {wants_html} THEN get_i18n_all_string_translations(bp.content_html) END AS content_html,
@@ -397,6 +393,7 @@ pub async fn get_post(
                 bp.id,
                 bp.board_id,
                 bp.icon,
+                bp.cover_id,
                 get_i18n_string(bp.title, {langs}) AS title,
                 CASE WHEN {wants_md} THEN get_i18n_string(bp.content, {langs}) END AS content,
                 CASE WHEN {wants_html} THEN get_i18n_string(bp.content_html, {langs}) END AS content_html,

@@ -40,3 +40,6 @@ CREATE INDEX media_owner_id_idx ON media (owner_id);
 
 ALTER TABLE accounts_people
 ADD CONSTRAINT accounts_people_avatar_id_fkey FOREIGN KEY (avatar_id) REFERENCES media (id) ON DELETE SET NULL;
+
+ALTER TABLE board_posts
+ADD COLUMN cover_id uuid REFERENCES media (id) ON DELETE SET NULL;

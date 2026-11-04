@@ -1,5 +1,6 @@
 use serde::Serialize;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Serialize, ToSchema)]
 pub struct QuickLinkModelTranslated {
@@ -22,6 +23,7 @@ pub struct JumboModelTranslated {
 pub struct BoardPostModelHomeTranslated {
     pub id: i32,
     pub icon: Option<String>,
+    pub cover_id: Option<Uuid>,
     pub title: Option<String>,
     pub content: Option<String>,
     pub location: Option<String>,
