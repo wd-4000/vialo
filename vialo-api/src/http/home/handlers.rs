@@ -115,7 +115,7 @@ pub async fn get_home_aggregated(
             board_posts bp
         LEFT JOIN
             board_pinned_posts bpp ON bp.id = bpp.post_id
-        WHERE ((bp.created_at >= CURRENT_DATE::timestamptz) OR (bpp.pinned_until <= NOW() AND bpp.board_id = 0))
+        WHERE ((bp.created_at >= CURRENT_DATE::timestamptz) OR (bpp.pinned_until >= NOW() AND bpp.board_id = 0))
           AND {#visibility}
         ORDER BY created_at DESC LIMIT {limit} OFFSET {offset}",
         #visibility = match &user_o {
