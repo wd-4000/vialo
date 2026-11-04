@@ -71,7 +71,7 @@ async fn fetch_visible(
     let uid = user.map(|u| u.id);
     let r = sqlx::query!(
         r#"SELECT m.id, m.type AS "media_type: MediaType", m.context AS "context: MediaContext", m.mime,
-            m.filename, m.size_bytes, m.owner_id, m.status AS "status: MediaStatus", m.post_id, m.position,
+            m.filename, m.size_bytes, m.status AS "status: MediaStatus", m.post_id, m.position,
             m.width, m.height, m.variants,
             COALESCE(bp.visibility = 'public', false) AS "public!",
             COALESCE(CASE
@@ -98,7 +98,6 @@ async fn fetch_visible(
             mime: r.mime,
             filename: r.filename,
             size_bytes: r.size_bytes,
-            owner_id: r.owner_id,
             status: r.status,
             post_id: r.post_id,
             position: r.position,
@@ -306,7 +305,6 @@ pub async fn upload_media(
             mime: detected.mime.into(),
             filename,
             size_bytes: total as i64,
-            owner_id: user.id,
             status,
             post_id: None,
             position: 0,

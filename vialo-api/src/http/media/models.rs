@@ -57,7 +57,6 @@ pub enum MediaAttachment {
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct MediaModel {
     pub id: Uuid,
-    pub owner_id: Uuid,
     pub mime: String,
     pub size_bytes: i64,
     pub status: MediaStatus,

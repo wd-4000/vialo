@@ -13,7 +13,6 @@ pub struct MediaRow {
     pub mime: String,
     pub filename: Option<String>,
     pub size_bytes: i64,
-    pub owner_id: Uuid,
     pub status: MediaStatus,
     pub post_id: Option<i32>,
     pub position: i32,
@@ -26,7 +25,6 @@ impl From<MediaRow> for MediaModel {
     fn from(r: MediaRow) -> Self {
         Self {
             id: r.id,
-            owner_id: r.owner_id,
             mime: r.mime,
             size_bytes: r.size_bytes,
             status: r.status,

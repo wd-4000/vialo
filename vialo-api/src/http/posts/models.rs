@@ -33,7 +33,6 @@ pub struct BoardPostModelRaw {
 #[derive(Serialize, ToSchema)]
 pub struct BoardPostModelTranslated {
     pub id: i32,
-    pub account_id: Option<Uuid>,
     pub board_id: Option<i32>,
     pub icon: Option<String>,
     pub title: Option<String>,
@@ -50,12 +49,13 @@ pub struct BoardPostModelTranslated {
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     pub visibility: PostVisibility,
     pub media: Vec<PostMediaModel>,
+    /// Whether the requesting user may edit this post
+    pub can_edit: bool,
 }
 
 #[derive(Serialize, ToSchema)]
 pub struct BoardPostModelTranslatedWithPinnedOn {
     pub id: i32,
-    pub account_id: Option<Uuid>,
     pub board_id: i32,
     pub icon: Option<String>,
     pub title: Option<String>,
@@ -77,7 +77,6 @@ pub struct BoardPostModelTranslatedWithPinnedOn {
 #[derive(Serialize, ToSchema)]
 pub struct BoardPostModelTranslatedAllLanguages {
     pub id: i32,
-    pub account_id: Option<Uuid>,
     pub board_id: Option<i32>,
     pub icon: Option<String>,
     #[schema(value_type = Option<I18nMap>)]
@@ -99,6 +98,8 @@ pub struct BoardPostModelTranslatedAllLanguages {
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     pub visibility: PostVisibility,
     pub media: Vec<PostMediaModel>,
+    /// Whether the requesting user may edit this post
+    pub can_edit: bool,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]

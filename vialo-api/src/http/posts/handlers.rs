@@ -101,7 +101,6 @@ pub async fn list_posts(
     let posts = conditional_query_as!(BoardPostModelTranslatedWithPinnedOn,
         r#"SELECT
             bp.id,
-            bp.account_id,
             bp.board_id,
             bp.icon,
             get_i18n_string(bp.title, {langs}) AS title,
@@ -334,7 +333,6 @@ pub async fn get_post(
             BoardPostModelTranslatedAllLanguages,
             r#"SELECT
                 bp.id,
-                bp.account_id,
                 bp.board_id,
                 bp.icon,
                 get_i18n_all_string_translations(bp.title) AS title,
@@ -348,7 +346,12 @@ pub async fn get_post(
                 bp.visibility AS "visibility: PostVisibility",
                 ARRAY(SELECT jsonb_build_object('id', m.id, 'status', m.status, 'mime', m.mime, 'size_bytes', m.size_bytes,
                     'content', jsonb_build_object('type', m.type, 'width', m.width, 'height', m.height, 'variants', m.variants, 'filename', m.filename))
-                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS "media!: Vec<PostMediaModel>"
+                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS "media!: Vec<PostMediaModel>",
+                -- same rule as update_post
+                COALESCE({uid}::uuid IS NOT NULL AND (
+                    account_board_perm_exists({uid}, bp.board_id, 'moderate'::board_perm)
+                    OR (bp.account_id = {uid} AND account_board_perm_exists({uid}, bp.board_id, 'post'::board_perm))
+                ), false) AS "can_edit!"
             FROM board_posts bp
             WHERE bp.id = {id}
                 -- visibility
@@ -366,7 +369,6 @@ pub async fn get_post(
             BoardPostModelTranslated,
             r#"SELECT
                 bp.id,
-                bp.account_id,
                 bp.board_id,
                 bp.icon,
                 get_i18n_string(bp.title, {langs}) AS title,
@@ -380,7 +382,12 @@ pub async fn get_post(
                 bp.visibility AS "visibility: PostVisibility",
                 ARRAY(SELECT jsonb_build_object('id', m.id, 'status', m.status, 'mime', m.mime, 'size_bytes', m.size_bytes,
                     'content', jsonb_build_object('type', m.type, 'width', m.width, 'height', m.height, 'variants', m.variants, 'filename', m.filename))
-                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS "media!: Vec<PostMediaModel>"
+                FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS "media!: Vec<PostMediaModel>",
+                -- same rule as update_post
+                COALESCE({uid}::uuid IS NOT NULL AND (
+                    account_board_perm_exists({uid}, bp.board_id, 'moderate'::board_perm)
+                    OR (bp.account_id = {uid} AND account_board_perm_exists({uid}, bp.board_id, 'post'::board_perm))
+                ), false) AS "can_edit!"
             FROM board_posts bp
             WHERE bp.id = {id}
                 -- visibility
