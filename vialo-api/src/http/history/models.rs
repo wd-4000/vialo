@@ -7,28 +7,27 @@ use uuid::Uuid;
 
 use crate::http::util::models::AccountPersonEmbed;
 
-/*
-id int PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-table_name TEXT,
-record_id int,  -- NB/TODO: Schedule PII-related logs for deletion when a user gets deleted!
-operation_type tgop,
-created_at TIMESTAMPTZ DEFAULT now(),
-delete_on TIMESTAMPTZ,
-caused_by_account uuid REFERENCES accounts_people (id) ON DELETE SET NULL,
-caused_by_subsystem subsystem_type,
-diff jsonb
-*/
 #[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, Deserialize, Serialize, ToSchema)]
 #[sqlx(type_name = "subsystem_type", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum Subsystem {
+    /// Generic value for "done by the app"
     App,
+    /// Handles bookable activation, appointment expiry, connector sync
     Bookable,
+    /// Creates/deletes printer users, sets print limits, commits credit deductions
     Printer,
+    /// Pushes PPSK Wi‑Fi credentials to a network management system and syncs VLANs
     Nms,
+    /// Sends notification emails
     Email,
+    /// Sign-in for people directly changing the database
     Sysop,
+    /// DHCP
+    DHCP,
+    /// Imported
     Import,
+    /// Media encoding
     Media,
 }
 

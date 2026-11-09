@@ -514,9 +514,11 @@ async fn main() {
 
     subsystems.push(("media", {
         let asp = asp.clone();
-        tokio::spawn(run_subsystem("media", shutdown_rx.clone(), move |shutdown| {
-            vialo_api::media::main(asp.clone(), shutdown)
-        }))
+        tokio::spawn(run_subsystem(
+            "media",
+            shutdown_rx.clone(),
+            move |shutdown| vialo_api::media::main(asp.clone(), shutdown),
+        ))
     }));
 
     subsystems.push(("memberships", {

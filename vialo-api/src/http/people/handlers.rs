@@ -637,14 +637,17 @@ pub async fn delete_person(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    #[cfg(feature = "printer")]
-    if let Some(printer_id) = sqlx::query_scalar!(
-        "SELECT printer_id FROM subsystem_printer_context WHERE id = $1",
+    let existing = sqlx::query!(
+        "SELECT printer_id, auth_id FROM accounts_people ap
+         LEFT JOIN subsystem_printer_context spc ON ap.id = spc.id
+         WHERE ap.id = $1",
         id
     )
     .fetch_optional(&mut *trans)
-    .await?
-    {
+    .await?;
+
+    #[cfg(feature = "printer")]
+    if let Some(printer_id) = existing.as_ref().and_then(|e| e.printer_id) {
         printer::add_task(&mut *trans, JobData::DeleteAccount { printer_id }).await?;
     }
 
@@ -652,9 +655,11 @@ pub async fn delete_person(
         .execute(&mut *trans)
         .await?;
 
-    helpers::people::delete_identity(id, &mut trans)
-        .await
-        .map_err(VialoError::Anyhow)?;
+    if let Some(auth_id) = existing.and_then(|e| e.auth_id) {
+        helpers::people::delete_identity(auth_id, &mut trans)
+            .await
+            .map_err(VialoError::Anyhow)?;
+    }
 
     trans.commit().await?;
     Ok(StatusCode::NO_CONTENT)
