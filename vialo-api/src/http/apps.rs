@@ -256,7 +256,7 @@ pub async fn add_app(
     let mut trans = grab_trans(&mut conn).await?;
 
     let processed_i18n_fields =
-        insert_i18n_strings(&mut trans, vec![("label", Some(body.label.into()))]).await?;
+        insert_i18n_strings(&mut trans, vec![("label", Some(body.label))]).await?;
 
     let record = sqlx::query_as!(
         AppIdModel,
@@ -287,7 +287,7 @@ pub async fn put_app(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let (label_langs, label_contents) = get_i18n_arg_arrays(Some(body.label.into()));
+    let (label_langs, label_contents) = get_i18n_arg_arrays(Some(body.label));
 
     let record = sqlx::query_as!(
         AppIdModel,

@@ -30,16 +30,8 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use sqlx_conditional_queries::conditional_query_as;
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 use uuid::Uuid;
-
-/// An empty map means "unset", and would trip up the i18n SQL functions.
-fn i18n_map(map: Option<I18nMap>) -> Option<HashMap<String, String>> {
-    map.map(HashMap::from).filter(|m| !m.is_empty())
-}
 
 #[utoipa::path(get, path = "/people/groups", params(GroupFilterOptions), responses((status = 200, description = "OK", body=Vec<GroupListModel>)))]
 pub async fn list_groups(
@@ -399,11 +391,8 @@ pub async fn insert_group(
     trans: &mut Transaction<'_, Postgres>,
     body: GroupSchema,
 ) -> Result<GroupListModel, VialoError> {
-    let processed_i18n_fields = insert_i18n_strings(
-        &mut *trans,
-        vec![("description", i18n_map(body.description))],
-    )
-    .await?;
+    let processed_i18n_fields =
+        insert_i18n_strings(&mut *trans, vec![("description", body.description)]).await?;
 
     let langs = vec![String::from("en"), String::from("de")];
 
@@ -643,7 +632,7 @@ pub async fn put_group(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let (description_langs, description_contents) = get_i18n_arg_arrays(i18n_map(body.description));
+    let (description_langs, description_contents) = get_i18n_arg_arrays(body.description);
 
     sqlx::query!(
         r#"UPDATE account_groups SET label = $2, email = $3, public = $4, icon = $5,

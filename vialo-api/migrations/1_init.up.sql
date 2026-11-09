@@ -86,8 +86,13 @@ DECLARE
     i int;
 BEGIN
     -- Check that both arrays have the same length
-    IF array_length(language_labels, 1) != array_length(contents, 1) THEN
+    IF cardinality(language_labels) != cardinality(contents) THEN
         RAISE EXCEPTION 'Arrays must have the same length';
+    END IF;
+
+    -- Nothing to write
+    IF cardinality(language_labels) = 0 THEN
+        RETURN idx_id;
     END IF;
 
     IF idx_id IS NULL THEN
@@ -130,8 +135,13 @@ DECLARE
     i int;
 BEGIN
     -- Check that both arrays have the same length
-    IF array_length(language_labels, 1) != array_length(contents, 1) THEN
+    IF cardinality(language_labels) != cardinality(contents) THEN
         RAISE EXCEPTION 'Arrays must have the same length';
+    END IF;
+
+    -- Nothing to write (array_length is NULL for empty arrays, which breaks the loop)
+    IF cardinality(language_labels) = 0 THEN
+        RETURN NULL;
     END IF;
 
    -- Insert the content into the i18n_index table

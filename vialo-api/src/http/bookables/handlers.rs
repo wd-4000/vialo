@@ -330,7 +330,7 @@ pub async fn insert_bookable(
     };
 
     let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut *db, vec![("name", Some(name.into()))])
+        super::super::util::insert_i18n_strings(&mut *db, vec![("name", Some(name))])
             .await?;
 
     let record = sqlx::query_as!(
@@ -406,7 +406,7 @@ pub async fn put_bookable(
     let relinked = link.is_some() && link != current.connector.zip(current.connector_output_id);
 
     let (name_langs, name_contents) =
-        super::super::util::get_i18n_arg_arrays(Some(body.name.into()));
+        super::super::util::get_i18n_arg_arrays(Some(body.name));
 
     let record = sqlx::query_as!(
         BoardPostIdModel,

@@ -534,7 +534,7 @@ pub async fn update_device(
 
     JsonE(body): JsonE<UpdateDeviceSchema>,
 ) -> Result<impl IntoResponse, VialoError> {
-    if let Err(_) = sqlx::query!(
+    sqlx::query!(
         "SELECT (
         (SELECT EXISTS (SELECT 1 FROM net_devices WHERE account_id = $1 AND net_devices.id = $2))
         OR account_role_exists($1, 'network_manager'::app_role)
@@ -543,10 +543,7 @@ pub async fn update_device(
         id,
     )
     .fetch_one(&data.db)
-    .await
-    {
-        return Err(VialoError::Forbidden());
-    };
+    .await?;
 
     let device = sqlx::query_as!(
         DeviceWithRefs,

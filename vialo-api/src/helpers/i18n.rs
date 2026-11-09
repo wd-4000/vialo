@@ -17,3 +17,17 @@ impl From<I18nMap> for HashMap<String, String> {
         m.0
     }
 }
+
+impl FromIterator<(String, String)> for I18nMap {
+    fn from_iter<I: IntoIterator<Item = (String, String)>>(iter: I) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+impl std::ops::Deref for I18nMap {
+    type Target = HashMap<String, String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}

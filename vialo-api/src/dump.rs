@@ -6,7 +6,6 @@ use tokio::process::Command;
 
 Of the database.
 */
-
 pub async fn dump(uri: &str) -> Result<(), anyhow::Error> {
     let filename = Local::now()
         .format("vialo_%Y-%m-%d_%H-%M-%S.dump")

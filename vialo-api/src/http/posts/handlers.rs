@@ -11,7 +11,7 @@ use ammonia;
 use pulldown_cmark::{Parser, html};
 
 use crate::AppState;
-use crate::helpers::LangVariant;
+use crate::helpers::{I18nMap, LangVariant};
 use crate::http::util::{
     JsonE, User, VialoError, clamp_pagination, get_i18n_arg_arrays, grab_trans,
 };
@@ -25,20 +25,14 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use sqlx_conditional_queries::conditional_query_as;
-use std::collections::HashMap;
 use std::sync::Arc;
 
-fn render_post(
-    content: &Option<HashMap<String, String>>,
-) -> (
-    Option<HashMap<String, String>>,
-    Option<HashMap<String, String>>,
-) {
+fn render_post(content: &Option<I18nMap>) -> (Option<I18nMap>, Option<I18nMap>) {
     // Images are use the `media:<id>` schema and resolved at the client
     let mut sanitizer = ammonia::Builder::default();
     sanitizer.add_url_schemes(["media"]);
 
-    let content_html: &Option<HashMap<String, String>> = &content.as_ref().map(|yes_content| {
+    let content_html: &Option<I18nMap> = &content.as_ref().map(|yes_content| {
         // option
         yes_content
             .iter()
@@ -55,18 +49,17 @@ fn render_post(
             .collect()
     });
 
-    let content_plain: &Option<HashMap<String, String>> =
-        &content_html.as_ref().map(|yes_content| {
-            // option
-            yes_content
-                .iter()
-                .map(|(k, v)| {
-                    // langs
-                    let rendered_plain = ammonia::Builder::empty().clean(v).to_string();
-                    (k.clone(), rendered_plain)
-                })
-                .collect()
-        });
+    let content_plain: &Option<I18nMap> = &content_html.as_ref().map(|yes_content| {
+        // option
+        yes_content
+            .iter()
+            .map(|(k, v)| {
+                // langs
+                let rendered_plain = ammonia::Builder::empty().clean(v).to_string();
+                (k.clone(), rendered_plain)
+            })
+            .collect()
+    });
 
     (content_html.to_owned(), content_plain.to_owned())
 }
@@ -243,7 +236,7 @@ pub async fn add_post(
 
 /// Title and content each need something in at least one language
 fn check_post_not_empty(body: &CreatePostSchema) -> Result<(), VialoError> {
-    let any_filled = |field: &Option<HashMap<String, String>>| {
+    let any_filled = |field: &Option<I18nMap>| {
         // The editor writes blank paragraphs as &nbsp
         field
             .iter()

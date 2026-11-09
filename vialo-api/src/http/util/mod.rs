@@ -17,6 +17,8 @@ use strum::AsRefStr;
 use utoipa::IntoParams;
 use uuid::Uuid;
 
+use crate::helpers::I18nMap;
+
 pub mod middleware;
 pub mod models;
 
@@ -154,13 +156,11 @@ pub struct User {
     pub suspended: Option<UserSuspendedReason>,
 }
 
-pub fn get_i18n_arg_arrays(
-    vec_data: Option<HashMap<String, String>>,
-) -> (Vec<String>, Vec<String>) {
+pub fn get_i18n_arg_arrays(vec_data: Option<I18nMap>) -> (Vec<String>, Vec<String>) {
     if let Some(i18n_map) = vec_data {
         let mut lang_strings = Vec::new();
         let mut content_strings = Vec::new();
-        for (lang, content) in i18n_map {
+        for (lang, content) in i18n_map.0 {
             lang_strings.push(lang);
             content_strings.push(content);
         }
@@ -172,11 +172,12 @@ pub fn get_i18n_arg_arrays(
 
 pub async fn insert_i18n_strings(
     db: &mut PgConnection,
-    vec_data: Vec<(&'static str, Option<HashMap<String, String>>)>,
+    vec_data: Vec<(&'static str, Option<I18nMap>)>,
 ) -> Result<HashMap<&'static str, i32>, sqlx::Error> {
     let i18n_fields = vec_data
         .into_iter()
-        .filter_map(|(field, value)| value.map(|v| (field, v)))
+        // Empty map = unset, so the column stays NULL
+        .filter_map(|(field, value)| value.filter(|v| !v.is_empty()).map(|v| (field, v)))
         .collect::<HashMap<_, _>>();
 
     let mut processed_i18n_fields: HashMap<&str, i32> = HashMap::new();
@@ -184,7 +185,7 @@ pub async fn insert_i18n_strings(
     for (field_name, i18n_map) in i18n_fields {
         let mut lang_strings = Vec::new();
         let mut content_strings = Vec::new();
-        for (lang, content) in i18n_map {
+        for (lang, content) in i18n_map.0 {
             lang_strings.push(lang);
             content_strings.push(content);
         }
