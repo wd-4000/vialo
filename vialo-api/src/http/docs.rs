@@ -27,6 +27,18 @@ impl utoipa::Modify for FixTheseUglyTagsNow {
             ] {
                 if let Some(operation) = op {
                     operation.operation_id = Some(method.to_lowercase() + &path_to_camel(path));
+
+                    // Write everything from doc comments into the description field
+                    if let Some(summary) = operation.summary.as_deref_mut() {
+                        if let Some(description) = operation.description.as_deref_mut() {
+                            operation.description = Some(description.to_owned() + summary)
+                        } else {
+                            operation.description = Some(summary.to_owned())
+                        }
+
+                        operation.summary = None;
+                    }
+
                     if let Some(tags) = &mut operation.tags {
                         let new_tags: Vec<Vec<String>> =
                             tags.iter().map(|t| clean_tag(t)).collect();
