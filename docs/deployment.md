@@ -77,33 +77,11 @@ Configure `[public].listen` and `[hooks].listen` in `vialo.toml`:
 | Direct Unix socket | `listen = "/run/vialo-api/public.sock"` |
 | Socket activation | The `.socket` unit provides the sockets; `vialo.toml` is ignored for binding |
 
-With Unix sockets, the hooks API is only reachable by processes with filesystem
-access to the socket. No network exposure.
+> [!CAUTION]
+> Never expose the hooks API. It has no
+> authentication and should only be reachable by Kratos and FreeRADIUS on a
+> local address or Unix socket.
 
-## Reverse proxy
-
-Place nginx (or another TLS-terminating proxy) in front of the public API:
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name vialo.example.com;
-
-    location / {
-        proxy_pass http://unix:/run/vialo-api/public.sock;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-    }
-}
-```
-
-The `X-Forwarded-For` header is used by the rate limiter to identify client IPs
-through the proxy.
-
-The hooks API should **not** be exposed through the reverse proxy. It has no
-authentication and should only be reachable by Kratos and FreeRADIUS on a
-local address or Unix socket.
 
 ## Kratos integration
 
@@ -140,7 +118,7 @@ ORY_KRATOS_ADMIN_URL=unix:///run/kratos/admin.sock
 
 ## Printer subsystem
 
-Requires the `printer` and `printer_km` features (enabled by default).
+Requires the `printer` feature (enabled by default). The Konica Minolta backend isn't part of this repo, so it has no printer to talk to.
 
 Set these environment variables:
 
@@ -192,7 +170,7 @@ realm IP pools.
 - `AF_NETLINK` for VLAN detection via `rtnetlink`
 - `SocketBindAllow=ipv4:udp:67`, `SocketBindDeny=any`
 
-The systemd unit at `vialo/vialo-dhcp/debian/service` applies the same
+The systemd unit at `vialo-dhcp/debian/service` applies the same
 sandboxing as vialo-api (`DynamicUser=yes`, `ProtectSystem=strict`, etc.).
 
 ### Config
@@ -200,7 +178,7 @@ sandboxing as vialo-api (`DynamicUser=yes`, `ProtectSystem=strict`, etc.).
 The server reads the `[dhcp]` section of the same `vialo.toml` as vialo-api.
 `siaddr` must be set to an IP address on the listen interface.
 
-Copy `vialo/vialo-dhcp/debian/dhcp.env.example` to `/etc/vialo/dhcp.env` for
+Copy `vialo-dhcp/debian/dhcp.env.example` to `/etc/vialo/dhcp.env` for
 `DATABASE_URL`; the unit points the binary at the config file itself. It runs
 under `DynamicUser`, so
 `/etc/vialo/vialo.toml` must be readable by an unknown UID — mode 0644,
@@ -210,7 +188,7 @@ The DHCP server shares the same Postgres database as vialo-api.
 
 ### Container
 
-`compose.dhcp.yaml` builds `vialo/vialo-dhcp/Dockerfile` (a scratch image, ~3 MB)
+`compose.dhcp.yaml` builds `vialo-dhcp/Dockerfile` (a scratch image, ~3 MB)
 and runs it alongside the rest of the stack:
 
 ```sh
@@ -221,8 +199,8 @@ It is a separate overlay rather than part of the base stack because bringing it
 up binds UDP/67 and starts answering DHCP on whatever LAN the host is plugged
 into.
 
-The container needs `network_mode: host` — clients broadcast from `0.0.0.0` and
-the VLAN lookup reads netlink, neither of which survives a bridge network. That
+The container needs `network_mode: host`, because clients broadcast from `0.0.0.0` and
+the VLAN lookup reads netlink. That
 in turn means Postgres has to be reachable on the host, so the overlay
 publishes it on `127.0.0.1:5432` and points `DATABASE_URL` there.
 

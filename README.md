@@ -1,12 +1,12 @@
 # vialo
 
-vialo is a platform for student dorms. Residents manage their own devices, bookings, and
-network credentials. Everything significant is logged. Operational settings like network
-topology, booking schedules, pricing, and groups are configurable at runtime. The backend
-(`vialo-api`) is designed to be reusable(-ish) across deployments.
+vialo is a student dorm platform meant to package up a lot of things you need into a nice little box.
 
-> [!CAUTION]
-> Under heavy development. Not ready for production.
+Operational settings like network topology, booking schedules, pricing, and groups are configurable at runtime.
+Residents can manage their own devices, bookings, and network credentials.
+Everything significant is logged.
+
+The backend bits (`vialo-api`, `vialo-dhcp`) are designed to be more or less reusable across deployments.
 
 ## Demo
 Pre-requisite: Docker
@@ -16,44 +16,38 @@ cp .env.example .env
 docker compose -f compose.yaml -f compose.demo.yaml up
 ```
 This pulls a prebuilt `vialo-api` image from ghcr instead of compiling the Rust
-workspace. Plain `docker compose up` also works — it builds everything from
+workspace. Plain `docker compose up` also works, that builds everything from
 source with dev settings (see `compose.override.yaml`).
 
 ## Development
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the **LLM policy**, setup, code conventions, etc.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the **LLM policy**, as well as setup instructions, code conventions,
-and how to run the app locally.
+## Configuration
+Config is in env variables and `vialo.toml`, see [docs/configuration.md](docs/configuration.md). 
 
-## Docs
+Quick env reference: [.env.example](.env.example) 
 
-| Doc | What it covers |
-|---|---|
-| [Concepts](docs/concepts.md) | Domain model : accounts, groups, realms, bookables, credits |
-| [Configuration](docs/configuration.md) | `vialo.toml` reference and environment variables |
-| [Deployment](docs/deployment.md) | Production setup: systemd, Postgres, reverse proxy, subsystems |
-| [Architecture](docs/architecture.md) | Codebase structure, subsystem model, auth flow, database patterns |
-| [API env vars](vialo/vialo-api/debian/api.env.example) | Quick reference for all environment variables |
+## Deployment
+### systemd
+[docs/deployment.md](docs/deployment.md)
 
-## Stack
-
-| Layer | Technology |
-|---|---|
-| Backend | Rust (axum, sqlx, tokio) |
-| Database | PostgreSQL 18 |
-| Frontend | Nuxt (not in this repo) |
-| Identity | Ory Kratos (not in this repo) |
-
+## Concepts and architecture
+- [docs/concepts.md](docs/concepts.md) goes over the models: accounts, groups, realms, bookables, credits etc.
+- [docs/architecture.md](docs/architecture.md) talks about the more abstract parts such as codebase structure, subsystem model, auth flow, and database patterns
 
 ## Repository structure
 
+```text
+├── compose.yaml
+├── docs/               # Docs
+├── vialo-api/          # Rust backend (generic)
+├── vialo-common/       # Config loader shared by vialo-api & vialo-dhcp
+├── vialo-dhcp/         # DHCP server based on dora [1]
+└── postgres/           # Postgres image for vialo
 ```
-vialo/
-├── compose.yaml      # Docker
-├── vialo-api/        # Rust backend (generic)
-├── vialo-common/     # Config loading shared by the Rust binaries
-├── vialo-dhcp/       # DHCP server (dora-based)
-└── postgres/         # Custom PostgreSQL image
-```
+1. DHCP: [dora](https://github.com/bluecatengineering/dora)
+
+Frontends and auth ([Ory Kratos](https://github.com/ory/kratos)) are not in this repo.
 
 ## API
 
@@ -63,3 +57,5 @@ vialo-api exposes two HTTP listeners (ports configured in `vialo.toml`):
 |---|---|
 | `[public]` | Browser-facing REST API with CORS, auth, and rate limiting |
 | `[hooks]` | Unauthenticated webhooks for Kratos identity sync and RADIUS auth |
+
+OpenAPI reference: [https://wd-4000.github.io/vialo/](https://wd-4000.github.io/vialo/)

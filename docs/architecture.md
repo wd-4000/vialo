@@ -1,50 +1,9 @@
 # Architecture
 
-How the vialo-api code is organized and how the pieces fit together.
-
-## Crate map
-
-```
-src/
-├── main.rs           # Entry point: config loading, pool setup, listener binding,
-│                       subsystem spawning, graceful shutdown
-├── lib.rs            # AppState, KratosConfigs, EventChannels, shared macros
-├── config.rs         # Config deserialization (vialo.toml → Config struct)
-├── http/             # Public API routes, handlers, middleware, rate limiting
-│   ├── mod.rs        # create_router(): assembles all route groups
-│   ├── util/         # Auth middleware (mock + Kratos), pagination, transactions
-│   ├── rate_limit.rs # Per-user and per-IP rate limiting (governor)
-│   ├── people/       # Account management
-│   ├── network/      # Networks, realms, devices, credentials, NMS connectors
-│   ├── bookables/    # Asset types, assets, appointments, connectors
-│   ├── posts/        # Boards, posts, subscriptions
-│   ├── home/         # Dashboard quicklinks
-│   ├── history/      # Audit log / health events
-│   ├── health/       # Health check endpoint
-│   └── docs.rs       # OpenAPI (utoipa) spec generation
-├── hooks/            # Hooks API. Unauthenticated webhook handlers.
-│   ├── mod.rs        # create_router(), /hooks/update_identity
-│   └── radius.rs     # /radius/auth/{network_id}: FreeRADIUS auth endpoint
-├── ws.rs             # WebSocket server for real-time event subscriptions
-├── bookables/        # Bookable connector subsystem (NetIO smart outlets)
-├── printer/          # Printer subsystem (Konica Minolta API)
-├── email/            # Email subsystem (SMTP/sendmail + handlebars templates)
-├── nms/              # PPSK subsystem (UniFi/MikroTik controller credential sync)
-├── helpers/          # Encryption, people helpers, file utilities
-├── permissions.rs    # App role checks
-├── events.rs         # Broadcast channel wiring
-├── health.rs         # Health event recording
-└── dump.rs           # Database dump utility
-```
-
-`vialo-dhcp/` is a separate crate in the same workspace:
-
-```
-vialo-dhcp/
-├── main.rs           # CLI parsing (clap), pool setup, dora Server bootstrap
-├── lib.rs            # VialoDhcp plugin: discover, request, release, decline handlers
-└── tests.rs          # Integration tests using sqlx::test
-```
+`vialo-api` holds the API and its background subsystems. `vialo-dhcp`
+is a separate crate in the same workspace. In `vialo-api/src`, `http/` has the
+public API and `hooks/` the internal one. The other folders are mostly one
+subsystem each.
 
 ## Public & Hooks APIs
 
@@ -60,95 +19,63 @@ its callers (Kratos, FreeRADIUS) are trusted internal services. It is meant to
 be bound to `127.0.0.1` or a Unix socket. It must never be exposed to the
 network.
 
-In `main.rs`, the two routers are created separately (`create_router` for
-public, `create_router` for hooks) and served concurrently via `tokio::join!`.
-The public router also merges in the WebSocket handler and a CORS layer.
+## Subsystems
 
-## Subsystem model
+Subsystems are long-running tasks inside the `vialo-api` process, started through
+`run_subsystem` in `main.rs`. If one exits unexpectedly or panics, it restarts
+after 5 seconds unless the server is shutting down.
 
-Most subsystems run as long‑running async tasks inside the `vialo-api` process.
-DHCP is the exception: it is a standalone binary with its own process lifecycle.
-The in‑process subsystems follow the same pattern:
+They don't all get their work the same way:
 
-1. Spawned as a `tokio::spawn` or `LocalSet::run_until` in `main.rs`.
-2. Loops on a job queue in the `subsystem_jobs` table (status: `pending` →
-   `processing` → `done` / `error`).
-3. Restarts itself on unexpected exit (delayed retry, respect shutdown signal).
-4. Records health events on errors (visible in the admin health dashboard).
-
-| Subsystem | Code | Job data |
+| Subsystem | Code | Work comes from |
 |---|---|---|
-| Printer | `printer::main()` | CreateAccount, DeleteAccount, UpdateAccountLimit, Refresh, FullSync |
-| NMS | `nms::main()` | Refresh (sync credentials to UniFi) |
-| Email | `email::main()` | Event‑driven via broadcast channels, no job table |
-| Bookables | `bookables::main()` | Connector power on/off on appointment start/end |
-| DHCP | `vialo-dhcp` binary | Discover, Request, Release, Decline. Standalone process using dora for the DHCP protocol. |
+| Printer | `printer::main()` | `subsystem_jobs` table |
+| NMS | `nms::main()` | `subsystem_jobs` table |
+| Media | `media::main()` | `subsystem_jobs` table |
+| Email | `email::main()` | Broadcast channels (`posts_tx`, `bookable_events_tx`) |
+| Bookables | `bookables::main()` | Postgres `LISTEN`/`NOTIFY` |
+| Memberships | `memberships::main()` | Timer, at midnight |
 
-Email is the exception. It listens on `tokio::sync::broadcast` channels
-(`posts_tx`, `expired_appointments_tx`) instead of polling a job table.
+Jobs in `subsystem_jobs` move through `pending` → `processing` → `done` or
+`error`. They live in the database, so they survive a restart.
 
-## Auth flow
+DHCP is the exception: `vialo-dhcp` is a standalone binary with its own process
+lifecycle, using dora for the DHCP protocol.
+
+## Auth
 
 ### Mock auth (development)
-A hardcoded UUID from `vialo.toml` is always authenticated. An admin account
-is auto‑created on first start. No external services needed.
+A hardcoded UUID from `vialo.toml` is always authenticated. An account for it is
+created on first start.
 
 ### Kratos auth (production)
-1. The auth middleware (`http/util/middleware.rs`) extracts the session token
-   from the `X-Session-Token` header, or falls back to the `Cookie` header.
-2. It calls the Kratos `to_session` API directly to validate the session.
-3. On success, a `User` extension is inserted into the request with the
-   account UUID looked up from the identity's `auth_id`.
-4. Downstream handlers and the rate limiter read the `User` extension.
+1. The auth middleware (`http/util/middleware.rs`) reads the session token from
+   the `X-Session-Token` header, or falls back to the `Cookie` header.
+2. It calls the Kratos `to_session` API to validate the session.
+3. It finds the account whose `auth_id` matches the identity. This is **not** the
+   account's own `id`.
+4. It inserts a `User` extension into the request, for handlers and the rate
+   limiter. A suspended account also gets an `AuthError` extension.
 
 ### Identity lifecycle
 - Kratos POSTs `/hooks/update_identity` when an identity is created or updated.
-- The hook handler upserts into the `identities` table and optionally creates
-  the first admin account.
-- When an account is deleted, `helpers/people.rs` calls the Kratos admin API to
-  delete the identity as well. This is best‑effort. The local delete proceeds
-  even if Kratos is unreachable.
+  The handler upserts into the `identities` table and can bootstrap the first
+  admin account.
+- `helpers::people::delete_identity` removes the local row and, if
+  `ORY_KRATOS_ADMIN_URL` is set, the Kratos identity. Callers run it inside their
+  transaction, so if Kratos fails, the local delete rolls back too.
 
-## Database patterns
+## Database session variables
 
-### Session variables
-Two PostgreSQL session variables scope database access:
+Two session variables record who is making a change:
 
-- `app.account_id`: set by `grab_authd_conn_subsystem()` for user‑scoped
-  operations. Row‑level security policies filter on this.
-- `app.subsystem`: set by the same function for subsystem‑scoped operations
-  (printer, PPSK, etc.).
+- `app.account_id`: set by `grab_authd_conn_user()` for user actions.
+- `app.subsystem`: set by `grab_authd_conn_subsystem()` for subsystem actions.
 
-These are reset on connection release (`after_release` hook in the pool).
+The `table_log` trigger reads them to attribute changes in the audit log, and
+**rejects writes** to logged tables when neither is set. They are for attribution
+only. There is no row-level security, so access checks belong in the handlers.
 
-### Transactions
-Handlers use `grab_trans()` to get a transaction from an auth'd connection.
-This ensures the session variables are set before any application queries run.
-
-### Compiled‑checked queries
-All SQL uses `sqlx::query!()` and `sqlx::query_scalar!()` macros, which verify
-queries against the database at compile time. No runtime query building.
-
-## Rate limiting
-
-The rate limiter (`http/rate_limit.rs`) applies per‑route limits using the
-`governor` crate:
-
-- **Authenticated requests**: rate limited by user UUID.
-- **Anonymous requests**: rate limited by client IP. The IP comes from the
-  `X-Forwarded-For` header, or the `ConnectInfo` peer address, or falls back
-  to `127.0.0.1`.
-
-Different endpoint groups have different limits. Credential endpoints are
-stricter than general read endpoints. Rate limit state is in‑memory
-(per‑process).
-
-## WebSocket
-
-The WebSocket endpoint (`/ws` on the public API) provides real‑time event
-subscriptions. Clients send JSON messages to subscribe to channels (currently
-`bookables`). The server pushes updates when subscribed resources change.
-
-`EventChannels` in `AppState` holds the broadcast senders. The bookables
-channel uses a custom `BookableChannel` that manages per‑resource
-subscriptions.
+They are reset when a connection returns to the pool (`after_release` in
+`main.rs`). Handlers get a transaction from one of these connections with
+`grab_trans()`.
