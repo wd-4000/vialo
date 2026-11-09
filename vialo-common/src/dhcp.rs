@@ -1,13 +1,28 @@
+//! This config bit lives here because vialo-dhcp won't build on Mac.
+
 use std::net::{Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
+use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::CircuitIdMode;
+/// How to derive a VLAN hint from the option 82 Agent Circuit ID
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CircuitIdMode {
+    /// Ignore the circuit ID.
+    Off,
+    /// ASCII "vlan.module.port" (Cisco-style), leading digit is the VLAN.
+    #[default]
+    Ascii,
+    /// First two bytes as a big-endian u16.
+    #[serde(rename = "binary")]
+    BinaryU16,
+}
 
-/// The slice of `vialo.toml` this binary reads. Everything else in the file
+/// The slice of `vialo.toml` vialo-dhcp reads. Everything else in the file
 /// belongs to other processes and is ignored.
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 pub struct Config {
     pub dhcp: DhcpConfig,
 }
@@ -31,14 +46,14 @@ fn default_pg_max_connections() -> u32 {
 /// `[dhcp]`. Unknown keys are rejected: a typo'd key would otherwise silently
 /// leave the default in place, which for `lease_time` or `siaddr` is the kind
 /// of thing you find out about from users, not logs.
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DhcpConfig {
     /// Server identifier IP. Must be an IP on the listen interface. Realms with
     /// their own DHCP server address use that instead.
     pub siaddr: Ipv4Addr,
 
-    /// DHCP server listen address.
+    /// DHCP server listen address (UDP).
     #[serde(default = "default_listen")]
     pub listen: SocketAddr,
 
@@ -47,7 +62,7 @@ pub struct DhcpConfig {
     #[serde(default)]
     pub interfaces: Vec<String>,
 
-    /// Lease duration in seconds (T1/renew and T2/rebind are derived from it).
+    /// Lease duration in seconds. T1 = lease/2, T2 = lease × 7/8.
     #[serde(default = "default_lease_time")]
     pub lease_time: u64,
 

@@ -1,7 +1,8 @@
 use std::net::Ipv4Addr;
 use std::time::Duration;
 
-pub mod config;
+pub use vialo_common::dhcp as config;
+pub use vialo_common::dhcp::CircuitIdMode;
 
 use anyhow::{Context, Result};
 use dora_core::async_trait;
@@ -15,20 +16,6 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use sqlx::types::ipnetwork::IpNetwork;
 use uuid::Uuid;
-
-/// How to derive a VLAN hint from the option 82 Agent Circuit ID
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CircuitIdMode {
-    /// Ignore the circuit ID.
-    Off,
-    /// ASCII "vlan.module.port" (Cisco-style), leading digit is the VLAN.
-    #[default]
-    Ascii,
-    /// First two bytes as a big-endian u16.
-    #[serde(rename = "binary")]
-    BinaryU16,
-}
 
 /// Realm network parameters required to hand out a lease.
 #[derive(Debug, Clone, Copy)]

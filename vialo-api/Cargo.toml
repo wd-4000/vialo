@@ -86,4 +86,5 @@ glob = "0.3.4"
 zip = { version = "9.2.2", default-features = false }
 tokio-util = { version = "0.7.20", features = ["io"] }
 libheif-rs = { version = "3.0.0", default-features = false, features = ["v1_17"], optional = true }
+schemars = { version = "1.2.3", features = ["preserve_order", "uuid1"] }
 #iana-time-zone = "0.1.63"

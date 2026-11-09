@@ -1,20 +1,24 @@
 //! Startup and infrastructure mechanics shared by the vialo binaries.
 //!
-//! What belongs here: things every binary does before it starts serving —
+//! What belongs here: things every binary does before it starts serving.
 //! finding and parsing the config file, and (should it ever move) connection
 //! setup. What does not: domain types and API schema. In particular, nothing
-//! deriving `utoipa::ToSchema` can live here — `utoipauto` discovers schemas by
-//! scanning `vialo-api`'s own `src/http` and `src/hooks` trees (see that
-//! crate's `build.rs`), so a type moved out of it silently disappears from the
+//! deriving `utoipa::ToSchema` can live here becayse `utoipauto` discovers schemas by
+//! scanning `vialo-api`'s own `src/http` and `src/hooks` trees (see the
+//! crate's `build.rs`), so a type moved out of it disappears from the
 //! OpenAPI document.
 //!
 //! Each binary defines its own `Config` struct and deserializes only the
-//! sections it cares about; serde ignores the rest, so `vialo.toml` is one file
+//! sections it cares about. Serde ignores the rest, so `vialo.toml` is one file
 //! read by several processes that each see a different slice of it.
+//!
+//! vialo-dhcp's slice lives in this crate bacuse it only builds on Linux
 
 use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 use std::path::{Path, PathBuf};
+
+pub mod dhcp;
 
 /// Config file name, searched for upward from the working directory.
 pub const CONFIG_FILE: &str = "vialo.toml";

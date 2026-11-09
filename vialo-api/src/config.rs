@@ -1,55 +1,77 @@
 use std::path::PathBuf;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+/// Browser-facing API
+#[derive(JsonSchema, Deserialize)]
 pub struct PublicApiConfig {
+    /// Frontend URLs that call this API
     pub cors_origins: Vec<String>,
+    /// `/path` Unix socket, `@name` abstract socket, otherwise TCP `host:port`
     pub listen: String,
 }
 
-#[derive(Deserialize)]
+/// Webhooks (Kratos identity sync, RADIUS auth). No authentication!
+#[derive(JsonSchema, Deserialize)]
 pub struct HooksApiConfig {
+    /// Same format as `public.listen`. Bind to `127.0.0.1` or a Unix socket
     pub listen: String,
 }
 
-#[derive(Deserialize, Clone, Serialize, ToSchema)]
+#[derive(JsonSchema, Deserialize, Clone, Serialize, ToSchema)]
 pub struct OrgConfig {
+    /// Full organization name
     pub name: String,
+    /// Domain for generated email addresses i.e. (`adminag@domain`)
     pub domain: String,
+    /// Abbreviation used in the home group list
     pub short_name: String,
+    /// URL of the legal notice / Impressum page
     pub impressum: String,
 }
 
 #[cfg(feature = "email")]
-#[derive(Deserialize)]
+#[derive(JsonSchema, Deserialize)]
 pub struct EmailApiUrlConfig {
+    /// Base URL for one-click unsubscribe links
     pub unsubscribe: String,
+    /// Base URL for links to individual posts
     pub post: String,
+    /// Base URL for links to boards
     pub board: String,
+    /// Base URL for email preference management
     pub preferences: String,
 }
 
+/// Transport comes from `EMAIL_URL` in the environment
 #[cfg(feature = "email")]
-#[derive(Deserialize)]
+#[derive(JsonSchema, Deserialize)]
 pub struct EmailApiConfig {
+    /// Defaults to `org.domain`
     domain: Option<String>,
     pub url: EmailApiUrlConfig,
 }
 
-#[derive(Deserialize, AsRefStr)]
+/// Outbound URLs accept `unix:///path/to.sock` for HTTP over a Unix socket.
+#[derive(JsonSchema, Deserialize, AsRefStr)]
 #[serde(rename_all = "snake_case", tag = "type")]
 #[strum(serialize_all = "snake_case")]
 pub enum AuthConfig {
+    /// Development only. The admin account is created on first start
     Mock {
+        /// Always authenticates as this admin
         uuid: Uuid,
+        /// Email of the auto-created admin account
         email: String,
     },
     Kratos {
+        /// Kratos public API, for session validation
         frontend_url: String,
+        /// Kratos admin API, for identity deletion
         admin_url: String,
     },
 }
@@ -58,7 +80,7 @@ fn default_timezone() -> String {
     "Europe/Berlin".to_string()
 }
 
-#[derive(Deserialize, Clone, Serialize, ToSchema)]
+#[derive(JsonSchema, Deserialize, Clone, Serialize, ToSchema)]
 pub struct UiConfig {
     pub copyright: String,
     pub appname_user: String,
@@ -71,7 +93,7 @@ pub struct UiConfig {
 /// Credential for a fixed device (e.g. the laundry kiosk) that reads bookable
 /// data without being an account. It's in config right now but I'm thinking of
 /// replacing it with a device table.
-#[derive(Deserialize, Clone)]
+#[derive(JsonSchema, Deserialize, Clone)]
 pub struct KioskConfig {
     pub token: String,
     pub asset_types: Vec<i32>,
@@ -87,7 +109,7 @@ impl KioskConfig {
     }
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(JsonSchema, Deserialize, Clone)]
 pub struct BookablesConfig {
     pub kiosk: Option<KioskConfig>,
 }
@@ -108,7 +130,7 @@ fn default_quota_mb() -> u64 {
     1024
 }
 
-#[derive(Deserialize)]
+#[derive(JsonSchema, Deserialize)]
 pub struct MediaConfig {
     /// Root for uploads
     #[serde(default = "default_media_dir")]
@@ -137,15 +159,17 @@ impl Default for MediaConfig {
 }
 
 #[cfg(feature = "migrate")]
-#[derive(Deserialize)]
+#[derive(JsonSchema, Deserialize)]
 pub struct DevConfig {
-    /// Rewrite `_sqlx_migrations` checksums that no longer match the migration
+    /// Rewrite `_sqlx_migrations` checksums of migrations edited since they ran
+    /// Does not apply the actual change, so change the DB yourself first
     #[serde(default)]
     pub repair_migration_checksums: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(JsonSchema, Deserialize)]
 pub struct Config {
+    /// SOCKS5 URL for outbound HTTP (printer, bookable connectors, UniFi)
     pub proxy: Option<String>,
     /// IANA timezone name (e.g. "Europe/Berlin") the venue operates in. Bookable
     /// schedules are wall-clock times interpreted in this zone, so every DB
