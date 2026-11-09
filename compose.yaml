@@ -3,10 +3,10 @@
 
 secrets:
   postgres_root_username:
-#   file: ../private/postgres_root_username
+#   file: ./private/postgres_root_username
     environment: POSTGRES_ROOT_USERNAME
   postgres_root_password:
-#    file: ../private/postgres_root_password
+#    file: ./private/postgres_root_password
     environment: POSTGRES_ROOT_PASSWORD
 services:
 
@@ -22,19 +22,32 @@ services:
         PROFILE: ${PROFILE:-release}
     restart: unless-stopped
     volumes:
-      - ../vialo.toml:/app/vialo.toml
+      - ./vialo.toml:/app/vialo.toml
+      - ./data/media:/app/media
     depends_on:
       postgres:
         condition: service_healthy
     env_file:
-      - "../.env"
+      - "./.env"
     environment:
       # Override .env host
       DATABASE_URL: postgresql://${POSTGRES_ROOT_USERNAME}:${POSTGRES_ROOT_PASSWORD}@postgres:5432/vialo?schema=public
   postgres:
     build: ./postgres
+    # track=all so all statements get logged
+    # random_page_cost 1.1 because we run on nvme
+    command:
+      [
+        "postgres",
+        "-c",
+        "shared_preload_libraries=pg_stat_statements",
+        "-c",
+        "pg_stat_statements.track=all",
+        "-c",
+        "random_page_cost=1.1",
+      ]
     volumes:
-      - "../data/postgres:/var/lib/postgresql"
+      - "./data/postgres:/var/lib/postgresql"
     healthcheck:
       test:
         [
