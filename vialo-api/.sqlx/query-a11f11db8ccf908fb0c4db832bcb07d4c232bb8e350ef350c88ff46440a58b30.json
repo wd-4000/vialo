@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            bp.id,\n            bp.icon,\n            get_i18n_string(bp.title, $1) AS title,\n            left(get_i18n_string(bp.content_plain, $1), 400) AS content,\n            get_i18n_string(bp.location, $1) AS location,\n            bp.event_from,\n            bp.event_to,\n            bp.created_at,\n            bpp.pinned_until\n        FROM\n            board_posts bp\n        LEFT JOIN\n            board_pinned_posts bpp ON bp.id = bpp.post_id\n        WHERE ((bp.created_at >= CURRENT_DATE::timestamptz) OR (bpp.pinned_until <= NOW() AND bpp.board_id = 0))\n          AND bp.visibility = 'public'\n        ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+  "query": "SELECT\n            bp.id,\n            bp.icon,\n            bp.cover_id,\n            get_i18n_string(bp.title, $1) AS title,\n            left(get_i18n_string(bp.content_plain, $1), 400) AS content,\n            get_i18n_string(bp.location, $1) AS location,\n            bp.event_from,\n            bp.event_to,\n            bp.created_at,\n            bpp.pinned_until\n        FROM\n            board_posts bp\n        LEFT JOIN\n            board_pinned_posts bpp ON bp.id = bpp.post_id\n        WHERE ((bp.created_at >= CURRENT_DATE::timestamptz) OR (bpp.pinned_until >= NOW() AND bpp.board_id = 0))\n          AND (bp.visibility IN ('public', 'logged_in') OR account_board_perm_exists($2, bp.board_id, 'view'))\n        ORDER BY created_at DESC LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -27,24 +27,35 @@
       },
       {
         "ordinal": 2,
+        "name": "cover_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "board_posts",
+            "name": "cover_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
         "name": "title",
         "type_info": "Text",
         "origin": "Expression"
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "content",
         "type_info": "Text",
         "origin": "Expression"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "location",
         "type_info": "Text",
         "origin": "Expression"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "event_from",
         "type_info": "Timestamptz",
         "origin": {
@@ -55,7 +66,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "event_to",
         "type_info": "Timestamptz",
         "origin": {
@@ -66,7 +77,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -77,7 +88,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "pinned_until",
         "type_info": "Timestamptz",
         "origin": {
@@ -91,12 +102,14 @@
     "parameters": {
       "Left": [
         "TextArray",
+        "Uuid",
         "Int8",
         "Int8"
       ]
     },
     "nullable": [
       false,
+      true,
       true,
       null,
       null,
@@ -107,5 +120,5 @@
       true
     ]
   },
-  "hash": "9d1bf3e2710acfdf1b8bf2eac34880eb52b6c0f27e1943f1b6b54c221abdb8ae"
+  "hash": "a11f11db8ccf908fb0c4db832bcb07d4c232bb8e350ef350c88ff46440a58b30"
 }

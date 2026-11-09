@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO board_posts (account_id, board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain, visibility) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8, $9, $10, $11) RETURNING id",
+  "query": "INSERT INTO board_posts (account_id, board_id, icon, title, content, created_at, location, event_from, event_to, content_html, content_plain, visibility, cover_id) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8, $9, $10, $11, $12) RETURNING id",
   "describe": {
     "columns": [
       {
@@ -38,12 +38,13 @@
               ]
             }
           }
-        }
+        },
+        "Uuid"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "a93e75a6e8e15eb3b2561c650f39220088965fec3611065d29c9ae524a3079e9"
+  "hash": "49b1cc5d64fe1d77251e6da092403f64a5cee9d128eb7e4f9c93d90976680837"
 }

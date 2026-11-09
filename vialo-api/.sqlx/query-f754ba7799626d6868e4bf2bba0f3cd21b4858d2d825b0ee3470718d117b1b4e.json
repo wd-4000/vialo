@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, context AS \"context: MediaContext\", owner_id, post_id FROM media\n        WHERE post_id = $1 OR id = ANY($2) ORDER BY id FOR UPDATE",
+  "query": "SELECT id, context AS \"context: MediaContext\", owner_id, post_id,\n            type = 'image' AS \"is_image!\"\n        FROM media WHERE post_id = $1 OR id = ANY($2) ORDER BY id FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -56,6 +56,12 @@
             "name": "post_id"
           }
         }
+      },
+      {
+        "ordinal": 4,
+        "name": "is_image!",
+        "type_info": "Bool",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -68,8 +74,9 @@
       false,
       false,
       false,
-      true
+      true,
+      null
     ]
   },
-  "hash": "e910a7d2e11c0d9c5b4d656df8d3c47239d7d3b5d001e53f66b70f529c7487ee"
+  "hash": "f754ba7799626d6868e4bf2bba0f3cd21b4858d2d825b0ee3470718d117b1b4e"
 }

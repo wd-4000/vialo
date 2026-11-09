@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT m.id, m.type AS \"media_type: MediaType\", m.context AS \"context: MediaContext\", m.mime,\n            m.filename, m.size_bytes, m.owner_id, m.status AS \"status: MediaStatus\", m.post_id, m.position,\n            m.width, m.height, m.variants,\n            COALESCE(bp.visibility = 'public', false) AS \"public!\",\n            COALESCE(CASE\n                WHEN m.context = 'avatar' THEN $2::uuid IS NOT NULL\n                WHEN m.post_id IS NULL THEN m.owner_id = $2\n                ELSE bp.visibility = 'public' OR ($2::uuid IS NOT NULL AND (bp.visibility = 'logged_in'\n                    OR account_board_perm_exists($2, bp.board_id, 'view'::board_perm)))\n            END, false) AS \"allowed!\"\n        FROM media m LEFT JOIN board_posts bp ON bp.id = m.post_id WHERE m.id = $1",
+  "query": "SELECT m.id, m.type AS \"media_type: MediaType\", m.context AS \"context: MediaContext\", m.mime,\n            m.filename, m.size_bytes, m.status AS \"status: MediaStatus\", m.post_id, m.position,\n            m.width, m.height, m.variants,\n            COALESCE(bp.visibility = 'public', false) AS \"public!\",\n            COALESCE(CASE\n                WHEN m.context = 'avatar' THEN $2::uuid IS NOT NULL\n                WHEN m.post_id IS NULL THEN m.owner_id = $2\n                ELSE bp.visibility = 'public' OR ($2::uuid IS NOT NULL AND (bp.visibility = 'logged_in'\n                    OR account_board_perm_exists($2, bp.board_id, 'view'::board_perm)))\n            END, false) AS \"allowed!\"\n        FROM media m LEFT JOIN board_posts bp ON bp.id = m.post_id WHERE m.id = $1",
   "describe": {
     "columns": [
       {
@@ -91,17 +91,6 @@
       },
       {
         "ordinal": 6,
-        "name": "owner_id",
-        "type_info": "Uuid",
-        "origin": {
-          "Table": {
-            "table": "media",
-            "name": "owner_id"
-          }
-        }
-      },
-      {
-        "ordinal": 7,
         "name": "status: MediaStatus",
         "type_info": {
           "Custom": {
@@ -123,7 +112,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 7,
         "name": "post_id",
         "type_info": "Int4",
         "origin": {
@@ -134,7 +123,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 8,
         "name": "position",
         "type_info": "Int4",
         "origin": {
@@ -145,7 +134,7 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 9,
         "name": "width",
         "type_info": "Int4",
         "origin": {
@@ -156,7 +145,7 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 10,
         "name": "height",
         "type_info": "Int4",
         "origin": {
@@ -167,7 +156,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 11,
         "name": "variants",
         "type_info": "Int4Array",
         "origin": {
@@ -178,13 +167,13 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 12,
         "name": "public!",
         "type_info": "Bool",
         "origin": "Expression"
       },
       {
-        "ordinal": 14,
+        "ordinal": 13,
         "name": "allowed!",
         "type_info": "Bool",
         "origin": "Expression"
@@ -204,7 +193,6 @@
       true,
       false,
       false,
-      false,
       true,
       false,
       true,
@@ -214,5 +202,5 @@
       null
     ]
   },
-  "hash": "b91e27d9f011631f84089f790ffb5da287e3573b7a06a37267361d14513a5a6a"
+  "hash": "75ba571809563fa4cf511c92023bebc2188c6e302b75c95d648d6422251df579"
 }
