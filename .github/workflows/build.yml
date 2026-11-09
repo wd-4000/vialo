@@ -207,10 +207,22 @@ jobs:
               <title>Vialo API</title>
               <meta charset="utf-8"/>
               <meta name="viewport" content="width=device-width, initial-scale=1">
-              <style>body { margin: 0; padding: 0; }</style>
+              <style>
+                body { margin: 0; padding: 0; }
+
+                /* Remove agents dropdown: https://gist.github.com/wd-4000/44589757f4efb6c49287878113ce76fc */
+                [data-testid="middle-panel"] [data-testid="dropdown"] {
+                 display: none;
+                }
+
+                [data-testid="middle-panel"] [data-component-name="Button/Button"] {
+                  border: var(--button-border-width) var(--button-border-style) var(--button-border-color) !important;
+                    border-radius: var(--button-border-radius) !important;
+                }
+              </style>
             </head>
             <body>
-              <redoc spec-url="openapi.json"></redoc>
+              <redoc spec-url="openapi.json" disable-telemetry="true"></redoc>
               <script type="module" src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
             </body>
           </html>
