@@ -75,7 +75,12 @@ impl Importer {
         Ok(id)
     }
 
-    pub async fn schema_assignment(&mut self, asset_id: i32, schema_id: i32, begins: NaiveDate) -> Result<()> {
+    pub async fn schema_assignment(
+        &mut self,
+        asset_id: i32,
+        schema_id: i32,
+        begins: NaiveDate,
+    ) -> Result<()> {
         sqlx::query!(
             "INSERT INTO bookable_schema_assignments (begins, schema_id, asset_id) VALUES ($1, $2, $3)
              ON CONFLICT (begins, asset_id) DO UPDATE SET schema_id = $2",

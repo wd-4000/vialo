@@ -34,10 +34,18 @@ use futures::{sink::SinkExt, stream::StreamExt};
 #[derive(Deserialize, Debug)]
 #[serde(tag = "op", rename_all = "snake_case")]
 enum WsFrame {
-    Auth { key: String },
+    Auth {
+        key: String,
+    },
     /// No `id` subscribes to every routing key on the channel
-    Subscribe { channel: String, id: Option<u16> },
-    Unsubscribe { channel: String, id: Option<u16> },
+    Subscribe {
+        channel: String,
+        id: Option<u16>,
+    },
+    Unsubscribe {
+        channel: String,
+        id: Option<u16>,
+    },
 }
 
 pub fn main(app_state: Arc<AppState>) -> Router {
@@ -169,7 +177,10 @@ async fn handle_socket(
                                 channels.bookables.subscribe(id, auth, slot, notify).await
                             }
                             "bookables/queues" => {
-                                channels.bookable_queues.subscribe(id, auth, slot, notify).await
+                                channels
+                                    .bookable_queues
+                                    .subscribe(id, auth, slot, notify)
+                                    .await
                             }
                             _ => {}
                         }

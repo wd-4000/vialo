@@ -14,13 +14,23 @@ pub enum Change {
 #[derive(Serialize, Debug, ToSchema)]
 #[serde(tag = "code", rename_all = "snake_case")]
 pub enum CommissionError {
-    Unreachable { detail: String },
-    LoginRejected { tries_left: Option<u64> },
+    Unreachable {
+        detail: String,
+    },
+    LoginRejected {
+        tries_left: Option<u64>,
+    },
     /// Too many rejected logins
-    LoginBlocked { minutes: Option<u64> },
+    LoginBlocked {
+        minutes: Option<u64>,
+    },
     OutputMissing,
-    MissingPermissions { missing: Vec<i64> },
-    Other { detail: String },
+    MissingPermissions {
+        missing: Vec<i64>,
+    },
+    Other {
+        detail: String,
+    },
 }
 
 /// Why commissioning failed, and what it had changed on the device by then
@@ -105,4 +115,3 @@ pub struct DiscoveredOutput {
     pub output_id: String,
     pub name: Option<String>,
 }
-

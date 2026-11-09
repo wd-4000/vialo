@@ -393,7 +393,13 @@ async fn realm_dhcp_server_is_identifier_and_off_pool(pool: PgPool) {
     .unwrap();
     assert!(!pooled);
 
-    let net = d.lookup_device(mac(1), None).await.unwrap().unwrap().net.unwrap();
+    let net = d
+        .lookup_device(mac(1), None)
+        .await
+        .unwrap()
+        .unwrap()
+        .net
+        .unwrap();
     assert_eq!(d.server_id(net), Ipv4Addr::new(10, 203, 0, 2));
 }
 
@@ -404,6 +410,12 @@ async fn realm_without_dhcp_server_uses_siaddr(pool: PgPool) {
     let realm = seed_realm(&pool, "10.204.0.0/29", "10.204.0.1", "10.204.0.1", 204).await;
     seed_device(&pool, mac(1), realm).await;
 
-    let net = d.lookup_device(mac(1), None).await.unwrap().unwrap().net.unwrap();
+    let net = d
+        .lookup_device(mac(1), None)
+        .await
+        .unwrap()
+        .unwrap()
+        .net
+        .unwrap();
     assert_eq!(d.server_id(net), Ipv4Addr::new(10, 200, 0, 1));
 }

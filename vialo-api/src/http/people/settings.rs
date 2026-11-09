@@ -1,10 +1,7 @@
 use crate::{
     AppState,
     bookables::BookableEventKind,
-    http::util::{
-            JsonE, User, VialoError, grab_authd_conn_user,
-            grab_trans,
-        },
+    http::util::{JsonE, User, VialoError, grab_authd_conn_user, grab_trans},
 };
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};

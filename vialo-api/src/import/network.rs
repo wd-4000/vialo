@@ -49,7 +49,10 @@ impl Importer {
         let mut clients = Vec::new();
         for c in connectors {
             let (Some(key), Some(site)) = (c.api_key, c.site_id) else {
-                self.warn(None, format!("UniFi connector {} lacks an API key or site", c.hostname));
+                self.warn(
+                    None,
+                    format!("UniFi connector {} lacks an API key or site", c.hostname),
+                );
                 continue;
             };
             let api = UniFiApi::new(c.hostname.clone(), key.expose(), site, proxy)?;
@@ -58,7 +61,11 @@ impl Importer {
                 Ok(history) => clients.extend(history),
                 Err(e) => self.warn(None, format!("UniFi {} client history: {e:#}", c.hostname)),
             }
-            clients.extend(api.get_clients().await.with_context(|| format!("UniFi {}", c.hostname))?);
+            clients.extend(
+                api.get_clients()
+                    .await
+                    .with_context(|| format!("UniFi {}", c.hostname))?,
+            );
         }
         Ok(clients)
     }
@@ -93,10 +100,15 @@ impl Importer {
             .fetch_optional(self.conn())
             .await?
         {
-            self.warn(Some(r), format!("username {username} already used by {holder}"));
+            self.warn(
+                Some(r),
+                format!("username {username} already used by {holder}"),
+            );
         }
 
-        let id = self.insert_cred(account, network_id, username, password).await?;
+        let id = self
+            .insert_cred(account, network_id, username, password)
+            .await?;
         self.remember(Some(r), "cred", id).await?;
         Ok(id)
     }
@@ -140,22 +152,33 @@ impl Importer {
             return Ok((id, network_id));
         }
 
-        let (username, password) =
-            generate_credentials(network.auth.as_ref(), network.gen_username, network.gen_password);
+        let (username, password) = generate_credentials(
+            network.auth.as_ref(),
+            network.gen_username,
+            network.gen_password,
+        );
         let id = self
-            .insert_cred(account, network_id, username.as_deref(), password.as_deref())
+            .insert_cred(
+                account,
+                network_id,
+                username.as_deref(),
+                password.as_deref(),
+            )
             .await?;
         *self.report.created.entry("cred").or_default() += 1;
         Ok((id, network_id))
     }
 
     async fn device_creds(&mut self, device: Uuid) -> Result<Vec<(Uuid, i32)>> {
-        Ok(sqlx::query!("SELECT cred_id, network_id FROM net_device_creds WHERE device_id = $1", device)
-            .fetch_all(self.conn())
-            .await?
-            .into_iter()
-            .map(|c| (c.cred_id, c.network_id))
-            .collect())
+        Ok(sqlx::query!(
+            "SELECT cred_id, network_id FROM net_device_creds WHERE device_id = $1",
+            device
+        )
+        .fetch_all(self.conn())
+        .await?
+        .into_iter()
+        .map(|c| (c.cred_id, c.network_id))
+        .collect())
     }
 
     /// Imports a device. One whose MAC is on a device of the same account joins it instead,
@@ -181,7 +204,10 @@ impl Importer {
         if let Some((other, account)) = holder
             && account != d.account
         {
-            self.warn(Some(r), format!("MAC already on device {other} of account {account}, skipped"));
+            self.warn(
+                Some(r),
+                format!("MAC already on device {other} of account {account}, skipped"),
+            );
             return Ok(None);
         }
 
@@ -198,7 +224,9 @@ impl Importer {
                     .await?;
                     (id, network_id)
                 }
-                DeviceCred::Generate(network_id) => self.generated_cred(d.account, network_id).await?,
+                DeviceCred::Generate(network_id) => {
+                    self.generated_cred(d.account, network_id).await?
+                }
             });
         }
 
@@ -250,7 +278,10 @@ impl Importer {
             return Ok(id);
         }
 
-        let id = insert_realm(self.conn(), realm).await.map_err(api_error)?.id;
+        let id = insert_realm(self.conn(), realm)
+            .await
+            .map_err(api_error)?
+            .id;
 
         self.remember(Some(r), "realm", id).await?;
         Ok(id)
@@ -285,7 +316,10 @@ impl Importer {
         .fetch_one(self.conn())
         .await?;
         if holds_one {
-            self.warn(Some(r), format!("device {device} already has an address, {addr} not assigned"));
+            self.warn(
+                Some(r),
+                format!("device {device} already has an address, {addr} not assigned"),
+            );
             return Ok(false);
         }
 

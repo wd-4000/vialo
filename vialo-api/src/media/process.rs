@@ -2,9 +2,9 @@
 
 use std::{fmt, io::Cursor, path::Path};
 
+use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits, imageops::FilterType};
 #[cfg(feature = "media-heif")]
 use image::{RgbImage, RgbaImage};
-use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits, imageops::FilterType};
 use rayon::prelude::*;
 
 use super::models::MediaContext;
@@ -123,7 +123,11 @@ pub fn process(src: &[u8], context: MediaContext) -> anyhow::Result<Processed> {
             let handle = ctx.primary_image_handle()?;
             check_size(handle.width(), handle.height())?;
             let alpha = handle.has_alpha_channel();
-            let chroma = if alpha { RgbChroma::Rgba } else { RgbChroma::Rgb };
+            let chroma = if alpha {
+                RgbChroma::Rgba
+            } else {
+                RgbChroma::Rgb
+            };
             let decoded = LibHeif::new().decode(&handle, ColorSpace::Rgb(chroma), None)?;
             let planes = decoded.planes();
             let plane = planes
@@ -139,9 +143,13 @@ pub fn process(src: &[u8], context: MediaContext) -> anyhow::Result<Processed> {
 
             let bad = || anyhow::anyhow!("libheif plane size mismatch");
             if alpha {
-                DynamicImage::ImageRgba8(RgbaImage::from_raw(plane.width, plane.height, pixels).ok_or_else(bad)?)
+                DynamicImage::ImageRgba8(
+                    RgbaImage::from_raw(plane.width, plane.height, pixels).ok_or_else(bad)?,
+                )
             } else {
-                DynamicImage::ImageRgb8(RgbImage::from_raw(plane.width, plane.height, pixels).ok_or_else(bad)?)
+                DynamicImage::ImageRgb8(
+                    RgbImage::from_raw(plane.width, plane.height, pixels).ok_or_else(bad)?,
+                )
             }
         }
         #[cfg(not(feature = "media-heif"))]
@@ -175,7 +183,8 @@ pub fn process(src: &[u8], context: MediaContext) -> anyhow::Result<Processed> {
             let resized = if (w, h) == (bw, bh) {
                 base.clone()
             } else if bw > w * 4 {
-                base.thumbnail_exact(w * 2, h * 2).resize_exact(w, h, FilterType::Lanczos3)
+                base.thumbnail_exact(w * 2, h * 2)
+                    .resize_exact(w, h, FilterType::Lanczos3)
             } else {
                 base.resize_exact(w, h, FilterType::Lanczos3)
             };
@@ -188,10 +197,16 @@ pub fn process(src: &[u8], context: MediaContext) -> anyhow::Result<Processed> {
                 .iter()
                 .map(|&[r, g, b, a]| ravif::RGBA8::new(r, g, b, a))
                 .collect();
-            let avif = encoder.encode_rgba(ravif::Img::new(&px[..], w as usize, h as usize))?.avif_file;
+            let avif = encoder
+                .encode_rgba(ravif::Img::new(&px[..], w as usize, h as usize))?
+                .avif_file;
             Ok(Variant { width: w, avif })
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    Ok(Processed { width, height, variants })
+    Ok(Processed {
+        width,
+        height,
+        variants,
+    })
 }

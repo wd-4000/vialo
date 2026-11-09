@@ -447,8 +447,7 @@ pub async fn main(
 
     let mut cache: HashMap<i32, (BookableAssetStatus, BookableAssetQueue)> = HashMap::new();
 
-    let mut connector_tasks =
-        connectors::Connectors::spawn(&app_state.db, &app_state.config.proxy);
+    let mut connector_tasks = connectors::Connectors::spawn(&app_state.db, &app_state.config.proxy);
 
     loop {
         cancel_rolling_maintenance_overlaps(&app_state).await?;

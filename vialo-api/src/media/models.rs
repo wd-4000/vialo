@@ -34,10 +34,15 @@ impl From<MediaRow> for MediaModel {
                     height: r.height,
                     variants: r.variants.unwrap_or_default(),
                 },
-                MediaType::Document => MediaContent::Document { filename: r.filename.unwrap_or_default() },
+                MediaType::Document => MediaContent::Document {
+                    filename: r.filename.unwrap_or_default(),
+                },
             },
             attachment: match r.context {
-                MediaContext::Post => MediaAttachment::Post { post_id: r.post_id, position: r.position },
+                MediaContext::Post => MediaAttachment::Post {
+                    post_id: r.post_id,
+                    position: r.position,
+                },
                 MediaContext::Avatar => MediaAttachment::Avatar,
             },
         }

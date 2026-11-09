@@ -1,10 +1,10 @@
-use super::{
-    models::RoomModel,
-    schemas::CreateRoomSchema,
-};
+use super::{models::RoomModel, schemas::CreateRoomSchema};
 use crate::{
     AppState,
-    http::util::{JsonE, SearchableListOptions, User, VialoError, clamp_pagination, grab_authd_conn_user, is_unique_violation},
+    http::util::{
+        JsonE, SearchableListOptions, User, VialoError, clamp_pagination, grab_authd_conn_user,
+        is_unique_violation,
+    },
 };
 use axum::{
     Extension, Json,
@@ -33,9 +33,13 @@ pub async fn add_room(
     )
     .fetch_one(&mut *conn)
     .await
-    .map_err(|e| if is_unique_violation(&e) {
-        VialoError::AppError(StatusCode::CONFLICT, "label_conflict".into())
-    } else { e.into() })?;
+    .map_err(|e| {
+        if is_unique_violation(&e) {
+            VialoError::AppError(StatusCode::CONFLICT, "label_conflict".into())
+        } else {
+            e.into()
+        }
+    })?;
 
     Ok((StatusCode::CREATED, Json(created_room)))
 }
@@ -79,9 +83,13 @@ pub async fn put_room(
     )
     .fetch_one(&mut *conn)
     .await
-    .map_err(|e| if is_unique_violation(&e) {
-        VialoError::AppError(StatusCode::CONFLICT, "label_conflict".into())
-    } else { e.into() })?;
+    .map_err(|e| {
+        if is_unique_violation(&e) {
+            VialoError::AppError(StatusCode::CONFLICT, "label_conflict".into())
+        } else {
+            e.into()
+        }
+    })?;
 
     Ok((StatusCode::OK, Json(created_room)))
 }

@@ -107,8 +107,16 @@ pub async fn post(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
 
     let api_key = body.api_key.as_ref().map(encryption::encrypt).transpose()?;
-    let username = body.username.as_ref().map(encryption::encrypt).transpose()?;
-    let password = body.password.as_ref().map(encryption::encrypt).transpose()?;
+    let username = body
+        .username
+        .as_ref()
+        .map(encryption::encrypt)
+        .transpose()?;
+    let password = body
+        .password
+        .as_ref()
+        .map(encryption::encrypt)
+        .transpose()?;
 
     let record = sqlx::query_as!(
         NmsConnectorModel,

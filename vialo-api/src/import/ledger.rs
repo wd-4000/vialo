@@ -51,11 +51,20 @@ impl Importer {
                     .await?;
 
                     match original {
-                        Some(o) if credits >= 0 && o.refundable >= credits && o.from_account == Some(e.account) => {
+                        Some(o)
+                            if credits >= 0
+                                && o.refundable >= credits
+                                && o.from_account == Some(e.account) =>
+                        {
                             product = product.or(o.product);
                         }
                         _ => {
-                            self.warn(r, format!("refund of {credits} doesn't fit {target}, imported unlinked"));
+                            self.warn(
+                                r,
+                                format!(
+                                    "refund of {credits} doesn't fit {target}, imported unlinked"
+                                ),
+                            );
                             refund_of = None;
                         }
                     }

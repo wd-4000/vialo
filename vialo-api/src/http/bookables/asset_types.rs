@@ -114,7 +114,10 @@ async fn replace_asset_type_permissions(
     }
 
     let group_ids = permissions.iter().map(|p| p.group_id).collect::<Vec<_>>();
-    let permissions = permissions.iter().map(|p| p.perm.clone()).collect::<Vec<_>>();
+    let permissions = permissions
+        .iter()
+        .map(|p| p.perm.clone())
+        .collect::<Vec<_>>();
 
     query!("INSERT INTO bookable_asset_type_group_perms (asset_type_id, group_id, perm)
         SELECT $1 as asset_type_id, group_id, perm FROM unnest($2::uuid[], $3::bookable_perm[]) AS p(group_id, perm)",

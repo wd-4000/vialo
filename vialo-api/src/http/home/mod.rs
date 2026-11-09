@@ -1,11 +1,7 @@
-use axum::{
-    Router,
-    routing::get,
-};
+use axum::{Router, routing::get};
 use std::sync::Arc;
 
 use crate::AppState;
-
 
 pub mod handlers;
 pub mod models;

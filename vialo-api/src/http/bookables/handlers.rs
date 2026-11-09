@@ -1,6 +1,7 @@
 use crate::helpers::{I18nMap, LangVariant, PgDateTime};
 
 use super::asset_types::{PostBookableTypeSchema, insert_asset_type};
+use super::connectors::{CommissionOptions, CommissioningFailedResponse, require_commissioned};
 use super::models::{
     BoardPostIdModel, BookableAssetQueue, BookableAssetTranslatedAllLanguages,
     BookableAssetTranslatedWithStatus, BookableStatus,
@@ -8,7 +9,6 @@ use super::models::{
 use super::permissions::{
     BookableCaller, BookablePerm, require_asset_type_perm, require_asset_type_perm_by_asset,
 };
-use super::connectors::{CommissionOptions, CommissioningFailedResponse, require_commissioned};
 use super::schemas::{NewSchemaInline, insert_schema};
 use crate::bookables::connectors;
 use crate::http::util::{clamp_pagination, grab_authd_conn_user, grab_trans};
@@ -403,8 +403,7 @@ pub async fn put_bookable(
     }
 
     let link = body.connector.zip(body.connector_output_id.clone());
-    let relinked =
-        link.is_some() && link != current.connector.zip(current.connector_output_id);
+    let relinked = link.is_some() && link != current.connector.zip(current.connector_output_id);
 
     let (name_langs, name_contents) =
         super::super::util::get_i18n_arg_arrays(Some(body.name.into()));

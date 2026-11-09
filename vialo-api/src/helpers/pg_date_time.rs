@@ -2,11 +2,14 @@ use std::error::Error;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use utoipa::openapi::{ObjectBuilder, OneOfBuilder, RefOr, Schema, SchemaFormat, KnownFormat, schema::{SchemaType, Type}};
 use sqlx::{
     Encode,
     encode::IsNull,
     postgres::{PgArgumentBuffer, PgTypeInfo, types::Oid},
+};
+use utoipa::openapi::{
+    KnownFormat, ObjectBuilder, OneOfBuilder, RefOr, Schema, SchemaFormat,
+    schema::{SchemaType, Type},
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -70,7 +73,8 @@ impl<'r> sqlx::Decode<'r, sqlx::Postgres> for PgDateTime {
             sqlx::postgres::PgValueFormat::Text => match value.as_str()? {
                 "infinity" => Ok(PgDateTime::Infinity),
                 "-infinity" => Ok(PgDateTime::NegativeInfinity),
-                _ => <DateTime<Utc> as sqlx::Decode<sqlx::Postgres>>::decode(value).map(PgDateTime::DateTime),
+                _ => <DateTime<Utc> as sqlx::Decode<sqlx::Postgres>>::decode(value)
+                    .map(PgDateTime::DateTime),
             },
             sqlx::postgres::PgValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
@@ -81,7 +85,8 @@ impl<'r> sqlx::Decode<'r, sqlx::Postgres> for PgDateTime {
                     b"\x80\x00\x00\x00" | b"\x80\x00\x00\x00\x00\x00\x00\x00" => {
                         Ok(PgDateTime::NegativeInfinity)
                     }
-                    _ => <DateTime<Utc> as sqlx::Decode<sqlx::Postgres>>::decode(value).map(PgDateTime::DateTime),
+                    _ => <DateTime<Utc> as sqlx::Decode<sqlx::Postgres>>::decode(value)
+                        .map(PgDateTime::DateTime),
                 }
             }
         }

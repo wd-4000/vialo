@@ -2,11 +2,14 @@ use std::error::Error;
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use utoipa::openapi::{ObjectBuilder, OneOfBuilder, RefOr, Schema, SchemaFormat, KnownFormat, schema::{SchemaType, Type}};
 use sqlx::{
     Encode,
     encode::IsNull,
     postgres::{PgArgumentBuffer, PgTypeInfo, types::Oid},
+};
+use utoipa::openapi::{
+    KnownFormat, ObjectBuilder, OneOfBuilder, RefOr, Schema, SchemaFormat,
+    schema::{SchemaType, Type},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -70,14 +73,17 @@ impl<'r> sqlx::Decode<'r, sqlx::Postgres> for PgDate {
             sqlx::postgres::PgValueFormat::Text => match value.as_str()? {
                 "infinity" => Ok(PgDate::Infinity),
                 "-infinity" => Ok(PgDate::NegativeInfinity),
-                _ => <NaiveDate as sqlx::Decode<sqlx::Postgres>>::decode(value).map(PgDate::DateTime),
+                _ => {
+                    <NaiveDate as sqlx::Decode<sqlx::Postgres>>::decode(value).map(PgDate::DateTime)
+                }
             },
             sqlx::postgres::PgValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
                 match bytes {
                     b"\x7F\xFF\xFF\xFF" => Ok(PgDate::Infinity),
                     b"\x80\x00\x00\x00" => Ok(PgDate::NegativeInfinity),
-                    _ => <NaiveDate as sqlx::Decode<sqlx::Postgres>>::decode(value).map(PgDate::DateTime),
+                    _ => <NaiveDate as sqlx::Decode<sqlx::Postgres>>::decode(value)
+                        .map(PgDate::DateTime),
                 }
             }
         }
