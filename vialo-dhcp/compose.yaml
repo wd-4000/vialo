@@ -7,7 +7,7 @@ services:
     command: sleep infinity
     stop_grace_period: 1s
     volumes:
-      - ../..:/workspace
+      - ..:/workspace/vialo
       - cargo-cache:/root/.cargo/registry
       - cargo-target:/workspace/vialo/target
     environment:
@@ -34,7 +34,7 @@ services:
       - /run
       - /run/lock
     volumes:
-      - ../..:/workspace
+      - ..:/workspace/vialo
       - cargo-target:/workspace/vialo/target:ro
       - /sys/fs/cgroup:/sys/fs/cgroup
     networks:
