@@ -8,7 +8,7 @@ fn main() {
     let out_dir = std::env::var("OUT_DIR").unwrap();
 
     // The public API and the hooks API are served on separate listeners, so they
-    // get separate documents — the UIs must never see the hooks contract.
+    // get separate documents.
     let public_paths = format!("{}/src/http", manifest_dir);
     let hooks_paths = format!("{}/src/hooks", manifest_dir);
 

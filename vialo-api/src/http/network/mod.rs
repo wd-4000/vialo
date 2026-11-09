@@ -19,7 +19,7 @@ pub mod realms;
 pub mod schemas;
 
 pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
-    // Fully public — needed by the user-ui to list available networks
+    // Fully public and needed by the user-ui to list available networks
     let public_routes = Router::new().route("/networks", get(networks::list_networks));
 
     // Staff-only infrastructure management

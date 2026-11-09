@@ -217,13 +217,14 @@ pub async fn add_post(
     .await?;
 
     // A new post has nothing to drop
-    super::media::sync_post_media(&mut trans, user.id, record.id, &body.media, body.cover_id).await?;
+    super::media::sync_post_media(&mut trans, user.id, record.id, &body.media, body.cover_id)
+        .await?;
     trans.commit().await?;
 
     if data.event_channels.posts_tx.send(record.id).is_err() {
         tracing::error!(
             post_id = record.id,
-            "posts channel has no receivers — post email notifications will not be sent"
+            "posts channel has no receivers, post email notifications will not be sent"
         );
         crate::health::add_health_event(
             &data.db,
