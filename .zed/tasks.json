@@ -1,7 +1,7 @@
 [
   {
-    "label": "db",
-    "command": "docker compose up",
+    "label": "deps",
+    "command": "docker compose up postgres mailhog",
   },
   {
     "label": "vialo-api",
