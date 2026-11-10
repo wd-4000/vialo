@@ -1,31 +1,42 @@
 # Contributing
-## LLMs
-Large language models can be useful for reading into a codebase, or even writing new code.
-However, let's at least not completely slop it up here.
-
-I don't have a moral high ground —¹ I've used LLMs for working on many parts of this project. Ideally this software would have been completely boutique, but I wanted to make it the best I could in the already glacial time frame. I also acknowledge that they are problematic in many ways.
-
-¹ human-placed em-dash
-
-### Working with an LLM
-- Ask it to help you review approaches and pick one
-- Keep an eye on what it's doing
-- Look through your contributions before submitting
-- Try to avoid giant commits
-- Avoid LLM-written copy if possible
-
-
-## Local development setup
-### 1. API
+## Development setup
+### Dependencies
 You need:
+- [Rust](https://rust-lang.org) 1.99 via rustup (pinned in `rust-toolchain.toml`)
+- PostgreSQL 18+ (use the container)
 
-- [Rust](https://rust-lang.org) (latest stable)
-- PostgreSQL 18+
+Here's a detailed tutorial:
 
-Copy `vialo.example.toml` to `vialo.toml`.
-Copy `.env.example` to `.env`.
+#### Windows
+If you're on Windows, install WSL using PowerShell (run as admin):
+`wsl --install`. If asked, reboot, and run `wsl --install` again.
+Create your user.
 
-Start the mock email server:
+After you are done, follow the Ubuntu instructions below.
+
+#### Ubuntu
+0. Download the repository
+    - Create an SSH key if you don't have one: `ssh-keygen -t ed25519 -C <your github email here!>`. Add it to GitHub using the [settings](https://github.com/settings/keys)
+    - Clone the repo: `git clone git@github.com:wd-4000/vialo.git`
+    - Enter the folder: `cd vialo`.
+1. `sudo apt install build-essential rustup pkg-config libssl-dev`
+2. Install Docker
+    - You can use [Docker Desktop](https://docs.docker.com/desktop/)
+     
+      > [!NOTE]
+      > If you're on WSL, download Docker Desktop for Windows and enable the default WSL integration in settings.
+    
+    - Or just grab the [Engine](https://docs.docker.com/engine/install/ubuntu/).
+3. Install SQLx: `cargo install sqlx-cli`
+
+### Copy the Configuration
+```sh
+cp vialo.example.toml vialo.toml
+cp .env.example .env
+```
+
+### Launch
+Start the mock email server (optional):
 ```sh
 docker compose up -d mailhog
 ```
@@ -48,6 +59,7 @@ cargo run
 
 The first start auto‑creates the mock admin account.
 The API will run on [localhost:8000](http://localhost:8000) by default.
+Some warnings will flash by if you didn't start the email server, this is okay. Keep it running.
 
 
 ## Conventions
@@ -63,9 +75,11 @@ When a commit touches several crates, list them in this order: vialo-common, via
 - Avoid `SELECT *`/`RETURNING *` in queries. There are some annoyances caused by column order.
 
 #### vialo-dhcp
-- only builds on Linux. You can use [vialo-dhcp/Dockerfile.dev](vialo-dhcp/Dockerfile.dev) to spin up a development env.
+only builds on Linux. You can use its [Dockerfile.dev](vialo-dhcp/Dockerfile.dev) to spin up a development environment if you're not using linux.
 
-#### After changes
+#### Before opening a PR
+- Format the files: `cargo fmt --all` (your editor should do this automatically)
+- Clippy can tell you things about the code quality: `cargo clippy`
 - **SQL changed:** run `cargo sqlx prepare -- --all-features` and check `.sqlx`
   into Git.
   Also fine to run after multiple commits, if you're firing them off in quick succession,
@@ -75,6 +89,17 @@ When a commit touches several crates, list them in this order: vialo-common, via
   prepared without them is missing queries.
 - **API surface changed:** nothing to commit. CI generates the OpenAPI spec and publishes it to the reference below.
   To look at it locally: `cargo run --bin openapi-spec -- openapi.json openapi-hooks.json`.
+
+## Note on LLMs
+Large language models can be useful for reading into a codebase, or even writing new code.
+However, let's be thoughtful and at least not completely slop it up here.
+
+### Working with an LLM
+- Ask it to help you review approaches and pick one
+- Keep an eye on what it's doing
+- Look through your contributions before submitting
+- Try to avoid giant commits
+- Avoid LLM-written copy if possible
 
 ## Where to find things
 

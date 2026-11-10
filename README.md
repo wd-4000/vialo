@@ -9,6 +9,9 @@ Everything significant is logged.
 The backend bits (`vialo-api`, `vialo-dhcp`) are designed to be more or less reusable across deployments.
 
 ## Demo
+If you just want a quick look without setting up the development environment, you can run the demo.
+For the full development setup, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 Pre-requisite: Docker
 ```
 cp vialo.example.toml vialo.toml
@@ -38,12 +41,17 @@ Quick env reference: [.env.example](.env.example)
 ## Repository structure
 
 ```text
-├── compose.yaml
-├── docs/               # Docs
-├── vialo-api/          # Rust backend (generic)
-├── vialo-common/       # Config loader shared by vialo-api & vialo-dhcp
-├── vialo-dhcp/         # DHCP server based on dora [1]
-└── postgres/           # Postgres image for vialo
+├── compose.yaml          # Base stack: vialo-api + Postgres
+├── compose.override.yaml # Dev overlay loaded by default
+├── compose.*.yaml        # Opt-in overlays (demo, prod, dhcp), use with -f or COMPOSE_FILE
+├── vialo.example.toml    # Runtime config template, copy to vialo.toml
+├── .env.example          # Env template, copy to .env
+├── docs/                 # Docs
+├── vialo-api/            # Rust backend (generic)
+├── vialo-common/         # Config loader shared by vialo-api & vialo-dhcp
+├── vialo-dhcp/           # DHCP server based on dora [1], Linux only
+├── postgres/             # Postgres image for vialo
+└── data/                 # Data will be stored here
 ```
 1. DHCP: [dora](https://github.com/bluecatengineering/dora)
 
