@@ -16,6 +16,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1", features = ["derive"] }
 uuid = "1"
 mac_address = "1"
-rtnetlink = "0.23.0"
+rtnetlink = "0.24.0"
 futures = "0.3.34"
 vialo-common = { path = "../vialo-common" }
