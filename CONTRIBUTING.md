@@ -90,6 +90,15 @@ only builds on Linux. You can use its [Dockerfile.dev](vialo-dhcp/Dockerfile.dev
 - **API surface changed:** nothing to commit. CI generates the OpenAPI spec and publishes it to the reference below.
   To look at it locally: `cargo run --bin openapi-spec -- openapi.json openapi-hooks.json`.
 
+#### Upgrade dependencies
+Make sure you have `cargo-upgrade` installed. If not, `cargo install cargo-upgrades`.
+
+Then, from the repository root occasionally run `cargo upgrade -i`. 
+> [!WARNING]
+> If this causes the build to fail and you can't fix it, revert the changes and run `cargo upgrade` without the -i.
+
+Check the build by running `cargo check` inside `vialo-api` and `vialo-dhcp` (Don't forget that the latter only builds on Linux/inside WSL!)
+
 ## Note on LLMs
 Large language models can be useful for reading into a codebase, or even writing new code.
 However, let's be thoughtful and at least not completely slop it up here.
