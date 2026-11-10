@@ -18,4 +18,4 @@ target/
 
 sampledata/
 openapi.json
-media
+/media
