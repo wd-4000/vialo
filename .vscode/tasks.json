@@ -1,0 +1,20 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "deps",
+      "type": "shell",
+      "command": "docker compose up -d --wait postgres mailhog",
+      "problemMatcher": []
+    },
+    {
+      "label": "vialo-api",
+      "type": "shell",
+      "command": "cargo run",
+      "options": { "cwd": "${workspaceFolder}/vialo-api" },
+      "dependsOn": ["deps"],
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}

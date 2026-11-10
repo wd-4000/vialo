@@ -1,0 +1,12 @@
+{
+  "files.eol": "\n",
+
+  // vialo-dhcp only compiles on Linux
+  "rust-analyzer.check.workspace": false,
+  // Separate target dir so rust-analyzer doesn't hold the build lock against `cargo run`
+  "rust-analyzer.cargo.targetDir": true,
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
+    "editor.formatOnSave": true
+  }
+}
