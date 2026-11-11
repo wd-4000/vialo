@@ -1,7 +1,13 @@
 use crate::{helpers::encryption, helpers::random};
 use anyhow::Result;
+use ory_kratos_client::{
+    apis::{configuration::Configuration, frontend_api, identity_api},
+    models::{
+        UpdateRecoveryFlowBody, UpdateRecoveryFlowWithLinkMethod,
+        update_recovery_flow_with_link_method::MethodEnum,
+    },
+};
 use rand::{RngExt, rng};
-use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, Transaction};
 use utoipa::ToSchema;
@@ -39,25 +45,28 @@ pub async fn generate_amenities_login(
     Ok(AmenitiesLogin { username, pin })
 }
 
-fn build_kratos_http_client(kratos_url: &str) -> (reqwest::Client, String) {
-    if kratos_url.starts_with("unix://") {
-        #[cfg(unix)]
-        {
-            let socket_path = kratos_url.strip_prefix("unix://").unwrap();
-            let client = reqwest::Client::builder()
+/// Builds a Kratos client config with `unix://` URLs going over a Unix socket
+pub fn kratos_configuration(url: &str) -> Configuration {
+    let url = url.trim_end_matches('/');
+    let Some(socket_path) = url.strip_prefix("unix://") else {
+        return Configuration {
+            base_path: url.to_string(),
+            ..Default::default()
+        };
+    };
+    #[cfg(unix)]
+    {
+        Configuration {
+            base_path: "http://localhost".to_string(), // dud
+            client: reqwest_kratos::Client::builder()
                 .unix_socket(socket_path)
                 .build()
-                .expect("Failed to build Unix socket HTTP client for Kratos");
-            return (client, "http://localhost".to_string());
-        }
-        #[cfg(not(unix))]
-        {
-            panic!(
-                "Kratos URL configured as unix:// but this platform does not support Unix sockets"
-            );
+                .expect("Failed to build Unix socket HTTP client for Kratos"),
+            ..Default::default()
         }
     }
-    (reqwest::Client::new(), kratos_url.to_string())
+    #[cfg(not(unix))]
+    panic!("Kratos URL {socket_path} is a Unix socket but this platform does not support them")
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -72,21 +81,39 @@ pub struct IdentityModel {
     pub room: Option<String>,
 }
 
-pub async fn delete_identity(id: Uuid, trans: &mut Transaction<'_, Postgres>) -> Result<()> {
+pub async fn delete_identity(
+    id: Uuid,
+    kratos_admin: Option<&Configuration>,
+    trans: &mut Transaction<'_, Postgres>,
+) -> Result<()> {
     sqlx::query!(r#"DELETE FROM identities i WHERE i.id = $1"#, id)
         .execute(&mut **trans)
         .await?;
 
-    if let Ok(kratos_url) = std::env::var("ORY_KRATOS_ADMIN_URL") {
-        let (client, base_url) = build_kratos_http_client(&kratos_url);
-        let delete_url = Url::parse(&base_url)?
-            .join("admin/identities/")?
-            .join(&id.to_string())?;
-
-        let kratos_response = client.delete(delete_url).send().await?;
-
-        kratos_response.error_for_status()?;
+    if let Some(kratos_admin) = kratos_admin {
+        identity_api::delete_identity(kratos_admin, &id.to_string()).await?;
     }
+
+    Ok(())
+}
+
+/// Email a recovery link
+pub async fn reset_identity_password(
+    id: Uuid,
+    kratos_frontend: &Configuration,
+    db: impl sqlx::PgExecutor<'_>,
+) -> Result<()> {
+    let email = sqlx::query_scalar!(r#"SELECT i.email FROM identities i WHERE i.id = $1"#, id)
+        .fetch_one(db)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Identity {id} has no email"))?;
+
+    let flow = frontend_api::create_native_recovery_flow(kratos_frontend).await?;
+    let body = UpdateRecoveryFlowBody::Link(Box::new(UpdateRecoveryFlowWithLinkMethod::new(
+        email,
+        MethodEnum::Link,
+    )));
+    frontend_api::update_recovery_flow(kratos_frontend, &flow.id, body, None, None).await?;
 
     Ok(())
 }

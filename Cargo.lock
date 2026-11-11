@@ -5690,6 +5690,7 @@ dependencies = [
  "rand 0.10.3",
  "ravif",
  "rayon",
+ "reqwest 0.12.28",
  "reqwest 0.13.5",
  "schemars 1.2.3",
  "secrecy",

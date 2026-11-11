@@ -323,17 +323,9 @@ async fn main() {
         admin_url,
     } = &config.auth
     {
-        let frontend_url = frontend_url.trim_end_matches('/').to_string();
-        let admin_url = admin_url.trim_end_matches('/').to_string();
         Some(KratosConfigs {
-            frontend: ory_kratos_client::apis::configuration::Configuration {
-                base_path: frontend_url.clone(),
-                ..Default::default()
-            },
-            admin: ory_kratos_client::apis::configuration::Configuration {
-                base_path: admin_url.clone(),
-                ..Default::default()
-            },
+            frontend: vialo_api::helpers::people::kratos_configuration(frontend_url),
+            admin: vialo_api::helpers::people::kratos_configuration(admin_url),
         })
     } else {
         None

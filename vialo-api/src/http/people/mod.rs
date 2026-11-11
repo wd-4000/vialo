@@ -66,11 +66,16 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/identities/{id}",
             get(identities::get).delete(identities::delete),
         )
+        .route(
+            "/identities/{id}/reset_password",
+            post(identities::reset_password),
+        )
         .route("/identities/{id}/merge", post(identities::merge))
-        .route("/{id}", get(handlers::get_person))
         .route(
             "/{id}",
-            put(handlers::put_person).delete(handlers::delete_person),
+            get(handlers::get_person)
+                .put(handlers::put_person)
+                .delete(handlers::delete_person),
         )
         .route("/{id}/overview", get(handlers::get_person_overview))
         .route("/{id}/roles", get(handlers::get_person_roles_by_id))

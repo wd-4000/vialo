@@ -656,9 +656,13 @@ pub async fn delete_person(
         .await?;
 
     if let Some(auth_id) = existing.and_then(|e| e.auth_id) {
-        helpers::people::delete_identity(auth_id, &mut trans)
-            .await
-            .map_err(VialoError::Anyhow)?;
+        helpers::people::delete_identity(
+            auth_id,
+            data.kratos_config.as_ref().map(|k| &k.admin),
+            &mut trans,
+        )
+        .await
+        .map_err(VialoError::Anyhow)?;
     }
 
     trans.commit().await?;

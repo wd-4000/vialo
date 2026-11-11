@@ -60,6 +60,23 @@ pub async fn get(
     }))
 }
 
+#[utoipa::path(post, path = "/people/identities/{id}/reset_password", responses((status = 204, description = "Recovery email sent")))]
+pub async fn reset_password(
+    Path(id): Path<Uuid>,
+    State(data): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, VialoError> {
+    let kratos = data
+        .kratos_config
+        .as_ref()
+        .ok_or_else(|| VialoError::Anyhow(anyhow::anyhow!("Kratos is not configured")))?;
+
+    helpers::people::reset_identity_password(id, &kratos.frontend, &data.db)
+        .await
+        .map_err(VialoError::Anyhow)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 #[utoipa::path(delete, path = "/people/identities/{id}", responses((status = 204, description = "Deleted")))]
 pub async fn delete(
     Path(id): Path<Uuid>,
@@ -69,9 +86,13 @@ pub async fn delete(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    helpers::people::delete_identity(id, &mut trans)
-        .await
-        .map_err(VialoError::Anyhow)?;
+    helpers::people::delete_identity(
+        id,
+        data.kratos_config.as_ref().map(|k| &k.admin),
+        &mut trans,
+    )
+    .await
+    .map_err(VialoError::Anyhow)?;
 
     trans.commit().await?;
 

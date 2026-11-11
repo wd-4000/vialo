@@ -69,9 +69,9 @@ pub enum AuthConfig {
         email: String,
     },
     Kratos {
-        /// Kratos public API, for session validation
+        /// Kratos public API, for session validation and recovery emails
         frontend_url: String,
-        /// Kratos admin API, for identity deletion
+        /// Kratos admin API
         admin_url: String,
     },
 }
