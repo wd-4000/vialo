@@ -1,12 +1,6 @@
 use crate::{helpers::encryption, helpers::random};
 use anyhow::Result;
-use ory_kratos_client::{
-    apis::{configuration::Configuration, frontend_api, identity_api},
-    models::{
-        UpdateRecoveryFlowBody, UpdateRecoveryFlowWithLinkMethod,
-        update_recovery_flow_with_link_method::MethodEnum,
-    },
-};
+use ory_kratos_client::apis::{configuration::Configuration, identity_api};
 use rand::{RngExt, rng};
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, Transaction};
@@ -108,12 +102,26 @@ pub async fn reset_identity_password(
         .await?
         .ok_or_else(|| anyhow::anyhow!("Identity {id} has no email"))?;
 
-    let flow = frontend_api::create_native_recovery_flow(kratos_frontend).await?;
-    let body = UpdateRecoveryFlowBody::Link(Box::new(UpdateRecoveryFlowWithLinkMethod::new(
-        email,
-        MethodEnum::Link,
-    )));
-    frontend_api::update_recovery_flow(kratos_frontend, &flow.id, body, None, None).await?;
+    // Raw requests because the generated client can't parse flows (`node_type` is both its serde tag and a field)
+    let (client, base) = (&kratos_frontend.client, &kratos_frontend.base_path);
+    let flow: serde_json::Value = client
+        .get(format!("{base}/self-service/recovery/api"))
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    let flow_id = flow["id"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Kratos recovery flow has no id"))?;
+
+    client
+        .post(format!("{base}/self-service/recovery"))
+        .query(&[("flow", flow_id)])
+        .json(&serde_json::json!({ "method": "link", "email": email }))
+        .send()
+        .await?
+        .error_for_status()?;
 
     Ok(())
 }
