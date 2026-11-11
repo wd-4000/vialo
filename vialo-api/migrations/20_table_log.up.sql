@@ -119,11 +119,13 @@ DECLARE
     -- Columns whose changes carry no value. We Do Not Care
     -- account_people.credit_balance is just materialized from the transactions,
     -- credit_ledger.credits_refunded from the refund rows,
+    -- board_posts.content_(html/plain) from content
     -- media.(width/height) are taken during encoding
     p_noise_cols CONSTANT jsonb := '{
       "*": ["last_updated", "last_seen"],
       "accounts_people": ["credit_balance"],
       "credit_ledger": ["credits_refunded"],
+      "board_posts": ["content_html", "content_plain"],
       "media": ["width", "height", "variants"]
     }';
 BEGIN
