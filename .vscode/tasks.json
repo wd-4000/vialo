@@ -15,6 +15,14 @@
       "dependsOn": ["deps"],
       "isBackground": true,
       "problemMatcher": []
+    },
+    {
+      "label": "migrate",
+      "type": "shell",
+      "command": "cargo sqlx migrate run",
+      "options": { "cwd": "${workspaceFolder}/vialo-api" },
+      "dependsOn": ["deps"],
+      "problemMatcher": []
     }
   ]
 }
