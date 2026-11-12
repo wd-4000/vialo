@@ -4,7 +4,7 @@
     {
       "label": "deps",
       "type": "shell",
-      "command": "docker compose postgres mailhog",
+      "command": "docker compose up postgres mailhog",
       "problemMatcher": []
     },
     {
