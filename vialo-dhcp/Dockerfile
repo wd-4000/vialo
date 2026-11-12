@@ -3,7 +3,7 @@
 # between builds for fast incremental compiles. There is no .ci variant — this
 # server's primary deployment is the Debian package (debian/service), and the
 # image exists for compose.dhcp.yaml. Dockerfile.dev is the dev shell container.
-FROM rust:1.99-alpine AS builder
+FROM rust:1.100-alpine AS builder
 ARG PROFILE=release
 
 # No openssl: this crate's sqlx has no TLS feature (see vialo-dhcp/Cargo.toml).

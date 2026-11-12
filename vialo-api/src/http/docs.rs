@@ -91,9 +91,9 @@ impl utoipa::Modify for FixTheseUglyTagsNow {
 
 fn clean_tag(tag: &str) -> Vec<String> {
     let stripped = tag
-        .strip_prefix("crate::http::")
-        .or_else(|| tag.strip_prefix("crate::hooks::"))
-        .unwrap_or(tag);
+        .trim_prefix("crate::http::")
+        .trim_prefix("crate::hooks::");
+
     let parts: Vec<String> = stripped
         .split("::")
         .filter(|&p| !matches!(p, "handlers" | "models" | "mod"))

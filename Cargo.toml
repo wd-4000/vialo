@@ -3,7 +3,7 @@ resolver = "2"
 members = ["vialo-api", "vialo-common", "vialo-dhcp"]
 
 [workspace.package]
-rust-version = "1.99"
+rust-version = "1.100"
 
 # Unoptimized rav1e is the worst of a slow dev encode so use --release when testing uploads
 [profile.dev.package.rav1e]

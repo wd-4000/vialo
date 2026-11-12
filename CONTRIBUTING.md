@@ -2,7 +2,7 @@
 ## Development setup
 ### Dependencies
 You need:
-- [Rust](https://rust-lang.org) 1.99 via rustup (pinned in `rust-toolchain.toml`)
+- [Rust](https://rust-lang.org) 1.100 via rustup (pinned in `rust-toolchain.toml`)
 - PostgreSQL 18+ (use the container)
 
 Here's a detailed tutorial:

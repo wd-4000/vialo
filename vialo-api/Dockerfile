@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # This is the local/compose Dockerfile: cache mounts keep target/ between
 # builds for fast incremental compiles. CI publishes from Dockerfile.ci.
-FROM rust:1.99-alpine AS builder
+FROM rust:1.100-alpine AS builder
 ARG PROFILE=release
 
 # nasm: rav1e asm. cmake onwards: static libheif with HEVC (libde265) and AV1 (libaom)
