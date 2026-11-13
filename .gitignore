@@ -48,3 +48,6 @@ data
 !.vscode/extensions.json
 !.vscode/settings.json
 !.vscode/tasks.json
+
+# Database dumps
+*.dump
