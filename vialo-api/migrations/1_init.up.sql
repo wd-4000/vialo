@@ -337,11 +337,21 @@ END;
 $$ LANGUAGE plpgsql;
 
 create trigger tg_account_class
-before insert or update or delete on accounts_people for each row
+before insert or update on accounts_people for each row
+execute FUNCTION enforce_account_class ();
+
+-- AFTER so the person's row is gone before its accounts row
+create trigger tg_account_class_delete
+after delete on accounts_people for each row
 execute FUNCTION enforce_account_class ();
 
 create trigger tg_account_class
-before insert or update or delete on account_groups for each row
+before insert or update on account_groups for each row
+execute FUNCTION enforce_account_class ();
+
+-- AFTER so the group's row is gone before its accounts row
+create trigger tg_account_class_delete
+after delete on account_groups for each row
 execute FUNCTION enforce_account_class ();
 
 CREATE TYPE app_role AS ENUM(
