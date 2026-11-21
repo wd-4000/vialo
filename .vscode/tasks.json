@@ -4,7 +4,15 @@
     {
       "label": "deps",
       "type": "shell",
-      "command": "docker compose up postgres mailhog",
+      "command": "docker compose up -d --wait postgres mailhog",
+      "problemMatcher": []
+    },
+    {
+      "label": "deps-logs",
+      "type": "shell",
+      "command": "docker compose logs -f postgres mailhog",
+      "isBackground": true,
+      "dependsOn": ["deps"],
       "problemMatcher": []
     },
     {
