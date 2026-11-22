@@ -314,11 +314,9 @@ pub async fn add_board(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let processed_i18n_fields = super::super::util::insert_i18n_strings(
-        &mut trans,
-        vec![("label", Some(body.label))],
-    )
-    .await?;
+    let processed_i18n_fields =
+        super::super::util::insert_i18n_strings(&mut trans, vec![("label", Some(body.label))])
+            .await?;
 
     let record = sqlx::query_as!(
         BoardPostIdModel,
@@ -374,8 +372,7 @@ pub async fn put_board(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let (label_langs, label_contents) =
-        super::super::util::get_i18n_arg_arrays(Some(body.label));
+    let (label_langs, label_contents) = super::super::util::get_i18n_arg_arrays(Some(body.label));
 
     let record = sqlx::query_as!(
         BoardPostIdModel,

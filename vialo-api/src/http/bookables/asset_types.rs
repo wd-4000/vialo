@@ -134,8 +134,7 @@ pub async fn insert_asset_type(
     body: PostBookableTypeSchema,
 ) -> Result<i32, VialoError> {
     let processed_i18n_fields =
-        super::super::util::insert_i18n_strings(&mut *db, vec![("name", Some(body.name))])
-            .await?;
+        super::super::util::insert_i18n_strings(&mut *db, vec![("name", Some(body.name))]).await?;
 
     let id = sqlx::query_scalar!(
         "INSERT INTO bookable_asset_types (name_i18n) VALUES ($1) RETURNING id",
@@ -234,8 +233,7 @@ pub async fn put(
     let mut conn = grab_authd_conn_user(&data.db, user.id).await?;
     let mut trans = grab_trans(&mut conn).await?;
 
-    let (name_langs, name_contents) =
-        super::super::util::get_i18n_arg_arrays(Some(body.name));
+    let (name_langs, name_contents) = super::super::util::get_i18n_arg_arrays(Some(body.name));
 
     sqlx::query!(
         r#"UPDATE bookable_asset_types SET name_i18n = update_i18n_strings(name_i18n, $1, $2) WHERE id = $3"#,
