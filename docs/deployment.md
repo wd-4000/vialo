@@ -54,7 +54,7 @@ generated `ENCRYPTION_KEY`
 > Back up `/etc/vialo/api.env`, as it contains the encryption key
 > for WiFi passwords etc.
 
- Copy `vialo.example.toml` from  `/usr/share/doc/vialo-api/` to `/etc/vialo/vialo.toml`.
+`cp /usr/share/doc/vialo-api/vialo.example.toml /etc/vialo/vialo.toml` and customize it.
 
 It ships three units, all enabled on install:
 
