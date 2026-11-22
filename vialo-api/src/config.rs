@@ -15,7 +15,7 @@ pub struct PublicApiConfig {
     pub listen: String,
 }
 
-/// Webhooks (Kratos identity sync, RADIUS auth). No authentication!
+/// Webhooks (Kratos identity sync, RADIUS auth). Requests need HOOKS_KEY
 #[derive(JsonSchema, Deserialize)]
 pub struct HooksApiConfig {
     /// Same format as `public.listen`. Bind to `127.0.0.1` or a Unix socket
