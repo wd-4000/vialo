@@ -55,17 +55,17 @@ systemd creates the listening sockets and passes them to the service, which
 detects `LISTEN_FDS` and uses them instead of binding its own. Each socket has
 its own directory, so you can expose one without the other:
 
-| Socket | Path |
-|---|---|
-| public | `/run/vialo-api/public/api.sock` |
-| hooks | `/run/vialo-api/hooks/api.sock` |
+| Socket | Path | Group |
+|---|---|---|
+| API public | `/run/vialo/public/api/api.sock` | `vialo-public` |
+| API hooks | `/run/vialo-api/hooks/api.sock` | `vialo-hooks` |
 
-Both need to be active, otherwise the service falls back to binding the
-addresses from `vialo.toml`. To skip socket activation, disable both units.
+Both API sockets need to be active, otherwise the service falls back to
+binding the addresses from `vialo.toml`. To skip socket activation, disable
+both units.
 
-The sockets are mode 0660, owned by the `vialo-public` and `vialo-hooks` groups
-(created by the package via sysusers.d). Add the proxy and Kratos users to
-the matching group:
+The sockets are mode 0660 and the groups are created by the packages via
+sysusers.d. Add the proxy and Kratos users to the matching group:
 
 ```sh
 usermod -aG vialo-public caddy
@@ -73,8 +73,8 @@ usermod -aG vialo-hooks kratos
 ```
 
 For a reverse proxy in a container, bind-mount the directory rather than the
-socket file, which gets replaced whenever the socket unit restarts. Containers
-can't resolve host group names, so pass the numeric gid
+socket files, which get replaced whenever a unit restarts. Containers can't
+resolve host group names, so pass the numeric gid
 (`getent group vialo-public`):
 
 ```yaml
@@ -82,11 +82,11 @@ caddy:
   user: "1000:1000" # any non-root uid
   group_add: ["${VIALO_PUBLIC_GID}"]
   volumes:
-    - /run/vialo-api/public:/run/vialo-api/public:ro
+    - /run/vialo/public:/run/vialo/public:ro
 ```
 
 ```
-reverse_proxy unix//run/vialo-api/public/api.sock
+reverse_proxy unix//run/vialo/public/api/api.sock
 ```
 
 A container running as root bypasses the group check entirely.

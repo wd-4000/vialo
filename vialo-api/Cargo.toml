@@ -6,7 +6,10 @@ rust-version.workspace = true
 default-run = "vialo-api"
 
 [package.metadata.deb]
+maintainer = "WD-4000 <preparefordeallocation@outlook.com>"
 features = ["migrate"]
+# postinst runs systemd-sysusers
+depends = "$auto, systemd | systemd-standalone-sysusers | systemd-sysusers"
 # For `vialo dump`/`vialo restore`
 recommends = "postgresql-client"
 maintainer-scripts = "debian/"

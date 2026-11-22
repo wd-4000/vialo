@@ -5,6 +5,7 @@ edition = "2024"
 rust-version.workspace = true
 
 [package.metadata.deb]
+maintainer = "WD-4000 <preparefordeallocation@outlook.com>"
 maintainer-scripts = "debian/"
 systemd-units = { enable = true }
 
