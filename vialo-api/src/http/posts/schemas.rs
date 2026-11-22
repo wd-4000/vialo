@@ -28,6 +28,17 @@ pub struct PostFilterOptions {
     pub content_format: HashSet<PostContentFormat>,
 }
 
+#[derive(Deserialize, Debug, Default, IntoParams)]
+pub struct BoardPostFilterOptions {
+    pub lang: Option<Vec<String>>,
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+    pub search: Option<String>,
+    pub current_only: Option<bool>,
+    #[serde(default)]
+    pub content_format: HashSet<PostContentFormat>,
+}
+
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CreatePostSchema {

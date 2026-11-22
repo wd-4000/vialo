@@ -43,5 +43,6 @@ pub fn create_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             util::middleware::auth_required,
         ))
         .route("/", get(handlers::list_posts))
+        .route("/boards/{id}/posts", get(handlers::list_board_posts))
         .route("/{id}", get(handlers::get_post))
 }

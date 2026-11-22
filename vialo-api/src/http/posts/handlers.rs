@@ -3,9 +3,9 @@ use super::{
     boards::BoardPerm,
     models::{
         BoardPostIdModel, BoardPostModelTranslated, BoardPostModelTranslatedAllLanguages,
-        BoardPostModelTranslatedWithPinnedOn, PostMediaModel, PostVisibility,
+        BoardPostModelTranslatedWithPinnedOn, BoardPostsResponse, PostMediaModel, PostVisibility,
     },
-    schemas::{CreatePostSchema, PostContentFormat, PostFilterOptions},
+    schemas::{BoardPostFilterOptions, CreatePostSchema, PostContentFormat, PostFilterOptions},
 };
 use ammonia;
 use pulldown_cmark::{Parser, html};
@@ -26,6 +26,7 @@ use axum::{
 use axum_extra::extract::Query;
 use sqlx_conditional_queries::conditional_query_as;
 use std::sync::Arc;
+use uuid::Uuid;
 
 fn render_post(content: &Option<I18nMap>) -> (Option<I18nMap>, Option<I18nMap>) {
     // Images are use the `media:<id>` schema and resolved at the client
@@ -63,13 +64,52 @@ fn render_post(content: &Option<I18nMap>) -> (Option<I18nMap>, Option<I18nMap>) 
 
     (content_html.to_owned(), content_plain.to_owned())
 }
-
+/// Lists posts
+/// If `board_id` is included, posts pinned on a requested board sort first (by `pin_priority`), then by date
 #[utoipa::path(get, path = "/posts", params(PostFilterOptions), responses((status = 200, description = "OK", body=Vec<BoardPostModelTranslatedWithPinnedOn>)))]
 pub async fn list_posts(
     Query(opts): Query<PostFilterOptions>,
     Extension(user_o): Extension<Option<User>>,
     State(data): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, VialoError> {
+    let posts = query_posts(&data.db, opts, user_o.as_ref().map(|u| u.id)).await?;
+    Ok((StatusCode::OK, Json(posts)))
+}
+
+/// List a board's posts, with posts pinned on it split out into `pinned`
+#[utoipa::path(get, path = "/posts/boards/{id}/posts", params(BoardPostFilterOptions), responses((status = 200, description = "OK", body=BoardPostsResponse)))]
+pub async fn list_board_posts(
+    Query(opts): Query<BoardPostFilterOptions>,
+    Extension(user_o): Extension<Option<User>>,
+    State(data): State<Arc<AppState>>,
+    Path(id): Path<i32>,
+) -> Result<impl IntoResponse, VialoError> {
+    let opts = PostFilterOptions {
+        lang: opts.lang,
+        page: opts.page,
+        limit: opts.limit,
+        search: opts.search,
+        current_only: opts.current_only,
+        board_id: Some(vec![id]),
+        pinned_on: Some(true),
+        content_format: opts.content_format,
+    };
+    let posts = query_posts(&data.db, opts, user_o.as_ref().map(|u| u.id)).await?;
+    let (pinned, timeline): (Vec<_>, Vec<_>) = posts
+        .into_iter()
+        .partition(|p| p.pinned_on.as_ref().is_some_and(|b| b.contains(&id)));
+    let posts = BoardPostsResponse {
+        pinned: pinned.into_iter().map(Into::into).collect(),
+        timeline: timeline.into_iter().map(Into::into).collect(),
+    };
+    Ok((StatusCode::OK, Json(posts)))
+}
+
+async fn query_posts(
+    db: &sqlx::PgPool,
+    opts: PostFilterOptions,
+    uid: Option<Uuid>,
+) -> Result<Vec<BoardPostModelTranslatedWithPinnedOn>, VialoError> {
     /*
        PERM
        Logged-in users see 'public' and 'logged_in' posts (plus view-permissioned boards).
@@ -84,12 +124,12 @@ pub async fn list_posts(
     let wants_html = opts.content_format.contains(&PostContentFormat::Html);
     let wants_md = opts.content_format.is_empty()
         || opts.content_format.contains(&PostContentFormat::Markdown);
-    let uid = user_o.as_ref().map(|u| u.id);
-
     let pinned_on = opts.pinned_on.unwrap_or(false);
     let search = opts.search.as_deref();
+    let board_ids = opts.board_id.as_deref();
 
-    // #FILTER uses a conditional so the board/age predicates remain index-friendly
+    // #FILTER is chosen here so each variant stays simple enough to use indexes
+    // The pins join is only used for sorting and pinned_on
     // This might be red in rust-analyzer. Ignore that.
     let posts = conditional_query_as!(BoardPostModelTranslatedWithPinnedOn,
         r#"SELECT
@@ -108,10 +148,14 @@ pub async fn list_posts(
             ARRAY(SELECT jsonb_build_object('id', m.id, 'status', m.status, 'mime', m.mime, 'size_bytes', m.size_bytes,
                     'content', jsonb_build_object('type', m.type, 'width', m.width, 'height', m.height, 'variants', m.variants, 'filename', m.filename))
                 FROM media m WHERE m.post_id = bp.id ORDER BY m.position) AS "media!: Vec<PostMediaModel>",
-            CASE WHEN {pinned_on} THEN (SELECT array_agg(bpp.board_id) FROM board_pinned_posts bpp
-                WHERE bpp.post_id = bp.id
-                AND (bpp.pinned_until IS NULL OR bpp.pinned_until >= NOW())) END AS "pinned_on: Vec<i32>"
+            CASE WHEN {pinned_on} THEN pins.boards END AS "pinned_on: Vec<i32>"
         FROM board_posts bp
+        LEFT JOIN LATERAL (
+            SELECT array_agg(pin.board_id) AS boards,
+                max(pin.pin_priority) FILTER (WHERE pin.board_id = ANY({board_ids})) AS priority
+            FROM board_pinned_posts pin
+            WHERE pin.post_id = bp.id AND (pin.pinned_until IS NULL OR pin.pinned_until >= NOW())
+        ) pins ON TRUE
         WHERE {#FILTER}
             -- visibility
             AND (bp.visibility = 'public'
@@ -120,7 +164,9 @@ pub async fn list_posts(
             AND ({search}::text IS NULL
                 OR get_i18n_string(bp.title, {langs}) ILIKE '%' || {search} || '%'
                 OR get_i18n_string(bp.location, {langs}) ILIKE '%' || {search} || '%')
-        ORDER BY (bp.event_from <= now() AND bp.event_to >= now()), bp.created_at DESC
+        ORDER BY pins.priority DESC NULLS LAST,
+            COALESCE(bp.event_from <= now() AND bp.event_to >= now(), false) DESC,
+            bp.created_at DESC
         LIMIT {limit} OFFSET {offset}"#,
         #FILTER = match (opts.current_only.unwrap_or(true), &opts.board_id) {
             (false, None) => "TRUE",
@@ -139,13 +185,13 @@ pub async fn list_posts(
                 UNION ALL
                 SELECT h.id FROM board_posts h WHERE h.board_id = ANY({board_ids})
                     AND (h.event_to >= NOW() - interval '3 hours'
-                        OR (h.event_to IS NULL AND h.created_at > NOW() - interval '1 day')))"#
+                        OR (h.event_to IS NULL AND h.created_at > NOW() - interval '1 day')))"#,
         },
     )
-    .fetch_all(&data.db)
+    .fetch_all(db)
     .await?;
 
-    Ok((StatusCode::OK, Json(posts)))
+    Ok(posts)
 }
 
 async fn check_can_post_to_board(

@@ -76,6 +76,54 @@ pub struct BoardPostModelTranslatedWithPinnedOn {
     pub pinned_on: Option<Vec<i32>>,
 }
 
+/// A post in a single board's listing, where pinning is already communicated by BoardPostsResponse
+#[derive(Serialize, ToSchema)]
+pub struct BoardPostListModel {
+    pub id: i32,
+    pub board_id: i32,
+    pub icon: Option<String>,
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>, // markdown
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_html: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_plain: Option<String>,
+    pub location: Option<String>,
+    pub event_from: Option<chrono::DateTime<chrono::Utc>>,
+    pub event_to: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub media: Vec<PostMediaModel>,
+    pub cover_id: Option<Uuid>,
+}
+
+impl From<BoardPostModelTranslatedWithPinnedOn> for BoardPostListModel {
+    fn from(p: BoardPostModelTranslatedWithPinnedOn) -> Self {
+        Self {
+            id: p.id,
+            board_id: p.board_id,
+            icon: p.icon,
+            title: p.title,
+            content: p.content,
+            content_html: p.content_html,
+            content_plain: p.content_plain,
+            location: p.location,
+            event_from: p.event_from,
+            event_to: p.event_to,
+            created_at: p.created_at,
+            media: p.media,
+            cover_id: p.cover_id,
+        }
+    }
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct BoardPostsResponse {
+    /// Pinned on this board
+    pub pinned: Vec<BoardPostListModel>,
+    pub timeline: Vec<BoardPostListModel>,
+}
+
 #[derive(Serialize, ToSchema)]
 pub struct BoardPostModelTranslatedAllLanguages {
     pub id: i32,
