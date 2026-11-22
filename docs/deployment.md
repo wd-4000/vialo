@@ -21,8 +21,8 @@ For TCP:
 DATABASE_URL=postgresql://user:pass@localhost:5432/vialo
 ```
 
-Run migrations before starting the service for the first time (or enable the
-`migrate` feature to run them automatically on startup):
+The Debian package is built with the `migrate` feature, so the service applies
+migrations on startup. Without it, run them yourself before the first start:
 
 ```sh
 cargo sqlx migrate run
@@ -30,7 +30,13 @@ cargo sqlx migrate run
 
 ## systemd
 
-The Debian packaging (`cargo-deb`) installs two units:
+The Debian package (`cargo-deb`) installs `vialo-api`, the `vialo` CLI
+(dump/restore/seed; `pg_dump`/`pg_restore` come from the recommended
+`postgresql-client`), and `api.env.example` plus `vialo.example.toml` under
+`/usr/share/doc/vialo-api/`. Copy those to `/etc/vialo/api.env` and
+`/etc/vialo/vialo.toml`.
+
+It ships three units, all enabled on install:
 
 ### Service unit (`vialo-api.service`)
 
@@ -38,34 +44,52 @@ The Debian packaging (`cargo-deb`) installs two units:
 - Sandboxed: `ProtectSystem=strict`, `PrivateDevices=yes`, `NoNewPrivileges=yes`
 - Only `AF_UNIX AF_INET AF_INET6` address families allowed
 - Reads `/etc/vialo/api.env` for environment variables
-- `ConfigurationDirectory=vialo` and `LogsDirectory=vialo-api` are the only
-  writable paths
+- `ConfigurationDirectory=vialo`, `LogsDirectory=vialo-api` and
+  `StateDirectory=vialo-api` are the only writable paths
+- Runs in `/var/lib/vialo-api`, so the default relative `media.dir` ends up
+  in `/var/lib/vialo-api/media`
 
-### Socket unit (`vialo-api.socket`)
+### Socket units (`vialo-api-public.socket`, `vialo-api-hooks.socket`)
 
-Optional socket activation. When enabled, systemd creates the listening sockets
-and passes them to the service. The service detects `LISTEN_FDS` on startup and
-uses the pre‑bound sockets instead of binding its own.
+systemd creates the listening sockets and passes them to the service, which
+detects `LISTEN_FDS` and uses them instead of binding its own. Each socket has
+its own directory, so you can expose one without the other:
 
-```ini
-[Socket]
-ListenStream=/run/vialo-api/public.sock
-ListenStream=/run/vialo-api/hooks.sock
-FileDescriptorName=public
-FileDescriptorName=hooks
-SocketMode=0660
-RuntimeDirectory=vialo-api
-```
+| Socket | Path |
+|---|---|
+| public | `/run/vialo-api/public/api.sock` |
+| hooks | `/run/vialo-api/hooks/api.sock` |
 
-To use socket activation:
+Both need to be active, otherwise the service falls back to binding the
+addresses from `vialo.toml`. To skip socket activation, disable both units.
+
+The sockets are mode 0660, owned by the `vialo-public` and `vialo-hooks` groups
+(created by the package via sysusers.d). Add the proxy and Kratos users to
+the matching group:
 
 ```sh
-systemctl enable vialo-api.socket
-systemctl start vialo-api.socket
+usermod -aG vialo-public caddy
+usermod -aG vialo-hooks kratos
 ```
 
-The service starts on first connection. To use it without socket activation
-(direct binding), start the service directly. It falls back to manual binding.
+For a reverse proxy in a container, bind-mount the directory rather than the
+socket file, which gets replaced whenever the socket unit restarts. Containers
+can't resolve host group names, so pass the numeric gid
+(`getent group vialo-public`):
+
+```yaml
+caddy:
+  user: "1000:1000" # any non-root uid
+  group_add: ["${VIALO_PUBLIC_GID}"]
+  volumes:
+    - /run/vialo-api/public:/run/vialo-api/public:ro
+```
+
+```
+reverse_proxy unix//run/vialo-api/public/api.sock
+```
+
+A container running as root bypasses the group check entirely.
 
 ### Listen addresses
 
@@ -75,7 +99,7 @@ Configure `[public].listen` and `[hooks].listen` in `vialo.toml`:
 |---|---|
 | Direct TCP | `listen = "127.0.0.1:8000"` |
 | Direct Unix socket | `listen = "/run/vialo-api/public.sock"` |
-| Socket activation | The `.socket` unit provides the sockets; `vialo.toml` is ignored for binding |
+| Socket activation | The `.socket` units provide the sockets; `vialo.toml` is ignored for binding |
 
 > [!CAUTION]
 > Never expose the hooks API. It has no
@@ -102,14 +126,8 @@ webhooks:
   - url: http://127.0.0.1:8011/hooks/update_identity
 ```
 
-If both vialo and Kratos are on the same host, use a Unix socket for the hooks
-listener and the Kratos admin API connection:
-
-```toml
-# vialo.toml
-[hooks]
-listen = "/run/vialo-api/hooks.sock"
-```
+If both vialo and Kratos are on the same host, use the hooks socket
+(`/run/vialo-api/hooks/api.sock`) and a Unix socket for the Kratos admin API:
 
 ```
 # .env

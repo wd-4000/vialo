@@ -52,6 +52,7 @@ KeyringMode=private
 UMask=0077
 
 SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
 SystemCallErrorNumber=EPERM
 SystemCallArchitectures=native
 

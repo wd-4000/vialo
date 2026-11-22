@@ -1,0 +1,3 @@
+# Members may connect to the matching socket in /run/vialo-api
+g vialo-public -
+g vialo-hooks  -

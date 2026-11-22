@@ -1,0 +1,14 @@
+[Unit]
+Description=Vialo API hooks socket
+Documentation=https://github.com/wd-4000/vialo
+
+[Socket]
+# Unauthenticated: only expose to Kratos/FreeRADIUS
+ListenStream=/run/vialo-api/hooks/api.sock
+FileDescriptorName=hooks
+Service=vialo-api.service
+SocketGroup=vialo-hooks
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

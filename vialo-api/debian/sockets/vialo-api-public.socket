@@ -1,0 +1,14 @@
+[Unit]
+Description=Vialo API public socket
+Documentation=https://github.com/wd-4000/vialo
+
+[Socket]
+# Own directory so it can be bind-mounted into a proxy container without the hooks socket
+ListenStream=/run/vialo-api/public/api.sock
+FileDescriptorName=public
+Service=vialo-api.service
+SocketGroup=vialo-public
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

@@ -14,6 +14,7 @@ RestartSec=5s
 
 # HTTP API server — no privileged ports, no netlink, no raw sockets.
 DynamicUser=yes
+PrivateUsers=yes
 CapabilityBoundingSet=
 NoNewPrivileges=yes
 
@@ -25,8 +26,9 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 ProtectSystem=strict
 ConfigurationDirectory=vialo
 LogsDirectory=vialo-api
-# Uploaded images: set media.dir = "/var/lib/vialo-api/media"
 StateDirectory=vialo-api
+# Relative paths like the default media.dir land in /var/lib/vialo-api
+WorkingDirectory=%S/vialo-api
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
@@ -48,6 +50,7 @@ KeyringMode=private
 UMask=0077
 
 SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
 SystemCallErrorNumber=EPERM
 SystemCallArchitectures=native
 

@@ -6,8 +6,23 @@ rust-version.workspace = true
 default-run = "vialo-api"
 
 [package.metadata.deb]
+features = ["migrate"]
+# For `vialo dump`/`vialo restore`
+recommends = "postgresql-client"
 maintainer-scripts = "debian/"
-systemd-units = { enable = true }
+assets = [
+    ["target/release/vialo-api", "usr/bin/", "755"],
+    ["target/release/vialo", "usr/bin/", "755"],
+    ["debian/api.env.example", "usr/share/doc/vialo-api/", "644"],
+    ["../vialo.example.toml", "usr/share/doc/vialo-api/", "644"],
+]
+# Sockets are in their own dir, cargo-deb would otherwise reuse `service` for each named unit
+# Listed first so postinst starts them before the service.
+systemd-units = [
+    { unit-name = "vialo-api-public", unit-scripts = "debian/sockets", enable = true },
+    { unit-name = "vialo-api-hooks", unit-scripts = "debian/sockets", enable = true },
+    { unit-name = "vialo-api", enable = true },
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
