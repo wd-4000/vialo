@@ -3,6 +3,9 @@ use std::sync::Arc;
 use axum::{
     Router,
     extract::{MatchedPath, Request},
+    http::header::AUTHORIZATION,
+    middleware::{self, Next},
+    response::Response,
     routing::post,
 };
 use tower_http::trace::TraceLayer;
@@ -28,7 +31,33 @@ pub async fn update_identity(
 
 use super::AppState;
 
-pub async fn create_router(app_state: Arc<AppState>) -> Router {
+/// Shared secret Kratos and FreeRADIUS send as `Authorization: Bearer <key>`.
+/// None (debug builds only) leaves the hooks open.
+pub type HooksKey = Option<Arc<str>>;
+
+/// Constant-time, so the key can't be recovered from response timing
+fn key_matches(given: &[u8], key: &[u8]) -> bool {
+    given.len() == key.len() && given.iter().zip(key).fold(0, |acc, (a, b)| acc | (a ^ b)) == 0
+}
+
+async fn require_key(
+    State(key): State<HooksKey>,
+    req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    if let Some(key) = key {
+        let given = req
+            .headers()
+            .get(AUTHORIZATION)
+            .and_then(|v| v.as_bytes().strip_prefix(b"Bearer "));
+        if !given.is_some_and(|given| key_matches(given, key.as_bytes())) {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    }
+    Ok(next.run(req).await)
+}
+
+pub async fn create_router(app_state: Arc<AppState>, hooks_key: HooksKey) -> Router {
     Router::new()
         .route("/hooks/update_identity", post(update_identity))
         .route(
@@ -39,6 +68,7 @@ pub async fn create_router(app_state: Arc<AppState>) -> Router {
             "/radius/networks/{network_id}/post-auth",
             post(radius::post_auth),
         )
+        .layer(middleware::from_fn_with_state(hooks_key, require_key))
         .layer(
             TraceLayer::new_for_http()
                 // Create our own span for the request and include the matched path. The matched

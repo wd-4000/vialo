@@ -1,3 +1,2 @@
-# vialo-public: sockets in /run/vialo/public; vialo-hooks: /run/vialo-api/hooks
+# Members may connect to the sockets in /run/vialo/public
 g vialo-public -
-g vialo-hooks  -

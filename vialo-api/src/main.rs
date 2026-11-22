@@ -39,6 +39,23 @@ enum Listener {
     Unix(UnixListener),
 }
 
+/// Wraps a socket systemd passed us, which may be TCP or Unix
+#[cfg(unix)]
+fn listener_from_fd(fd: i32) -> Listener {
+    use std::os::unix::io::IntoRawFd;
+    // SAFETY: systemd hands these fds to this process only
+    let tcp = unsafe { std::net::TcpListener::from_raw_fd(fd) };
+    // getsockname only yields an address for AF_INET/AF_INET6
+    if tcp.local_addr().is_ok() {
+        tcp.set_nonblocking(true).unwrap();
+        return Listener::Tcp(TcpListener::from_std(tcp).unwrap());
+    }
+    // SAFETY: same fd, released by the TcpListener without closing it
+    let unix = unsafe { std::os::unix::net::UnixListener::from_raw_fd(tcp.into_raw_fd()) };
+    unix.set_nonblocking(true).unwrap();
+    Listener::Unix(UnixListener::from_std(unix).unwrap())
+}
+
 #[cfg(unix)]
 fn try_socket_activation() -> Option<(Listener, Listener)> {
     let pid: u32 = std::process::id();
@@ -64,20 +81,8 @@ fn try_socket_activation() -> Option<(Listener, Listener)> {
         }
         let fd = 3 + i as i32;
         match *name {
-            "public" => {
-                let std_l = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
-                let _ = std_l.set_nonblocking(true);
-                public = Some(Listener::Unix(
-                    tokio::net::UnixListener::from_std(std_l).unwrap(),
-                ));
-            }
-            "hooks" => {
-                let std_l = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
-                let _ = std_l.set_nonblocking(true);
-                hooks = Some(Listener::Unix(
-                    tokio::net::UnixListener::from_std(std_l).unwrap(),
-                ));
-            }
+            "public" => public = Some(listener_from_fd(fd)),
+            "hooks" => hooks = Some(listener_from_fd(fd)),
             _ => {}
         }
     }
@@ -237,6 +242,25 @@ async fn main() {
     };
 
     encryption::init(encryption_key);
+
+    let hooks_key: vialo_api::hooks::HooksKey = if let Ok(s) = std::env::var("HOOKS_KEY") {
+        Some(s.trim().into())
+    } else if let Ok(key_path) = std::env::var("HOOKS_KEY_PATH") {
+        Some(
+            std::fs::read_to_string(&key_path)
+                .expect("Error reading hooks key file")
+                .trim()
+                .into(),
+        )
+    } else if cfg!(debug_assertions) {
+        warn!("No HOOKS_KEY: the hooks API accepts unauthenticated requests.");
+        None
+    } else {
+        panic!("HOOKS_KEY or HOOKS_KEY_PATH must be set in prod.")
+    };
+    if hooks_key.as_deref().is_some_and(str::is_empty) {
+        panic!("HOOKS_KEY is empty");
+    }
 
     info!("Connecting to the database...");
     let db_timezone = config.timezone.clone();
@@ -541,7 +565,7 @@ async fn main() {
     };
 
     let app = vialo_api::http::create_router(asp.clone()).await;
-    let hook_app = vialo_api::hooks::create_router(asp.clone()).await;
+    let hook_app = vialo_api::hooks::create_router(asp.clone(), hooks_key).await;
     let ws = vialo_api::ws::main(asp.clone());
 
     let cors = CorsLayer::new()

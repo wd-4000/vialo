@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+# Shared secret for the hooks API, also read by vialo-kratos
+if [ "$1" = "configure" ] && [ ! -e /etc/vialo/hooks.env ]; then
+	install -d -m 755 /etc/vialo
+	(umask 077 && printf 'HOOKS_KEY=%s\n' "$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')" > /etc/vialo/hooks.env)
+fi
+
+#DEBHELPER#

@@ -5,7 +5,7 @@ cors_origins = ["http://localhost:3000", "http://localhost:3001", "http://127.0.
 listen = "0.0.0.0:8000"
 
 [hooks]
-# Unauthenticated. Do not publish the port.
+# Requests need HOOKS_KEY as a Bearer token. Do not publish the port.
 listen = "0.0.0.0:8011"
 
 [email]

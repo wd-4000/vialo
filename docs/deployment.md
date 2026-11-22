@@ -55,21 +55,20 @@ systemd creates the listening sockets and passes them to the service, which
 detects `LISTEN_FDS` and uses them instead of binding its own. Each socket has
 its own directory, so you can expose one without the other:
 
-| Socket | Path | Group |
+| Socket | Address | Access |
 |---|---|---|
-| API public | `/run/vialo/public/api/api.sock` | `vialo-public` |
-| API hooks | `/run/vialo-api/hooks/api.sock` | `vialo-hooks` |
+| API public | `/run/vialo/public/api/api.sock` | group `vialo-public` |
+| API hooks | `127.0.0.1:8011` | `HOOKS_KEY` (see [Hooks API](#hooks-api)) |
 
 Both API sockets need to be active, otherwise the service falls back to
 binding the addresses from `vialo.toml`. To skip socket activation, disable
 both units.
 
-The sockets are mode 0660 and the groups are created by the packages via
-sysusers.d. Add the proxy and Kratos users to the matching group:
+The Unix sockets are mode 0660 and the group is created by the packages via
+sysusers.d. Add the proxy user to it:
 
 ```sh
 usermod -aG vialo-public caddy
-usermod -aG vialo-hooks kratos
 ```
 
 For a reverse proxy in a container, bind-mount the directory rather than the
@@ -101,10 +100,22 @@ Configure `[public].listen` and `[hooks].listen` in `vialo.toml`:
 | Direct Unix socket | `listen = "/run/vialo-api/public.sock"` |
 | Socket activation | The `.socket` units provide the sockets; `vialo.toml` is ignored for binding |
 
+### Hooks API
 > [!CAUTION]
-> Never expose the hooks API. It has no
-> authentication and should only be reachable by Kratos and FreeRADIUS on a
-> local address or Unix socket.
+> Never expose the hooks API.
+
+Kratos and FreeRADIUS call the hooks API, which hands out Wi-Fi passwords
+(`/radius/*`) and writes identity data (`/hooks/update_identity`). Every
+request needs `Authorization: Bearer <HOOKS_KEY>`.
+Release builds refuse to start without a key.
+
+The Debian package generates the key into `/etc/vialo/hooks.env`
+on first install. Set the same key in:
+
+- Kratos: the webhooks' `auth` config
+- FreeRADIUS: `hooks_key` in the `vialo-rest` module
+
+Kratos' webhooks can't use Unix sockets, which is why the listener is TCP.
 
 
 ## Kratos integration
@@ -126,8 +137,9 @@ webhooks:
   - url: http://127.0.0.1:8011/hooks/update_identity
 ```
 
-If both vialo and Kratos are on the same host, use the hooks socket
-(`/run/vialo-api/hooks/api.sock`) and a Unix socket for the Kratos admin API:
+Kratos authenticates with `HOOKS_KEY` (see [Hooks API](#hooks-api)). If both
+vialo and Kratos are on the same host, use a Unix socket for the Kratos admin
+API:
 
 ```
 # .env

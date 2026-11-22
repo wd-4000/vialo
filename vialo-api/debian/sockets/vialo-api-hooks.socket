@@ -3,12 +3,11 @@ Description=Vialo API hooks socket
 Documentation=https://github.com/wd-4000/vialo
 
 [Socket]
-# Unauthenticated: only expose to Kratos/FreeRADIUS
-ListenStream=/run/vialo-api/hooks/api.sock
+# TCP because Kratos' webhooks can't use Unix sockets. Requests need HOOKS_KEY
+# from /etc/vialo/hooks.env; still don't publish this port.
+ListenStream=127.0.0.1:8011
 FileDescriptorName=hooks
 Service=vialo-api.service
-SocketGroup=vialo-hooks
-SocketMode=0660
 
 [Install]
 WantedBy=sockets.target
