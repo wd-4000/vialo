@@ -16,7 +16,8 @@ maintainer-scripts = "debian/"
 assets = [
     ["target/release/vialo-api", "usr/bin/", "755"],
     ["target/release/vialo", "usr/bin/", "755"],
-    ["debian/api.env.example", "usr/share/doc/vialo-api/", "644"],
+    # Template for /etc/vialo/api.env, read by postinst
+    ["debian/api.env.example", "usr/share/vialo-api/", "644"],
     ["../vialo.example.toml", "usr/share/doc/vialo-api/", "644"],
 ]
 # Sockets are in their own dir, cargo-deb would otherwise reuse `service` for each named unit

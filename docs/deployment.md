@@ -6,20 +6,28 @@ You can run it with `docker compose -f compose.yaml -f compose.prod.yaml up -d`.
 
 ## PostgreSQL
 
-vialo requires **PostgreSQL 18 or later**.
+vialo requires **PostgreSQL 18 or later**. Debian's own package lags behind,
+so install the latest from the [PGDG repository](https://wiki.postgresql.org/wiki/Apt):
 
-The connection string lives in `/etc/vialo/api.env` (or wherever `DATABASE_URL`
-points). For best performance and security, use a Unix socket:
+```sh
+apt install postgresql-common
+/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
+apt install postgresql
+```
 
-```
-DATABASE_URL=postgresql://user:pass@/vialo?host=/var/run/postgresql
+Then create the roles and databases:
+
+```sh
+sudo vialo db init
 ```
 
-For TCP:
+It creates the `vialo-api` role with the `vialo` database and `vialo-kratos`
+with `kratos`, and installs `pg_stat_statements`. 
 
-```
-DATABASE_URL=postgresql://user:pass@localhost:5432/vialo
-```
+The services connect over `/run/postgresql`, so peer auth lets in
+the system user of the same name, which `DynamicUser=` gives each unit. That way they don't have passwords.
+
+For a remote PostgreSQL, set `DATABASE_URL` in `/etc/vialo/api.env` instead.
 
 The Debian package is built with the `migrate` feature, so the service applies
 migrations on startup. Without it, run them yourself before the first start:
@@ -28,13 +36,25 @@ migrations on startup. Without it, run them yourself before the first start:
 cargo sqlx migrate run
 ```
 
+`vialo dump`, `restore` and `seed` need a role too. Locally, run them as the
+`postgres` superuser from a directory it can write to:
+
+```sh
+cd /var/lib/postgresql && sudo -u postgres vialo dump --database-url 'postgresql:///vialo?host=/run/postgresql'
+```
+
 ## systemd
 
-The Debian package (`cargo-deb`) installs `vialo-api`, the `vialo` CLI
-(dump/restore/seed; `pg_dump`/`pg_restore` come from the recommended
-`postgresql-client`), and `api.env.example` plus `vialo.example.toml` under
-`/usr/share/doc/vialo-api/`. Copy those to `/etc/vialo/api.env` and
-`/etc/vialo/vialo.toml`.
+The Debian package (`cargo-deb`) installs `vialo-api` and the `vialo` CLI
+(db init/dump/restore/seed; `pg_dump`/`pg_restore` come from the recommended
+`postgresql-client`). On first install it creates `/etc/vialo/api.env` with a
+generated `ENCRYPTION_KEY`
+
+> [!WARNING]
+> Back up `/etc/vialo/api.env`, as it contains the encryption key
+> for WiFi passwords etc.
+
+ Copy `vialo.example.toml` from  `/usr/share/doc/vialo-api/` to `/etc/vialo/vialo.toml`.
 
 It ships three units, all enabled on install:
 

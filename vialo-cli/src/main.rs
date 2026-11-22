@@ -7,6 +7,7 @@ use clap::{Args, CommandFactory, Parser, Subcommand, ValueHint};
 use clap_complete::Shell;
 use dotenv::dotenv;
 use vialo_api::dump::{dump, restore};
+mod db;
 mod seed;
 
 #[derive(Parser)]
@@ -18,23 +19,34 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Set up the local PostgreSQL
+    Db {
+        #[command(subcommand)]
+        command: DbCommand,
+    },
     /// Dump the database to a file
-    Dump(Db),
+    Dump(DbUrl),
     /// Restore the database from a dump
     Restore {
         #[command(flatten)]
-        db: Db,
+        db: DbUrl,
         #[arg(value_hint = ValueHint::FilePath)]
         path: PathBuf,
     },
     /// Seed rooms, realms and residents
-    Seed(Db),
+    Seed(DbUrl),
     /// Print a shell completion script to stdout
     Completions { shell: Shell },
 }
 
+#[derive(Subcommand)]
+enum DbCommand {
+    /// Create the vialo-api and vialo-kratos roles and databases. Run as root. Safe to re-run
+    Init,
+}
+
 #[derive(Args)]
-struct Db {
+struct DbUrl {
     #[arg(long, env = "DATABASE_URL", hide_env_values = true)]
     database_url: String,
 }
@@ -47,6 +59,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     match Cli::parse().command {
+        Command::Db {
+            command: DbCommand::Init,
+        } => db::init()?,
         Command::Dump(db) => {
             let filename = dump(&db.database_url).await.context("dumping")?;
             println!("Dumped DB to: {filename}");
