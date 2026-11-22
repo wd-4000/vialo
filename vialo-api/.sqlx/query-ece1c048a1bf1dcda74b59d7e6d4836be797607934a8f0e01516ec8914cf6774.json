@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT get_i18n_string(b.label, ARRAY['de', 'en']) AS \"label!\"\n        FROM board_subscriptions bs JOIN boards b ON b.id = bs.board_id\n        WHERE bs.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "label!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ece1c048a1bf1dcda74b59d7e6d4836be797607934a8f0e01516ec8914cf6774"
+}
