@@ -6,6 +6,7 @@
 !vialo-api
 !vialo-common
 !vialo-dhcp
+!vialo-cli
 # Non-build inputs inside the allowed directories
 vialo-api/Cargo.lock
 vialo-api/Dockerfile*

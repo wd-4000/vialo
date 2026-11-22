@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["vialo-api", "vialo-common", "vialo-dhcp"]
+members = ["vialo-api", "vialo-cli", "vialo-common", "vialo-dhcp"]
 
 [workspace.package]
 rust-version = "1.100"

@@ -20,15 +20,17 @@ COPY Cargo.toml Cargo.lock ./
 COPY vialo-api/Cargo.toml vialo-api/
 COPY vialo-common/Cargo.toml vialo-common/
 COPY vialo-dhcp/Cargo.toml vialo-dhcp/
+COPY vialo-cli/Cargo.toml vialo-cli/
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/usr/src/vialo/target \
-    mkdir -p vialo-api/src vialo-common/src vialo-dhcp/src && \
+    mkdir -p vialo-api/src vialo-common/src vialo-dhcp/src vialo-cli/src && \
     echo "fn main() {}" > vialo-api/src/main.rs && \
     touch vialo-common/src/lib.rs && \
     echo "fn main() {}" > vialo-dhcp/src/main.rs && \
+    echo "fn main() {}" > vialo-cli/src/main.rs && \
     cargo build --locked --profile $PROFILE --features migrate,media-asm,media-heif-static -p vialo-api && \
-    rm -rf vialo-api/src vialo-common/src vialo-dhcp/src
+    rm -rf vialo-api/src vialo-common/src vialo-dhcp/src vialo-cli/src
 
 COPY . .
 

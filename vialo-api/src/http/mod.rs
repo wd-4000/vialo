@@ -25,62 +25,6 @@ pub mod util;
 use super::AppState;
 
 pub async fn create_router(app_state: Arc<AppState>) -> Router {
-    // let file1 =
-    //     std::fs::File::open("sampledata/nachnamen.json").expect("file should open read only");
-    // let json1: serde_json::Value =
-    //     serde_json::from_reader(file1).expect("file should be proper JSON");
-    // let file2 =
-    //     std::fs::File::open("sampledata/vornamen_w.json").expect("file should open read only");
-    // let mut json2: serde_json::Value =
-    //     serde_json::from_reader(file2).expect("file should be proper JSON");
-    // let file3 =
-    //     std::fs::File::open("sampledata/vornamen_m.json").expect("file should open read only");
-    // let mut json3: serde_json::Value =
-    //     serde_json::from_reader(file3).expect("file should be proper JSON");
-
-    // if let (Some(nachnamen), Some(vornamen_w), Some(vornamen_m), AuthConfig::Mock { uuid, .. }) = (
-    //     json1.as_array(),
-    //     json2.as_array_mut(),
-    //     json3.as_array_mut(),
-    //     &app_state.config.auth,
-    // ) {
-    //     vornamen_w.extend_from_slice(vornamen_m);
-    //     for i in 1..15 {
-    //         for j in 1..15 {
-    //             if let (Some(vorname), Some(nachname)) = (
-    //                 vornamen_w.choose(&mut rand::rng()).unwrap().as_str(),
-    //                 nachnamen.choose(&mut rand::rng()).unwrap().as_str(),
-    //             ) {
-    //                 let result = people::handlers::add_person(
-    //                     axum::extract::State(app_state.clone()),
-    //                     axum::Extension(util::User { id: *uuid }),
-    //                     util::JsonE(people::schemas::CreateUserSchema {
-    //                         full_name: format!("{} {}", vorname, nachname),
-    //                         label: None,
-    //                         auth_id: None,
-    //                         membership_end: crate::helpers::PgDate::DateTime(
-    //                             Utc::now().date_naive(),
-    //                         ),
-    //                         email: Some(format!("{}.{}@uni.example.com", vorname, nachname)),
-    //                         contract: Some(people::schemas::ContractInfoSchema {
-    //                             room: format!("{:02}{:02}", i, j),
-    //                             begins: Utc::now().date_naive(),
-    //                             ends: Utc::now().date_naive(),
-    //                             lessor_id: None,
-    //                         }),
-    //                         auto_setup_network: Some(true),
-    //                         enable_amenities_login: Some(false),
-    //                     }),
-    //                 )
-    //                 .await;
-    //                 println!("{:?}", result.err())
-    //             }
-    //         }
-    //     }
-    // }
-
-    // println!("Inserterd stuff");
-
     Router::new()
         .nest("/network", network::create_router(app_state.clone()))
         .nest("/history", history::create_router(app_state.clone()))
