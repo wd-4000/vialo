@@ -3,6 +3,8 @@ Description=Vialo DHCP server
 Documentation=https://github.com/wd-4000/vialo
 After=network-online.target postgresql.service
 Wants=network-online.target
+# Skipped instead of failing until the config is in place
+ConditionPathExists=/etc/vialo/vialo.toml
 
 [Service]
 Type=exec
@@ -11,6 +13,8 @@ ExecStart=/usr/bin/vialo-dhcp
 # ever reach /vialo.toml. Listed before EnvironmentFile= so the env file can
 # still override it.
 Environment=VIALO_CONFIG=/etc/vialo/vialo.toml
+# Peer auth on the local PostgreSQL as role vialo-dhcp (`vialo db init`)
+Environment=DATABASE_URL=postgresql:///vialo?host=/run/postgresql&user=vialo-dhcp
 EnvironmentFile=-/etc/vialo/dhcp.env
 Restart=on-failure
 RestartSec=5s

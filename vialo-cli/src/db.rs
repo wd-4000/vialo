@@ -47,6 +47,9 @@ pub fn init() -> anyhow::Result<()> {
              WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '{db}')\\gexec\n"
         );
     }
+    // Grant DHCP tables to vialo-dhcp
+    sql += "SELECT 'CREATE ROLE \"vialo-dhcp\" LOGIN' \
+            WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'vialo-dhcp')\\gexec\n";
     psql("postgres", &sql)?;
 
     // Untrusted extension, so vialo-api's migration can't create it as the owner
