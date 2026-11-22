@@ -39,6 +39,8 @@ pub struct OrgConfig {
 pub struct EmailApiUrlConfig {
     /// Base URL for one-click unsubscribe links
     pub unsubscribe: String,
+    /// Where `/unsubscribe/` sends browsers, with the token appended as  `?unsubscribe=`
+    pub unsubscribe_page: String,
     /// Base URL for links to individual posts
     pub post: String,
     /// Base URL for links to boards

@@ -20,6 +20,7 @@ pub mod network;
 pub mod people;
 pub mod posts;
 pub mod rate_limit;
+mod unsubscribe;
 pub mod util;
 
 use super::AppState;
@@ -53,6 +54,10 @@ pub async fn create_router(app_state: Arc<AppState>) -> Router {
         ))
         .route("/config", get(config::get_config))
         .route("/etc/mail-recipients", get(etc::list_mail_recipients))
+        .route(
+            "/unsubscribe/{token}",
+            get(unsubscribe::info).post(unsubscribe::unsubscribe),
+        )
         // TODO expose openapi.json (Maybe) .route("/openapi.json", get(docs::openapi_json))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),

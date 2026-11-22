@@ -11,11 +11,16 @@ listen = "0.0.0.0:8011"
 [email]
 domain = "xyz.example.com"
 
+# vialo-api appends the token or ID. user-ui only serves locale-prefixed paths.
 [email.url]
-unsubscribe = "https://xyz.example.com/unsub/"
-post = "https://xyz.example.com/post/"
-board = "https://xyz.example.com/board/"
-preferences = "https://xyz.example.com/prefs/"
+# vialo-api's /unsubscribe/<token>, which mail clients also POST to
+unsubscribe = "https://api.xyz.example.com/unsubscribe/"
+# Where that link sends browsers, so.. user-ui's unsubscribe dialog
+unsubscribe_page = "https://xyz.example.com/en/?unsubscribe="
+post = "https://xyz.example.com/en/posts/"
+# No board page yet, so this lands on the posts list
+board = "https://xyz.example.com/en/posts?board="
+preferences = "https://xyz.example.com/en/settings"
 
 # vialo-dhcp. DATABASE_URL stays in the environment.
 [dhcp]
