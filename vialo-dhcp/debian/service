@@ -37,6 +37,7 @@ SocketBindDeny=any
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
+PrivateIPC=yes
 PrivateDevices=yes
 ProtectProc=invisible
 ProcSubset=pid

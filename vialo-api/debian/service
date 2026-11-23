@@ -18,7 +18,6 @@ EnvironmentFile=/etc/vialo/hooks.env
 Restart=on-failure
 RestartSec=5s
 
-# HTTP API server — no privileged ports, no netlink, no raw sockets.
 DynamicUser=yes
 PrivateUsers=yes
 CapabilityBoundingSet=
@@ -27,6 +26,8 @@ NoNewPrivileges=yes
 # AF_INET/AF_INET6: HTTP listen + Postgres + Kratos + SMTP + printers + proxy.
 # AF_UNIX: local Postgres sockets, DNS resolver, Kratos.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Listeners come from the sockets
+SocketBindDeny=any
 
 # Make the entire OS is read-only with ConfigurationDirectory/LogsDirectory/StateDirectory as the exceptions
 ProtectSystem=strict
@@ -37,6 +38,7 @@ StateDirectory=vialo-api
 WorkingDirectory=%S/vialo-api
 ProtectHome=yes
 PrivateTmp=yes
+PrivateIPC=yes
 PrivateDevices=yes
 ProtectProc=invisible
 ProcSubset=pid
