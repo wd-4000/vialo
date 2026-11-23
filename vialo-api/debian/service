@@ -1,8 +1,9 @@
 [Unit]
 Description=API service for Vialo
 Documentation=https://github.com/wd-4000/vialo
-After=network-online.target postgresql.service
+After=network-online.target postgresql.service vialo-api-public.socket vialo-api-hooks.socket
 Wants=network-online.target
+Requires=vialo-api-public.socket vialo-api-hooks.socket
 
 [Service]
 Type=exec
