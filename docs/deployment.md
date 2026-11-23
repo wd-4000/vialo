@@ -226,10 +226,14 @@ sandboxing as vialo-api (`DynamicUser=yes`, `ProtectSystem=strict`, etc.).
 ### Config
 
 The server reads the `[dhcp]` section of the same `vialo.toml` as vialo-api.
+The unit only starts once `/etc/vialo/vialo.toml` exists, so after creating
+it run `systemctl start vialo-dhcp`.
 `siaddr` must be set to an IP address on the listen interface.
 
-Copy `vialo-dhcp/debian/dhcp.env.example` to `/etc/vialo/dhcp.env` for
-`DATABASE_URL`; the unit points the binary at the config file itself. It runs
+It connects as the `vialo-dhcp` role (see [PostgreSQL](#postgresql)). For a
+remote database, set `DATABASE_URL` in `/etc/vialo/dhcp.env`
+(`vialo-dhcp/debian/dhcp.env.example`). The unit points the binary at
+the config file itself. It runs
 under `DynamicUser`, so
 `/etc/vialo/vialo.toml` must be readable by an unknown UID — mode 0644,
 with secrets left in the env file (0600, read by PID 1).
