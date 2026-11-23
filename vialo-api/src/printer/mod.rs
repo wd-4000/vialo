@@ -15,11 +15,6 @@ use tokio::{fs, sync::watch, time};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-#[cfg(feature = "printer_km")]
-mod km;
-#[cfg(feature = "printer_km")]
-use km::KmPrinterApi;
-
 pub mod models;
 pub mod traits;
 use models::*;
